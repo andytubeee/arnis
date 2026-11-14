@@ -10,6 +10,7 @@
 mod dialogs;
 pub mod disasters;
 pub mod discoveries;
+pub mod stories;
 mod resources;
 
 use crate::args::Args;

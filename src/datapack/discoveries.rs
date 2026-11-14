@@ -102,7 +102,7 @@ pub struct Place {
     /// Ground height at `anchor`, once settled; travel searches down from a little above it.
     pub ground_y: Option<i32>,
     pub notable: bool,
-    score: i32,
+    pub(crate) score: i32,
 }
 
 /// The places worth discovering, best first, and the most important `place=*` name as a
@@ -274,7 +274,7 @@ fn settlement_rank(tags: &HashMap<String, String>) -> Option<u8> {
     })
 }
 
-fn classify(element: &ProcessedElement) -> Option<(Category, &'static str)> {
+pub(crate) fn classify(element: &ProcessedElement) -> Option<(Category, &'static str)> {
     let tags = element.tags();
     let get = |k: &str| tags.get(k).map(String::as_str);
     let is_node = matches!(element, ProcessedElement::Node(_));
@@ -387,7 +387,7 @@ fn classify(element: &ProcessedElement) -> Option<(Category, &'static str)> {
 type Extent = ((i32, i32), (i32, i32));
 
 /// The element's extent, and whether it is a single point.
-fn outline(element: &ProcessedElement) -> Option<(Extent, bool)> {
+pub(crate) fn outline(element: &ProcessedElement) -> Option<(Extent, bool)> {
     fn extent<'n>(nodes: impl Iterator<Item = &'n ProcessedNode>) -> Option<Extent> {
         nodes.fold(None, |acc, n| {
             Some(match acc {
@@ -551,7 +551,7 @@ pub fn tree(area: &str, places: &[Place], schema: CriteriaSchema) -> Vec<(String
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::osm_parser::{ProcessedNode, ProcessedWay};
 
@@ -562,7 +562,7 @@ mod tests {
             .collect()
     }
 
-    fn square(id: u64, x: i32, z: i32, size: i32, t: &[(&str, &str)]) -> ProcessedElement {
+    pub(crate) fn square(id: u64, x: i32, z: i32, size: i32, t: &[(&str, &str)]) -> ProcessedElement {
         let corner = |i: u64, x, z| ProcessedNode {
             id: i,
             tags: HashMap::new(),
