@@ -21,8 +21,8 @@ use std::fmt::Write;
 /// Longest stretch between two points; shorter where the ground bends.
 const MAX_SPAN: f64 = 16.0;
 /// Most walkers around one player by day and by night, which is what a tick costs.
-const DAY_NEAR: usize = 60;
-const NIGHT_NEAR: usize = 15;
+const DAY_NEAR: usize = 40;
+const NIGHT_NEAR: usize = 10;
 /// Side of the map cells the spots walkers start from are stored by, in blocks.
 const SPOT_CELL: f64 = 32.0;
 /// Lanes and spot cells the pack stores per command.
