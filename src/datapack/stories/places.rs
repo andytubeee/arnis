@@ -105,8 +105,11 @@ pub fn collect(elements: &[ProcessedElement], world: &XZBBox) -> Vec<StoryPlace>
         let close = |k: &StoryPlace| {
             (k.place.anchor.0 - x).abs() < MIN_APART && (k.place.anchor.1 - z).abs() < MIN_APART
         };
-        if kept.len() < MAX_PLACES && !kept.iter().any(close) {
+        if !kept.iter().any(close) {
             kept.push(p);
+            if kept.len() == MAX_PLACES {
+                break;
+            }
         }
     }
     kept
