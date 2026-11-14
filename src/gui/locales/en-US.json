@@ -287,7 +287,7 @@
   "zombie_outbreak_desc": "Five nights of zombie waves through your streets, with a boss.",
   "crime_spree": "Crime Spree",
   "crime_spree_desc": "Rob pedestrians and outrun skeleton police on your streets.",
-  "crime_spree_tip": "Rob pedestrians for cash by crouching beside them. Skeleton police patrol the streets and hunt you if one sees a robbery or you hit one, until they lose sight of you for 3 seconds and a 30 second countdown runs out. Starts with a sword and a bow. Turns on Pedestrians and Moving Vehicles, so you can jump in a car to escape, and starts in Survival on Normal. Java 1.21.6+.",
+  "crime_spree_tip": "Rob pedestrians for cash by crouching beside them. Skeleton police patrol the streets and hunt you if one sees a robbery or you hit one, until they lose sight of you for a few seconds and a countdown runs out. Starts with a sword and a bow. Turns on Pedestrians, Moving Vehicles, so you can jump in a car to escape, and the Pause Menu, where you set difficulty, police and crowds, and starts in Survival on Normal. Java 1.21.6+.",
   "disasters": "Disasters",
   "disasters_desc": "A disaster every few minutes: floods, tornadoes, earthquakes and more.",
   "body_gravity": "Moon & Mars Gravity",

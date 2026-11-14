@@ -1,5 +1,5 @@
 //! The extras' share of the world resource pack: the logo at the top of the pause menu
-//! dialog, drawn as one glyph of a bitmap font.
+//! dialog, drawn as one glyph of a bitmap font, and Crime Spree's police uniform.
 
 use super::dialogs::BANNER_KEY;
 use crate::mapillary::displays::{
@@ -21,16 +21,55 @@ const GLYPH_HEIGHT: u32 = 40;
 const FONT_PATH: &str = "assets/arnis/font/banner.json";
 const TEXTURE_PATH: &str = "assets/arnis/textures/font/banner.png";
 const LANG_PATH: &str = "assets/arnis/lang/en_us.json";
+/// Crime Spree's police are skeletons, the only skeletons its worlds spawn, so their
+/// texture is the uniform.
+const POLICE_PNG: &[u8] = include_bytes!("../../assets/minecraft/police_skeleton.png");
+const SKELETON_PATH: &str = "assets/minecraft/textures/entity/skeleton/skeleton.png";
 
 /// Adds the banner to `<world>/resources.zip`: into the pack Arnis already wrote there, or
 /// into a new one. A pack the user put there is left alone, and the menu shows no banner.
 pub fn install_banner(world: &Path) -> Result<(), String> {
+    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    let font = json!({
+        "providers": [{
+            "type": "bitmap",
+            "file": "arnis:font/banner.png",
+            "height": GLYPH_HEIGHT,
+            "ascent": GLYPH_HEIGHT,
+            "chars": [GLYPH.to_string()],
+        }]
+    });
+    // Four empty lines above the glyph give its 40 pixels the room of five text lines.
+    let lang = json!({ BANNER_KEY: format!("\n\n\n\n{GLYPH}") });
+    install(
+        world,
+        &[
+            (FONT_PATH, font.to_string().into_bytes(), deflated),
+            (TEXTURE_PATH, BANNER_PNG.to_vec(), stored()),
+            (LANG_PATH, lang.to_string().into_bytes(), deflated),
+        ],
+    )
+}
+
+/// Dresses every skeleton in the world as a police officer.
+pub fn install_police(world: &Path) -> Result<(), String> {
+    install(world, &[(SKELETON_PATH, POLICE_PNG.to_vec(), stored())])
+}
+
+fn stored() -> SimpleFileOptions {
+    SimpleFileOptions::default().compression_method(CompressionMethod::Stored)
+}
+
+type PackFile<'a> = (&'a str, Vec<u8>, SimpleFileOptions);
+
+/// Writes `files` into `<world>/resources.zip`, keeping the rest of an Arnis pack there.
+fn install(world: &Path, files: &[PackFile]) -> Result<(), String> {
     let path = world.join("resources.zip");
     if path.exists() && !is_arnis_pack(&path) {
         return Ok(());
     }
     let staged = path.with_extension("zip.tmp");
-    let written = write_pack(&path, &staged);
+    let written = write_pack(&path, &staged, files);
     if let Err(e) = written {
         let _ = std::fs::remove_file(&staged);
         return Err(e);
@@ -38,7 +77,7 @@ pub fn install_banner(world: &Path) -> Result<(), String> {
     install_world_pack(&path, &staged)
 }
 
-fn write_pack(existing: &Path, staged: &Path) -> Result<(), String> {
+fn write_pack(existing: &Path, staged: &Path, files: &[PackFile]) -> Result<(), String> {
     let err = |e: zip::result::ZipError| e.to_string();
     let file = File::create(staged).map_err(|e| format!("create {}: {e}", staged.display()))?;
     let mut zip = ZipWriter::new(BufWriter::new(file));
@@ -52,7 +91,7 @@ fn write_pack(existing: &Path, staged: &Path) -> Result<(), String> {
             let entry = old.by_index_raw(i).map_err(err)?;
             if entry
                 .name()
-                .is_ok_and(|n| [FONT_PATH, TEXTURE_PATH, LANG_PATH].contains(&n.as_ref()))
+                .is_ok_and(|n| files.iter().any(|f| f.0 == n.as_ref()))
             {
                 continue;
             }
@@ -76,28 +115,9 @@ fn write_pack(existing: &Path, staged: &Path) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
 
-    let font = json!({
-        "providers": [{
-            "type": "bitmap",
-            "file": "arnis:font/banner.png",
-            "height": GLYPH_HEIGHT,
-            "ascent": GLYPH_HEIGHT,
-            "chars": [GLYPH.to_string()],
-        }]
-    });
-    // Four empty lines above the glyph give its 40 pixels the room of five text lines.
-    let lang = json!({ BANNER_KEY: format!("\n\n\n\n{GLYPH}") });
-    for (path, bytes, opts) in [
-        (FONT_PATH, font.to_string().into_bytes(), deflated),
-        (
-            TEXTURE_PATH,
-            BANNER_PNG.to_vec(),
-            SimpleFileOptions::default().compression_method(CompressionMethod::Stored),
-        ),
-        (LANG_PATH, lang.to_string().into_bytes(), deflated),
-    ] {
-        zip.start_file(path, opts).map_err(err)?;
-        zip.write_all(&bytes).map_err(|e| e.to_string())?;
+    for (path, bytes, opts) in files {
+        zip.start_file(*path, *opts).map_err(err)?;
+        zip.write_all(bytes).map_err(|e| e.to_string())?;
     }
     let mut out = zip.finish().map_err(err)?;
     out.flush().map_err(|e| e.to_string())
@@ -142,6 +162,17 @@ mod tests {
         let names = names(&dir.path().join("resources.zip"));
         assert_eq!(names.iter().filter(|n| *n == FONT_PATH).count(), 1);
         assert_eq!(names.iter().filter(|n| *n == "pack.mcmeta").count(), 1);
+    }
+
+    #[test]
+    fn the_police_uniform_joins_the_banner_in_one_pack() {
+        let dir = tempfile::tempdir().unwrap();
+        install_banner(dir.path()).unwrap();
+        install_police(dir.path()).unwrap();
+        install_police(dir.path()).unwrap();
+        let names = names(&dir.path().join("resources.zip"));
+        assert!(names.iter().any(|n| n == FONT_PATH));
+        assert_eq!(names.iter().filter(|n| *n == SKELETON_PATH).count(), 1);
     }
 
     #[test]

@@ -264,8 +264,11 @@ const CRIME: &[(&str, &[u8])] = static_files![
     "data/arnis/function/crime/unsupported.mcfunction",
     "ov80/data/arnis/function/crime/caught.mcfunction",
     "ov80/data/arnis/function/crime/clear.mcfunction",
+    "ov80/data/arnis/function/crime/control.mcfunction",
     "ov80/data/arnis/function/crime/cop.mcfunction",
     "ov80/data/arnis/function/crime/crouch.mcfunction",
+    "ov80/data/arnis/function/crime/crowd.mcfunction",
+    "ov80/data/arnis/function/crime/difficulty.mcfunction",
     "ov80/data/arnis/function/crime/dress.mcfunction",
     "ov80/data/arnis/function/crime/heat.mcfunction",
     "ov80/data/arnis/function/crime/hit.mcfunction",
@@ -723,6 +726,11 @@ pub fn install(world: &Path, ctx: &PackContext) -> Result<(), String> {
     if ctx.extras.outbreak || ctx.extras.disasters || ctx.extras.crime {
         crate::world_utils::start_in_survival(world)?;
     }
+    if ctx.extras.crime {
+        if let Err(e) = resources::install_police(world) {
+            eprintln!("Warning: the police uniform was left out of resources.zip: {e}");
+        }
+    }
     Ok(())
 }
 
@@ -901,6 +909,7 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
         } else {
             [
                 (ex.outbreak, "arnis:outbreak"),
+                (ex.crime, "arnis:crime"),
                 (ex.disasters, "arnis:disasters"),
             ]
             .into_iter()
@@ -929,6 +938,9 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
                 format!("{ov}/outbreak.json"),
                 pretty(&dialogs::outbreak(ctx)),
             ));
+        }
+        if ex.crime {
+            out.push((format!("{ov}/crime.json"), pretty(&dialogs::crime(ctx))));
         }
         if let Some(plan) = disaster_plan.filter(|_| ex.disasters) {
             out.push((

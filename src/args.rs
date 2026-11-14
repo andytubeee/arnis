@@ -429,8 +429,9 @@ pub struct Args {
 
     /// Crime Spree: rob pedestrians for cash by crouching next to them, with skeleton police
     /// patrolling the streets who hunt you if they see a robbery or you hit one, until they
-    /// lose sight of you for 3 seconds and a 30 second countdown runs out. Starts with a sword and a bow. Implies --pedestrians
-    /// and --moving-vehicles and starts the world in survival. Java 1.21.6+.
+    /// lose sight of you for a few seconds and a countdown runs out. Starts with a sword and a bow;
+    /// difficulty, police and crowds are set in the pause menu. Implies --pedestrians,
+    /// --moving-vehicles and --pause-menu and starts the world in survival. Java 1.21.6+.
     #[arg(long, default_value_t = false)]
     pub crime_spree: bool,
 
@@ -1529,11 +1530,12 @@ pub fn apply_feature_needs(args: &mut Args) {
     if args.zombie_outbreak || args.disasters || args.crime_spree {
         args.mob_spawning = MobSpawning::Off;
     }
-    // The police patrol where pedestrians walk, the pedestrians are who gets robbed, and a
-    // passing car is a way out.
+    // The police patrol where pedestrians walk, the pedestrians are who gets robbed, a
+    // passing car is a way out, and the pause menu holds its settings.
     if args.crime_spree {
         args.pedestrians = true;
         args.moving_vehicles = true;
+        args.pause_menu = true;
     }
 }
 
@@ -2387,7 +2389,7 @@ mod tests {
         }
 
         let crime = parse(&["--crime-spree"]);
-        assert!(crime.pedestrians && crime.moving_vehicles);
+        assert!(crime.pedestrians && crime.moving_vehicles && crime.pause_menu);
         assert!(validate_args(&crime).is_ok());
         let off_earth = parse(&["--crime-spree", "--body", "moon"]);
         assert!(!off_earth.crime_spree && !off_earth.pedestrians && !off_earth.moving_vehicles);

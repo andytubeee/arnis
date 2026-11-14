@@ -1,5 +1,5 @@
-//! The pause menu dialogs (1.21.6+): welcome, travel, discoveries, outbreak, disasters and
-//! credits.
+//! The pause menu dialogs (1.21.6+): welcome, travel, discoveries, outbreak, crime spree,
+//! disasters and credits.
 
 use super::disasters::Plan;
 use super::{Credits, PackContext};
@@ -66,6 +66,13 @@ pub fn menu(ctx: &PackContext) -> Value {
             "Zombie Outbreak",
             "Restart, skip to night or stop",
             show("arnis:outbreak"),
+        ));
+    }
+    if ctx.extras.crime {
+        actions.push(button(
+            "Crime Spree",
+            "Difficulty, police and crowds",
+            show("arnis:crime"),
         ));
     }
     if ctx.extras.disasters {
@@ -173,6 +180,39 @@ pub fn outbreak(ctx: &PackContext) -> Value {
             button("Restart", "Start again from day one", run("trigger arnis.ob.ctl set 1")),
             button("Skip to Night", "Bring on the next wave now", run("trigger arnis.ob.ctl set 2")),
             button("Stop", "End the outbreak and remove the zombies", run("trigger arnis.ob.ctl set 3")),
+        ],
+        "exit_action": back(ctx.extras.pause_menu),
+        "pause": false,
+    })
+}
+
+/// Three rows of three: difficulty, police on patrol and pedestrians, each Normal by default.
+pub fn crime(ctx: &PackContext) -> Value {
+    let pick = |n: u8, label: &str, tooltip: &str| {
+        button(
+            label,
+            tooltip,
+            run(&format!("trigger arnis.cr.ctl set {n}")),
+        )
+    };
+    json!({
+        "type": "minecraft:multi_action",
+        "title": text("Crime Spree", "red"),
+        "body": [
+            message(text("Difficulty: how long you must stay out of sight before the countdown starts, how long the countdown is, and how many police hunt you.", "gray")),
+            message(text("Police: how many patrol near you while you are not wanted. Pedestrians: how many walk the streets around you.", "gray")),
+        ],
+        "columns": 3,
+        "actions": [
+            pick(1, "Easy", "2 s out of sight, 20 s countdown, 4 hunting"),
+            pick(2, "Normal", "3 s out of sight, 30 s countdown, 6 hunting"),
+            pick(3, "Hard", "5 s out of sight, 45 s countdown, 8 hunting"),
+            pick(4, "Few Police", "2 on patrol near you"),
+            pick(5, "Some Police", "4 on patrol near you"),
+            pick(6, "Many Police", "6 on patrol near you"),
+            pick(7, "Quiet Streets", "20 pedestrians by day, 5 at night"),
+            pick(8, "Busy Streets", "40 by day, 10 at night"),
+            pick(9, "Packed Streets", "60 by day, 15 at night"),
         ],
         "exit_action": back(ctx.extras.pause_menu),
         "pause": false,

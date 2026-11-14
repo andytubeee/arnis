@@ -1,2 +1,2 @@
 scoreboard players set @s arnis.unseen 0
-scoreboard players set @s arnis.hide 30
+scoreboard players operation @s arnis.hide = #countdown arnis.cr
