@@ -301,6 +301,26 @@ const STORIES: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/story/current.mcfunction",
     "ov80/data/arnis/function/story/current_at.mcfunction",
     "ov80/data/arnis/function/story/finish.mcfunction",
+    "ov80/data/arnis/function/story/finish_at.mcfunction",
+    "ov80/data/arnis/function/story/finale/allay_courier.mcfunction",
+    "ov80/data/arnis/function/story/finale/band_reunion.mcfunction",
+    "ov80/data/arnis/function/story/finale/cat_mayor.mcfunction",
+    "ov80/data/arnis/function/story/finale/end.mcfunction",
+    "ov80/data/arnis/function/story/finale/fireworks.mcfunction",
+    "ov80/data/arnis/function/story/finale/founders_festival.mcfunction",
+    "ov80/data/arnis/function/story/finale/friendly_ghost.mcfunction",
+    "ov80/data/arnis/function/story/finale/ghost_fade.mcfunction",
+    "ov80/data/arnis/function/story/finale/golems_heart.mcfunction",
+    "ov80/data/arnis/function/story/finale/lost_dog.mcfunction",
+    "ov80/data/arnis/function/story/finale/message_bottle.mcfunction",
+    "ov80/data/arnis/function/story/finale/night.mcfunction",
+    "ov80/data/arnis/function/story/finale/picnic_bakeoff.mcfunction",
+    "ov80/data/arnis/function/story/finale/postcard_tour.mcfunction",
+    "ov80/data/arnis/function/story/finale/riddle_treasure.mcfunction",
+    "ov80/data/arnis/function/story/finale/secret_garden.mcfunction",
+    "ov80/data/arnis/function/story/finale/stargazer.mcfunction",
+    "ov80/data/arnis/function/story/finale/surprise_party.mcfunction",
+    "ov80/data/arnis/function/story/finale/time_capsule.mcfunction",
     "ov80/data/arnis/function/story/gossip.mcfunction",
     "ov80/data/arnis/function/story/grant.mcfunction",
     "ov80/data/arnis/function/story/intro.mcfunction",
@@ -1350,6 +1370,15 @@ mod tests {
         assert!(menu.contains("arnis:story"), "{menu}");
         let load = text_of(&out, "data/minecraft/tags/function/load.json").unwrap();
         assert!(load.contains("arnis:story/load"), "{load}");
+    }
+
+    #[test]
+    fn every_storyline_has_its_finale() {
+        let out = files(&ctx(all()));
+        for line in &stories::lines::STORYLINES {
+            let path = format!("ov80/data/arnis/function/story/finale/{}.mcfunction", line.key);
+            assert!(text_of(&out, &path).is_some(), "{path}");
+        }
     }
 
     #[test]
