@@ -427,6 +427,13 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub zombie_outbreak: bool,
 
+    /// Crime Spree: rob pedestrians for cash by crouching next to them, with skeleton police
+    /// patrolling the streets who hunt you if they see a robbery or you hit one, until they
+    /// lose sight of you for 3 seconds and a 30 second countdown runs out. Starts with a sword and a bow. Implies --pedestrians
+    /// and --moving-vehicles and starts the world in survival. Java 1.21.6+.
+    #[arg(long, default_value_t = false)]
+    pub crime_spree: bool,
+
     /// Disasters: a meteor shower, a tornado, a flood, an earthquake and more, one every few
     /// minutes in random order, picked from those the area can have. Floods rise from the
     /// mapped rivers and the sea. Starts the world in survival. Implies --fillground and a
@@ -1519,8 +1526,14 @@ pub fn apply_feature_needs(args: &mut Args) {
     if args.disasters {
         args.ground_level = args.ground_level.max(DISASTER_GROUND_LEVEL);
     }
-    if args.zombie_outbreak || args.disasters {
+    if args.zombie_outbreak || args.disasters || args.crime_spree {
         args.mob_spawning = MobSpawning::Off;
+    }
+    // The police patrol where pedestrians walk, the pedestrians are who gets robbed, and a
+    // passing car is a way out.
+    if args.crime_spree {
+        args.pedestrians = true;
+        args.moving_vehicles = true;
     }
 }
 
@@ -1570,6 +1583,7 @@ pub fn apply_body_defaults(args: &mut Args) {
     args.discoveries = false;
     args.moving_vehicles = false;
     args.pedestrians = false;
+    args.crime_spree = false;
     // Nothing lives there, and the one barren biome would still spawn zombies.
     args.mob_spawning = MobSpawning::Off;
     // Airless bodies look right at night. Only a default: comparing against the
@@ -1761,6 +1775,7 @@ pub fn validate_args(args: &Args) -> Result<(), String> {
         (args.body_gravity, "--body-gravity"),
         (args.moving_vehicles, "--moving-vehicles"),
         (args.pedestrians, "--pedestrians"),
+        (args.crime_spree, "--crime-spree"),
     ];
     if !args.java() {
         // Bedrock runs the vehicles from an add-on of its own.
@@ -2363,12 +2378,20 @@ mod tests {
         for extra in [
             &["--zombie-outbreak"][..],
             &["--disasters"],
+            &["--crime-spree"],
             &["--body", "moon"],
         ] {
             let mut cmd = extra.to_vec();
             cmd.extend(["--mob-spawning", "all"]);
             assert_eq!(parse(&cmd).mob_spawning, MobSpawning::Off, "{extra:?}");
         }
+
+        let crime = parse(&["--crime-spree"]);
+        assert!(crime.pedestrians && crime.moving_vehicles);
+        assert!(validate_args(&crime).is_ok());
+        let off_earth = parse(&["--crime-spree", "--body", "moon"]);
+        assert!(!off_earth.crime_spree && !off_earth.pedestrians && !off_earth.moving_vehicles);
+        assert!(validate_args(&parse(&["--bedrock", "--crime-spree"])).is_err());
 
         let luanti = validate_args(&parse(&["--luanti", "--mob-spawning", "animals"])).unwrap_err();
         assert!(luanti.contains("--mob-spawning"), "{luanti}");

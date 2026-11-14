@@ -258,6 +258,31 @@ const OUTBREAK: &[(&str, &[u8])] = static_files![
     "ov121/data/arnis/loot_table/outbreak/supply_drop.json",
 ];
 
+const CRIME: &[(&str, &[u8])] = static_files![
+    "data/arnis/function/crime/load.mcfunction",
+    "data/arnis/function/crime/tick.mcfunction",
+    "data/arnis/function/crime/unsupported.mcfunction",
+    "ov80/data/arnis/function/crime/caught.mcfunction",
+    "ov80/data/arnis/function/crime/clear.mcfunction",
+    "ov80/data/arnis/function/crime/cop.mcfunction",
+    "ov80/data/arnis/function/crime/dress.mcfunction",
+    "ov80/data/arnis/function/crime/heat.mcfunction",
+    "ov80/data/arnis/function/crime/hit.mcfunction",
+    "ov80/data/arnis/function/crime/hud.mcfunction",
+    "ov80/data/arnis/function/crime/intro.mcfunction",
+    "ov80/data/arnis/function/crime/load.mcfunction",
+    "ov80/data/arnis/function/crime/patrol.mcfunction",
+    "ov80/data/arnis/function/crime/player.mcfunction",
+    "ov80/data/arnis/function/crime/ray.mcfunction",
+    "ov80/data/arnis/function/crime/rob.mcfunction",
+    "ov80/data/arnis/function/crime/second.mcfunction",
+    "ov80/data/arnis/function/crime/sight.mcfunction",
+    "ov80/data/arnis/function/crime/sighted.mcfunction",
+    "ov80/data/arnis/tags/block/see_through.json",
+    "ov80/data/arnis/function/crime/spotted.mcfunction",
+    "ov80/data/arnis/function/crime/tick.mcfunction",
+];
+
 const DISASTERS: &[(&str, &[u8])] = static_files![
     "data/arnis/function/disaster/load.mcfunction",
     "data/arnis/function/disaster/tick.mcfunction",
@@ -513,6 +538,7 @@ pub struct Extras {
     pub discoveries: bool,
     pub pause_menu: bool,
     pub outbreak: bool,
+    pub crime: bool,
     pub disasters: bool,
     pub cars: bool,
     /// Set once the rail network turns out to have trains on it.
@@ -532,6 +558,7 @@ impl Extras {
             discoveries: args.discoveries,
             pause_menu: args.pause_menu,
             outbreak: args.zombie_outbreak,
+            crime: args.crime_spree,
             disasters: args.disasters,
             cars: args.moving_vehicles,
             trains: false,
@@ -558,6 +585,7 @@ impl Extras {
             || self.discoveries
             || self.pause_menu
             || self.outbreak
+            || self.crime
             || self.disasters
             || self.cars
             || self.trains
@@ -691,7 +719,7 @@ pub fn install(world: &Path, ctx: &PackContext) -> Result<(), String> {
             eprintln!("Warning: the pause menu logo was left out of resources.zip: {e}");
         }
     }
-    if ctx.extras.outbreak || ctx.extras.disasters {
+    if ctx.extras.outbreak || ctx.extras.disasters || ctx.extras.crime {
         crate::world_utils::start_in_survival(world)?;
     }
     Ok(())
@@ -735,6 +763,9 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
     if ex.outbreak {
         add_static(OUTBREAK);
     }
+    if ex.crime {
+        add_static(CRIME);
+    }
     if ex.disasters {
         add_static(DISASTERS);
     }
@@ -760,6 +791,7 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
         (ex.traffic_lights, "traffic"),
         (ex.pause_menu, "menu"),
         (ex.outbreak, "outbreak"),
+        (ex.crime, "crime"),
         (ex.disasters, "disaster"),
         (ex.cars, "cars"),
         (ex.trains, "trains"),
@@ -1077,6 +1109,7 @@ mod tests {
             discoveries: true,
             pause_menu: true,
             outbreak: true,
+            crime: true,
             disasters: true,
             cars: true,
             trains: true,
@@ -1119,7 +1152,7 @@ mod tests {
     fn every_bundled_file_is_shipped_by_some_feature() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/minecraft/datapack_extras");
         let listed: std::collections::HashSet<&str> = [
-            CORE, GRAVITY, TRAFFIC, MENU, OUTBREAK, DISASTERS, CARS, TRAINS, WALK,
+            CORE, GRAVITY, TRAFFIC, MENU, OUTBREAK, CRIME, DISASTERS, CARS, TRAINS, WALK,
         ]
         .iter()
         .flat_map(|set| set.iter().map(|(p, _)| *p))

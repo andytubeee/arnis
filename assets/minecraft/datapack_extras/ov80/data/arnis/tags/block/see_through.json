@@ -1,0 +1,9 @@
+{
+  "values": [
+    "#minecraft:replaceable",
+    "#minecraft:impermeable",
+    "#minecraft:fences",
+    "minecraft:glass_pane",
+    "minecraft:iron_bars"
+  ]
+}

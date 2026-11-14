@@ -2804,6 +2804,11 @@ pub fn generate_world_with_options(
         }
         walk_network = walk_network.filter(|net| !net.is_empty());
         extras.pedestrians = walk_network.is_some();
+        // The police join where pedestrians walk and the pedestrians are who gets robbed.
+        if extras.crime && !extras.pedestrians {
+            eprintln!("Warning: Crime Spree left out, as the area has no footways for pedestrians to walk.");
+            extras.crime = false;
+        }
         let (places, settlement) = extras_places.unwrap_or_default();
         let surface = crate::datapack::disasters::Surface::finish();
         let disasters = disaster_woods.map(|wooded| {
