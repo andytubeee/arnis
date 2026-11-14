@@ -283,6 +283,7 @@ const CRIME: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/crime/player.mcfunction",
     "ov80/data/arnis/function/crime/posse.mcfunction",
     "ov80/data/arnis/function/crime/ray.mcfunction",
+    "ov80/data/arnis/function/crime/reported.mcfunction",
     "ov80/data/arnis/function/crime/rob.mcfunction",
     "ov80/data/arnis/function/crime/second.mcfunction",
     "ov80/data/arnis/function/crime/sight.mcfunction",

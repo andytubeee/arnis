@@ -7,5 +7,10 @@ function arnis:crime/pay with storage arnis:crime take
 scoreboard players operation #take arnis.cr *= #10 arnis.cr
 tellraw @s [{"text":"You robbed a pedestrian: +$","color":"green"},{"score":{"name":"#take","objective":"arnis.cr"},"color":"green"}]
 playsound minecraft:entity.item.pickup player @s
+playsound minecraft:entity.villager.no neutral @a[distance=..16]
 function arnis:crime/sight
-execute if score #sighted arnis.cr matches 1 run function arnis:crime/spotted
+execute if score #sighted arnis.cr matches 1 run return run function arnis:crime/spotted
+# Unseen by the police, a pedestrian nearby calls them half the time.
+execute unless entity @e[tag=arnis.walker,tag=!arnis.robbed,distance=..10] run return 0
+execute store result score #roll arnis.cr run random value 1..2
+execute if score #roll arnis.cr matches 1 run function arnis:crime/reported

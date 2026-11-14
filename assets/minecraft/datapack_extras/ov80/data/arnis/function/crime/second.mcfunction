@@ -1,4 +1,6 @@
 scoreboard players set #cr_t arnis.cr 0
+scoreboard players add #siren arnis.cr 1
+execute if score #siren arnis.cr matches 2.. run scoreboard players set #siren arnis.cr 0
 scoreboard players enable @a arnis.cr.ctl
 execute as @a[scores={arnis.cr.ctl=1..}] run function arnis:crime/control
 execute if score #day arnis.cr matches 1.. run scoreboard players operation #day_cap arnis.walk = #day arnis.cr
