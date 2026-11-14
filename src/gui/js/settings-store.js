@@ -59,6 +59,7 @@ const SETTINGS = [
   { id: 'supply-crates-toggle', kind: 'checkbox', store: OWN },
   { id: 'zombie-outbreak-toggle', kind: 'checkbox', store: OWN },
   { id: 'crime-spree-toggle', kind: 'checkbox', store: OWN },
+  { id: 'city-stories-toggle', kind: 'checkbox', store: OWN },
   { id: 'disasters-toggle', kind: 'checkbox', store: OWN },
   { id: 'body-gravity-toggle', kind: 'checkbox', store: OWN },
   // The facade controls. Registered here like every other segmented control,

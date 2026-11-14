@@ -2186,6 +2186,7 @@ function refreshGameplayRows(format) {
   gate('pause-menu-toggle');
   gate('zombie-outbreak-toggle');
   gate('crime-spree-toggle', [earth, 'reason_earth']);
+  gate('city-stories-toggle', [earth, 'reason_earth']);
   gate('disasters-toggle');
   gate('discoveries-toggle', [earth, 'reason_earth']);
   gate('traffic-lights-toggle', [earth, 'reason_earth'], [!blueprint, 'reason_blueprint']);
@@ -2208,7 +2209,7 @@ function mobSpawningReason(format) {
   return why([current === 'java' || current === 'bedrock', 'reason_java_bedrock'],
     [selectedCelestialBody === 'earth', 'reason_earth'],
     [!gameplayToggle('zombie-outbreak-toggle'), 'reason_outbreak'], [!gameplayToggle('disasters-toggle'), 'reason_disasters'],
-    [!gameplayToggle('crime-spree-toggle'), 'reason_crime'],
+    [!gameplayToggle('crime-spree-toggle'), 'reason_crime'], [!gameplayToggle('city-stories-toggle'), 'reason_stories'],
     [!(isOneWorldEnabled() && !!(oneWorldInfo && oneWorldInfo.exists)), 'reason_world_set']);
 }
 
@@ -2229,7 +2230,7 @@ function getMobSpawning() {
 }
 
 function initMobSpawningLockout() {
-  ['zombie-outbreak-toggle', 'disasters-toggle', 'crime-spree-toggle'].forEach((id) => {
+  ['zombie-outbreak-toggle', 'disasters-toggle', 'crime-spree-toggle', 'city-stories-toggle'].forEach((id) => {
     const toggle = document.getElementById(id);
     if (toggle) toggle.addEventListener('change', () => refreshMobSpawningRow());
   });
@@ -3755,6 +3756,7 @@ const ROW_REASONS = {
   reason_outbreak: ['Turn off Zombie Outbreak.', 'zombie-outbreak-toggle'],
   reason_disasters: ['Turn off Disasters.', 'disasters-toggle'],
   reason_crime: ['Turn off Crime Spree.', 'crime-spree-toggle'],
+  reason_stories: ['Turn off City Stories.', 'city-stories-toggle'],
 };
 
 // The key of the first check that fails, as [ok, key] pairs; null when all pass.
@@ -4950,6 +4952,7 @@ async function startGeneration(confirmed = false, prewarm = false) {
         supplyCrates: gameplayToggle('supply-crates-toggle'),
         zombieOutbreak: gameplayToggle('zombie-outbreak-toggle'),
         crimeSpree: gameplayToggle('crime-spree-toggle'),
+        cityStories: gameplayToggle('city-stories-toggle'),
         disasters: gameplayToggle('disasters-toggle'),
         bodyGravity: gameplayToggle('body-gravity-toggle'),
         oneWorld: oneWorld,

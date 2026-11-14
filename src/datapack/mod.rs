@@ -550,6 +550,7 @@ pub struct Extras {
     pub pause_menu: bool,
     pub outbreak: bool,
     pub crime: bool,
+    pub stories: bool,
     pub disasters: bool,
     pub cars: bool,
     /// Set once the rail network turns out to have trains on it.
@@ -570,6 +571,7 @@ impl Extras {
             pause_menu: args.pause_menu,
             outbreak: args.zombie_outbreak,
             crime: args.crime_spree,
+            stories: args.city_stories,
             disasters: args.disasters,
             cars: args.moving_vehicles,
             trains: false,
@@ -597,6 +599,7 @@ impl Extras {
             || self.pause_menu
             || self.outbreak
             || self.crime
+            || self.stories
             || self.disasters
             || self.cars
             || self.trains
@@ -605,7 +608,7 @@ impl Extras {
 
     /// Whether the area's name and places are needed at all.
     pub fn wants_places(&self) -> bool {
-        self.discoveries || self.pause_menu || self.outbreak
+        self.discoveries || self.pause_menu || self.outbreak || self.stories
     }
 }
 
@@ -1130,6 +1133,7 @@ mod tests {
             pause_menu: true,
             outbreak: true,
             crime: true,
+            stories: true,
             disasters: true,
             cars: true,
             trains: true,

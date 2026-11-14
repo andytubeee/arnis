@@ -436,6 +436,12 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub crime_spree: bool,
 
+    /// City Stories: a chill co-op story picked from the map's real places, with people to
+    /// talk to and side errands. Works alone or with --crime-spree. Implies --pedestrians,
+    /// --moving-vehicles and --pause-menu. Java 1.21.6+.
+    #[arg(long, default_value_t = false)]
+    pub city_stories: bool,
+
     /// Disasters: a meteor shower, a tornado, a flood, an earthquake and more, one every few
     /// minutes in random order, picked from those the area can have. Floods rise from the
     /// mapped rivers and the sea. Starts the world in survival. Implies --fillground and a
@@ -1528,12 +1534,13 @@ pub fn apply_feature_needs(args: &mut Args) {
     if args.disasters {
         args.ground_level = args.ground_level.max(DISASTER_GROUND_LEVEL);
     }
-    if args.zombie_outbreak || args.disasters || args.crime_spree {
+    if args.zombie_outbreak || args.disasters || args.crime_spree || args.city_stories {
         args.mob_spawning = MobSpawning::Off;
     }
     // The police patrol where pedestrians walk, the pedestrians are who gets robbed, a
     // passing car is a way out, and the pause menu holds its settings.
-    if args.crime_spree {
+    // Story people and errand-givers are pedestrians, and an errand can be a ride.
+    if args.crime_spree || args.city_stories {
         args.pedestrians = true;
         args.moving_vehicles = true;
         args.pause_menu = true;
@@ -1587,6 +1594,7 @@ pub fn apply_body_defaults(args: &mut Args) {
     args.moving_vehicles = false;
     args.pedestrians = false;
     args.crime_spree = false;
+    args.city_stories = false;
     // Nothing lives there, and the one barren biome would still spawn zombies.
     args.mob_spawning = MobSpawning::Off;
     // Airless bodies look right at night. Only a default: comparing against the
@@ -1779,6 +1787,7 @@ pub fn validate_args(args: &Args) -> Result<(), String> {
         (args.moving_vehicles, "--moving-vehicles"),
         (args.pedestrians, "--pedestrians"),
         (args.crime_spree, "--crime-spree"),
+        (args.city_stories, "--city-stories"),
     ];
     if !args.java() {
         // Bedrock runs the vehicles from an add-on of its own.
@@ -2395,6 +2404,15 @@ mod tests {
         let off_earth = parse(&["--crime-spree", "--body", "moon"]);
         assert!(!off_earth.crime_spree && !off_earth.pedestrians && !off_earth.moving_vehicles);
         assert!(validate_args(&parse(&["--bedrock", "--crime-spree"])).is_err());
+
+        let stories = parse(&["--city-stories", "--mob-spawning", "all"]);
+        assert!(stories.pedestrians && stories.moving_vehicles && stories.pause_menu);
+        assert_eq!(stories.mob_spawning, MobSpawning::Off);
+        assert!(validate_args(&stories).is_ok());
+        let both = parse(&["--city-stories", "--crime-spree"]);
+        assert!(both.city_stories && both.crime_spree && validate_args(&both).is_ok());
+        assert!(!parse(&["--city-stories", "--body", "moon"]).city_stories);
+        assert!(validate_args(&parse(&["--bedrock", "--city-stories"])).is_err());
 
         let luanti = validate_args(&parse(&["--luanti", "--mob-spawning", "animals"])).unwrap_err();
         assert!(luanti.contains("--mob-spawning"), "{luanti}");
