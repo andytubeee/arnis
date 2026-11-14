@@ -1,4 +1,5 @@
-execute unless score @s arnis.cash matches 0.. run scoreboard players set @s arnis.cash 0
+execute store result score @s arnis.cash run clear @s minecraft:emerald 0
+scoreboard players operation @s arnis.cash *= #10 arnis.cr
 execute unless score @s arnis.wanted matches 1 run return run title @s actionbar [{"text":"$","color":"green"},{"score":{"name":"@s","objective":"arnis.cash"},"color":"green"}]
 execute if score @s arnis.unseen matches 0 run return run title @s actionbar [{"text":"$","color":"green"},{"score":{"name":"@s","objective":"arnis.cash"},"color":"green"},{"text":"   WANTED","color":"red","bold":true},{"text":"  SEEN BY POLICE","color":"red","bold":false}]
 execute if score @s arnis.unseen <= #delay arnis.cr run return run title @s actionbar [{"text":"$","color":"green"},{"score":{"name":"@s","objective":"arnis.cash"},"color":"green"},{"text":"   WANTED","color":"red","bold":true},{"text":"  hidden","color":"yellow","bold":false}]

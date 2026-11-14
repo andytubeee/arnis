@@ -268,6 +268,8 @@ const CRIME: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/crime/cop.mcfunction",
     "ov80/data/arnis/function/crime/crouch.mcfunction",
     "ov80/data/arnis/function/crime/crowd.mcfunction",
+    "ov80/data/arnis/function/crime/dealer.mcfunction",
+    "ov80/data/arnis/function/crime/dealer_spawn.mcfunction",
     "ov80/data/arnis/function/crime/difficulty.mcfunction",
     "ov80/data/arnis/function/crime/dress.mcfunction",
     "ov80/data/arnis/function/crime/heat.mcfunction",
@@ -276,6 +278,7 @@ const CRIME: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/crime/intro.mcfunction",
     "ov80/data/arnis/function/crime/load.mcfunction",
     "ov80/data/arnis/function/crime/patrol.mcfunction",
+    "ov80/data/arnis/function/crime/pay.mcfunction",
     "ov80/data/arnis/function/crime/player.mcfunction",
     "ov80/data/arnis/function/crime/ray.mcfunction",
     "ov80/data/arnis/function/crime/rob.mcfunction",
@@ -284,6 +287,7 @@ const CRIME: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/crime/sighted.mcfunction",
     "ov80/data/arnis/tags/block/see_through.json",
     "ov80/data/arnis/function/crime/spotted.mcfunction",
+    "ov80/data/arnis/function/crime/stock.mcfunction",
     "ov80/data/arnis/function/crime/tick.mcfunction",
 ];
 

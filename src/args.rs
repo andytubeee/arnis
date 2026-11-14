@@ -427,7 +427,8 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub zombie_outbreak: bool,
 
-    /// Crime Spree: rob pedestrians for cash by crouching next to them, with skeleton police
+    /// Crime Spree: rob pedestrians for cash by crouching next to them and spend it at arms
+    /// dealers who turn up on the street, with skeleton police
     /// patrolling the streets who hunt you if they see a robbery or you hit one, until they
     /// lose sight of you for a few seconds and a countdown runs out. Starts with a sword and a bow;
     /// difficulty, police and crowds are set in the pause menu. Implies --pedestrians,

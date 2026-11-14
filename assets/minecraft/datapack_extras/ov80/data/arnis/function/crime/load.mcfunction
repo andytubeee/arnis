@@ -14,6 +14,7 @@ scoreboard objectives add arnis.cr.hit minecraft.custom:minecraft.damage_dealt
 # Friendly fire stays on, as it is by default, so hitting an officer still lands.
 team add arnis.law
 scoreboard players set #cr_t arnis.cr 0
+scoreboard players set #10 arnis.cr 10
 scoreboard objectives add arnis.cr.ctl trigger
 # Settings from the pause menu outlast a reload; until one is picked, Normal.
 execute unless score #countdown arnis.cr matches 1.. run function arnis:crime/difficulty {delay:3,countdown:30,hunt:6}
