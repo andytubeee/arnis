@@ -193,7 +193,6 @@ pub fn outbreak(ctx: &PackContext) -> Value {
     })
 }
 
-/// Three rows of three: difficulty, police on patrol and pedestrians, each Normal by default.
 /// City Stories' page. It never names the storyline, which is a surprise until its end.
 pub fn story(ctx: &PackContext) -> Value {
     let pick = |n: u8, label: &str, tooltip: &str| {
@@ -220,6 +219,7 @@ pub fn story(ctx: &PackContext) -> Value {
     })
 }
 
+/// Three rows of three: difficulty, police on patrol and pedestrians, each Normal by default.
 pub fn crime(ctx: &PackContext) -> Value {
     let pick = |n: u8, label: &str, tooltip: &str| {
         button(

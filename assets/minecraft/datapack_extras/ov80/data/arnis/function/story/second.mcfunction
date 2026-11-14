@@ -6,5 +6,6 @@ function arnis:story/errand/second
 execute if score #step arnis.story >= #steps arnis.story run return 0
 # Whoever waits at the current stop is there while a player is near, glowing to be found.
 function arnis:story/current
+execute as @e[type=minecraft:villager,tag=arnis.story_npc] unless score @s arnis.story = #step arnis.story run kill @s
 execute unless entity @e[type=minecraft:villager,tag=arnis.story_npc] run function arnis:story/spawn with storage arnis:story cur
 execute as @e[type=minecraft:villager,tag=arnis.story_npc] at @s unless entity @a[distance=..64] run kill @s

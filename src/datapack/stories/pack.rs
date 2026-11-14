@@ -48,12 +48,13 @@ impl Story {
         })
     }
 
+    /// A place's quoted name, and where to stand there: x, the block above its ground, z.
     fn spot(&self, i: usize) -> (String, i32, i32, i32) {
         let p = &self.places[i].place;
         (
             json_text(&json!(p.name)),
             p.anchor.0,
-            p.ground_y.unwrap_or(64),
+            p.ground_y.unwrap_or(63) + 1,
             p.anchor.1,
         )
     }
@@ -85,7 +86,9 @@ impl Story {
             });
             let (name, x, y, z) = self.spot(i);
             steps.push(format!(
-                "{{name:{name},x:{x},y:{y},z:{z},npc:{},dialog:{}}}",
+                // sy: spreadplayers searches down from there for ground, as travel does.
+                "{{name:{name},x:{x},y:{y},sy:{},z:{z},npc:{},dialog:{}}}",
+                y + 3,
                 json_text(&json!(step.npc)),
                 json_text(&dialog)
             ));
@@ -228,6 +231,14 @@ mod tests {
             text.contains("scoreboard players set #outbreak arnis.story 0"),
             "{text}"
         );
+    }
+
+    #[test]
+    fn people_stand_on_the_ground_and_spread_from_above_it() {
+        // Ground at 70: stand at 71, and spreadplayers searches down from 74 as travel does.
+        let text = story().plan_function();
+        assert!(text.contains(",y:71,sy:74,"), "{text}");
+        assert!(text.contains(",ty:71,"), "{text}");
     }
 
     #[test]

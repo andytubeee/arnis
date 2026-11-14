@@ -1,16 +1,7 @@
 {
   "criteria": {
     "clicked": {
-      "trigger": "minecraft:player_interacted_with_entity",
-      "conditions": {
-        "entity": [
-          {
-            "condition": "minecraft:entity_properties",
-            "entity": "this",
-            "predicate": { "type": "minecraft:interaction", "nbt": "{Tags:[\"arnis.npc\"]}" }
-          }
-        ]
-      }
+      "trigger": "minecraft:player_interacted_with_entity"
     }
   },
   "rewards": { "function": "arnis:npc/click" }

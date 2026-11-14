@@ -1373,10 +1373,33 @@ mod tests {
     }
 
     #[test]
+    fn the_menu_click_needs_no_version_specific_predicate() {
+        // Predicates are spelled three ways across versions; the function filters instead.
+        let out = files(&ctx(all()));
+        let click = text_of(&out, "ov80/data/arnis/advancement/npc/click.json").unwrap();
+        assert!(!click.contains("conditions"), "{click}");
+    }
+
+    #[test]
+    fn only_the_current_steps_person_counts() {
+        let out = files(&ctx(all()));
+        let spawn = text_of(&out, "ov80/data/arnis/function/story/spawn.mcfunction").unwrap();
+        assert!(spawn.contains("arnis.story = #step arnis.story"), "{spawn}");
+        let second = text_of(&out, "ov80/data/arnis/function/story/second.mcfunction").unwrap();
+        assert!(
+            second.contains("unless score @s arnis.story = #step arnis.story run kill @s"),
+            "{second}"
+        );
+    }
+
+    #[test]
     fn every_storyline_has_its_finale() {
         let out = files(&ctx(all()));
         for line in &stories::lines::STORYLINES {
-            let path = format!("ov80/data/arnis/function/story/finale/{}.mcfunction", line.key);
+            let path = format!(
+                "ov80/data/arnis/function/story/finale/{}.mcfunction",
+                line.key
+            );
             assert!(text_of(&out, &path).is_some(), "{path}");
         }
     }
