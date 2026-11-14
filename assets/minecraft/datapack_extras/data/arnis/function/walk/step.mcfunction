@@ -1,3 +1,4 @@
+execute if score @s arnis.wpause matches 1.. run return run scoreboard players remove @s arnis.wpause 1
 execute if score @s arnis.ww matches 1.. run return run function arnis:walk/hold
 execute store result score #in_way arnis.walk run function arnis:walk/ahead
 execute if score #in_way arnis.walk matches 1 run return run function arnis:walk/blocked

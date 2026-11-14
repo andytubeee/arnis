@@ -1,4 +1,4 @@
-scoreboard players set @e[tag=arnis.npc_it,distance=..4] arnis.ww 60
+scoreboard players set @e[tag=arnis.npc_it,distance=..4] arnis.wpause 30
 execute if score @s arnis.npc matches 1 run function arnis:npc/hi
 execute if score @s arnis.npc matches 2 run function arnis:npc/chat
 execute if score @s arnis.npc matches 3 run function arnis:npc/directions

@@ -7,6 +7,8 @@ scoreboard objectives add arnis.wl dummy
 scoreboard objectives add arnis.wn dummy
 scoreboard objectives add arnis.wv dummy
 scoreboard objectives add arnis.ww dummy
+# Steps a walker stands still for, talking to a player, before carrying on where it was.
+scoreboard objectives add arnis.wpause dummy
 scoreboard objectives add arnis.wb dummy
 # Each walker's own run of chances, shared with whoever walks with them, own pace,
 # heading and number: of two held up by each other, the younger waits.

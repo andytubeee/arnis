@@ -5,7 +5,7 @@ scoreboard players operation @s arnis.npc.t = #k arnis.npc
 scoreboard players reset @s arnis.npc
 scoreboard players enable @s arnis.npc
 # They stop to talk, for as long as a menu takes.
-scoreboard players set @e[tag=arnis.npc_it,distance=..8] arnis.ww 60
+scoreboard players set @e[tag=arnis.npc_it,distance=..8] arnis.wpause 100
 data modify storage arnis:npc menu.title set value {text:"Someone"}
 data modify storage arnis:npc menu.title set from entity @e[tag=arnis.npc_it,distance=..8,limit=1] CustomName
 execute store result storage arnis:npc menu.i int 1 run scoreboard players get @e[tag=arnis.npc_it,distance=..8,limit=1] arnis.npc.tr
