@@ -1798,6 +1798,22 @@ fn generate_highways_internal(
                     neighbor_base + 4,
                     z,
                 );
+                // A supply crate on the ground under the sign.
+                if args.supply_crates
+                    && editor
+                        .get_block_absolute(x + 1, neighbor_base + 1, z)
+                        .is_none()
+                {
+                    editor.set_chest_with_items_absolute(
+                        x + 1,
+                        neighbor_base + 1,
+                        z,
+                        crate::element_processing::subprocessor::buildings_loot::supply_crate_loot(
+                            x + 1,
+                            z,
+                        ),
+                    );
+                }
             }
         } else if element
             .tags()

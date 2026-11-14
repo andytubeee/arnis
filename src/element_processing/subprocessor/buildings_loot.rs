@@ -178,6 +178,48 @@ pub fn themed_chest_loot(
     roll_chest(active_table(), x, z, salt, theme)
 }
 
+/// A supply crate: some of the food below and one or two swiftness potions, the same
+/// for a given position on every run.
+pub fn supply_crate_loot(x: i32, z: i32) -> Vec<HashMap<String, Value>> {
+    const FOOD: [(&str, i32); 5] = [
+        ("minecraft:bread", 6),
+        ("minecraft:cooked_beef", 4),
+        ("minecraft:apple", 6),
+        ("minecraft:baked_potato", 6),
+        ("minecraft:golden_carrot", 3),
+    ];
+    let mut rng = coord_rng(x, z, 0x5A99_17C0);
+    let stack = |id: &str, slot: usize, count: i32| {
+        let mut item = HashMap::new();
+        item.insert("id".to_string(), Value::String(id.to_string()));
+        item.insert("Slot".to_string(), Value::Byte(slot as i8));
+        item.insert("count".to_string(), Value::Int(count));
+        item
+    };
+    let mut out = Vec::new();
+    for (slot, &(id, max)) in FOOD.iter().enumerate() {
+        if rng.random_bool(0.6) {
+            out.push(stack(id, slot, rng.random_range(1..=max)));
+        }
+    }
+    for slot in 13..13 + rng.random_range(1..=2) {
+        let mut potion = stack("minecraft:potion", slot, 1);
+        let contents = HashMap::from([(
+            "potion".to_string(),
+            Value::String("minecraft:swiftness".to_string()),
+        )]);
+        potion.insert(
+            "components".to_string(),
+            Value::Compound(HashMap::from([(
+                "minecraft:potion_contents".to_string(),
+                Value::Compound(contents),
+            )])),
+        );
+        out.push(potion);
+    }
+    out
+}
+
 fn roll_chest(
     table: &LootTable,
     x: i32,
@@ -237,6 +279,22 @@ fn roll_chest(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn supply_crates_always_hold_a_swiftness_potion_and_repeat_per_position() {
+        for (x, z) in [(0, 0), (17, -40), (-999, 12345)] {
+            let crate_loot = supply_crate_loot(x, z);
+            assert_eq!(crate_loot, supply_crate_loot(x, z));
+            let swiftness = crate_loot.iter().filter(|i| {
+                i.get("id") == Some(&Value::String("minecraft:potion".to_string()))
+                    && format!("{:?}", i.get("components")).contains("minecraft:swiftness")
+            });
+            assert!((1..=2).contains(&swiftness.count()));
+            let mut slots: Vec<_> = crate_loot.iter().map(|i| i["Slot"].clone()).collect();
+            slots.dedup();
+            assert_eq!(slots.len(), crate_loot.len());
+        }
+    }
 
     // FNV-1a over every (slot, id, count) a grid of chests rolls.
     fn themed_fingerprint(table: &LootTable, theme: LootTheme) -> u64 {

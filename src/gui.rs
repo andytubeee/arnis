@@ -2381,6 +2381,7 @@ fn piece_argv(args: &Args, world_path: &Path, flags: &[String]) -> Vec<std::ffi:
         ("--disasters", args.disasters),
         ("--moving-vehicles", args.moving_vehicles),
         ("--pedestrians", args.pedestrians),
+        ("--supply-crates", args.supply_crates),
     ];
     values.extend(switches.iter().filter(|f| f.1).map(|f| f.0.to_string()));
     if let Some(t) = args.timeout {
@@ -2723,6 +2724,7 @@ fn gui_start_generation(
     disasters: bool,
     moving_vehicles: bool,
     pedestrians: bool,
+    supply_crates: bool,
     body_gravity: bool,
     one_world: bool,
     one_world_name: String,
@@ -3151,6 +3153,7 @@ fn gui_start_generation(
                 disasters,
                 moving_vehicles,
                 pedestrians,
+                supply_crates,
                 live: Default::default(),
                 progress: None,
                 no_update_check: false,

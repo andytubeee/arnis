@@ -2192,6 +2192,7 @@ function refreshGameplayRows(format) {
     [vehicles, 'reason_not_one_world'], [earth, 'reason_earth']);
   setSettingsRowAvailable('moving-cars-toggle', !carsWhy, carsWhy);
   gate('pedestrians-toggle', [earth, 'reason_earth']);
+  gate('supply-crates-toggle', [earth, 'reason_earth']);
   const gravityWhy = why([!earth, 'reason_moon_mars'], ...packWhy);
   setSettingsRowAvailable('body-gravity-toggle', !gravityWhy, gravityWhy);
   // Last, as it reads whether the outbreak and the disasters are still available.
@@ -4943,6 +4944,7 @@ async function startGeneration(confirmed = false, prewarm = false) {
         trafficLights: gameplayToggle('traffic-lights-toggle'),
         movingVehicles: gameplayToggle('moving-cars-toggle'),
         pedestrians: gameplayToggle('pedestrians-toggle'),
+        supplyCrates: gameplayToggle('supply-crates-toggle'),
         zombieOutbreak: gameplayToggle('zombie-outbreak-toggle'),
         disasters: gameplayToggle('disasters-toggle'),
         bodyGravity: gameplayToggle('body-gravity-toggle'),

@@ -13510,6 +13510,27 @@ pub fn generate_buildings(
                 },
             );
         }
+
+        // One building in three gets a supply crate a step in from its front door.
+        if args.supply_crates && config.is_ground_level && group_seed % 3 == 0 {
+            if let Some(door) = entrance_plans.first() {
+                let x = door.x - door.normal.0 * 2;
+                let z = door.z - door.normal.1 * 2;
+                let y = config.start_y_offset + config.abs_terrain_offset + 1;
+                if cached_floor_area.contains(&(x, z))
+                    && editor.get_block_absolute(x, y, z).is_none()
+                {
+                    editor.set_chest_with_items_absolute(
+                        x,
+                        y,
+                        z,
+                        crate::element_processing::subprocessor::buildings_loot::supply_crate_loot(
+                            x, z,
+                        ),
+                    );
+                }
+            }
+        }
     }
 
     // Construction/Ruined buildings stay roofless.

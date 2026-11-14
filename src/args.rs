@@ -449,6 +449,11 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub pedestrians: bool,
 
+    /// Supply crates: chests of food and swiftness potions just inside the front door of
+    /// about one building in three, and under the sign of every mapped bus stop.
+    #[arg(long, default_value_t = false)]
+    pub supply_crates: bool,
+
     #[command(flatten)]
     pub live: LiveArgs,
 
