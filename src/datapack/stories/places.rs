@@ -71,12 +71,21 @@ pub fn collect(elements: &[ProcessedElement], world: &XZBBox) -> Vec<StoryPlace>
         .iter()
         .filter_map(|element| {
             let tags = element.tags();
-            let name = tags.get("name").map(|n| n.trim()).filter(|n| !n.is_empty())?;
+            let name = tags
+                .get("name")
+                .map(|n| n.trim())
+                .filter(|n| !n.is_empty())?;
             let (role, category) = role(element)?;
             let ((min, max), point) = outline(element)?;
             let pad = if point { 8 } else { 3 };
-            let min = ((min.0 - pad).max(world.min_x()), (min.1 - pad).max(world.min_z()));
-            let max = ((max.0 + pad).min(world.max_x()), (max.1 + pad).min(world.max_z()));
+            let min = (
+                (min.0 - pad).max(world.min_x()),
+                (min.1 - pad).max(world.min_z()),
+            );
+            let max = (
+                (max.0 + pad).min(world.max_x()),
+                (max.1 + pad).min(world.max_z()),
+            );
             if min.0 > max.0 || min.1 > max.1 {
                 return None;
             }
@@ -128,12 +137,37 @@ mod tests {
     #[test]
     fn a_school_and_a_bakery_get_their_roles() {
         let elements = vec![
-            square(1, 10, 10, 30, &[("amenity", "school"), ("name", "Jarvis Collegiate")]),
-            square(2, 200, 200, 10, &[("shop", "bakery"), ("name", "Nova Bakery")]),
-            square(3, 400, 400, 60, &[("leisure", "park"), ("name", "Grange Park")]),
+            square(
+                1,
+                10,
+                10,
+                30,
+                &[("amenity", "school"), ("name", "Jarvis Collegiate")],
+            ),
+            square(
+                2,
+                200,
+                200,
+                10,
+                &[("shop", "bakery"), ("name", "Nova Bakery")],
+            ),
+            square(
+                3,
+                400,
+                400,
+                60,
+                &[("leisure", "park"), ("name", "Grange Park")],
+            ),
         ];
         let places = collect(&elements, &world());
-        let roles = |n: &str| places.iter().find(|p| p.place.name == n).unwrap().roles.clone();
+        let roles = |n: &str| {
+            places
+                .iter()
+                .find(|p| p.place.name == n)
+                .unwrap()
+                .roles
+                .clone()
+        };
         assert_eq!(roles("Jarvis Collegiate"), vec![Role::School, Role::Any]);
         assert_eq!(roles("Nova Bakery"), vec![Role::FoodShop, Role::Any]);
         assert_eq!(roles("Grange Park"), vec![Role::Park, Role::Any]);

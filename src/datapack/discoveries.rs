@@ -562,7 +562,13 @@ pub(crate) mod tests {
             .collect()
     }
 
-    pub(crate) fn square(id: u64, x: i32, z: i32, size: i32, t: &[(&str, &str)]) -> ProcessedElement {
+    pub(crate) fn square(
+        id: u64,
+        x: i32,
+        z: i32,
+        size: i32,
+        t: &[(&str, &str)],
+    ) -> ProcessedElement {
         let corner = |i: u64, x, z| ProcessedNode {
             id: i,
             tags: HashMap::new(),

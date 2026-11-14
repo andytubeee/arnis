@@ -10,8 +10,8 @@
 mod dialogs;
 pub mod disasters;
 pub mod discoveries;
-pub mod stories;
 mod resources;
+pub mod stories;
 
 use crate::args::Args;
 use crate::celestial::CelestialBody;
