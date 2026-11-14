@@ -10,7 +10,8 @@ playsound minecraft:entity.item.pickup player @s
 playsound minecraft:entity.villager.no neutral @a[distance=..16]
 function arnis:crime/sight
 execute if score #sighted arnis.cr matches 1 run return run function arnis:crime/spotted
-# Unseen by the police, a pedestrian nearby calls them half the time.
-execute unless entity @e[tag=arnis.walker,tag=!arnis.robbed,distance=..10] run return 0
+# Unseen by the police, a second pedestrian nearby (the victim is the first) calls them half the time.
+execute store result score #near arnis.cr if entity @e[tag=arnis.walker,distance=..10]
+execute if score #near arnis.cr matches ..1 run return 0
 execute store result score #roll arnis.cr run random value 1..2
 execute if score #roll arnis.cr matches 1 run function arnis:crime/reported

@@ -1,5 +1,6 @@
 # Seen by an officer resets the chase. #delay seconds out of sight starts the #countdown,
 # and the police stand down when it runs out.
+
 # A two-tone siren from the nearest officer while one is close.
 execute if score #siren arnis.cr matches 0 at @e[type=minecraft:skeleton,tag=arnis.cop,distance=..32,sort=nearest,limit=1] run playsound minecraft:block.note_block.bit hostile @s ~ ~ ~ 2 0.8
 execute if score #siren arnis.cr matches 1 at @e[type=minecraft:skeleton,tag=arnis.cop,distance=..32,sort=nearest,limit=1] run playsound minecraft:block.note_block.bit hostile @s ~ ~ ~ 2 1.2
