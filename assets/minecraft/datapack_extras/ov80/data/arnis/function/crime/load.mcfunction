@@ -6,8 +6,6 @@ scoreboard objectives add arnis.cash dummy
 scoreboard objectives add arnis.wanted dummy
 scoreboard objectives add arnis.hide dummy
 scoreboard objectives add arnis.unseen dummy
-scoreboard objectives add arnis.sneak minecraft.custom:minecraft.sneak_time
-scoreboard objectives add arnis.sneak.last dummy
 scoreboard objectives add arnis.cr.die deathCount
 scoreboard objectives add arnis.cr.hit minecraft.custom:minecraft.damage_dealt
 # With mob spawning off, the only skeletons are police.

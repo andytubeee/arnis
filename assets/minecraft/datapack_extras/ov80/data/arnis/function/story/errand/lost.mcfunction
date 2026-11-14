@@ -1,0 +1,4 @@
+# Dropped where someone walked, so it lies on a pavement nearby.
+execute at @e[tag=arnis.walker,distance=16..40,sort=random,limit=1] run summon minecraft:item ~ ~0.3 ~ {Tags:["arnis.lost"],Glowing:1b,PickupDelay:0,Age:-32768,Item:{id:"minecraft:leather_helmet",count:1,components:{"minecraft:custom_name":{text:"Lost Hat",color:"gold",italic:false},"minecraft:custom_data":{arnis_lost:1b}}}}
+execute unless entity @e[type=minecraft:item,tag=arnis.lost,distance=..48] at @s run summon minecraft:item ~3 ~0.3 ~ {Tags:["arnis.lost"],Glowing:1b,PickupDelay:0,Age:-32768,Item:{id:"minecraft:leather_helmet",count:1,components:{"minecraft:custom_name":{text:"Lost Hat",color:"gold",italic:false},"minecraft:custom_data":{arnis_lost:1b}}}}
+tellraw @s [{"selector":"@e[tag=arnis.npc_it,limit=1]","color":"aqua"},{"text":": I lost my favourite hat around here somewhere. It should be easy to spot!","color":"white"}]

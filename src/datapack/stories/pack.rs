@@ -63,15 +63,31 @@ impl Story {
     pub fn plan_function(&self) -> String {
         let stops = &self.plan.stops;
         let mut steps = Vec::new();
+        let last = stops.len() - 1;
         for (k, (step, i)) in self.plan.steps().enumerate() {
             let next = stops
                 .get(k + 1)
                 .map_or("", |&j| self.places[j].place.name.as_str());
+            let line = step.line.replace("{next}", next);
+            // Shown whole by a macro, which writes a compound out as valid SNBT.
+            let dialog = json!({
+                "type": "minecraft:notice",
+                "title": { "text": step.npc, "color": "aqua" },
+                "body": { "type": "minecraft:plain_message", "contents": { "text": line } },
+                "action": {
+                    "label": if k == last { "Thank you!" } else { "On my way" },
+                    "action": {
+                        "type": "run_command",
+                        "command": format!("trigger arnis.story.ctl set {}", 10 + k),
+                    },
+                },
+                "pause": false,
+            });
             let (name, x, y, z) = self.spot(i);
             steps.push(format!(
-                "{{name:{name},x:{x},y:{y},z:{z},npc:{},line:{}}}",
+                "{{name:{name},x:{x},y:{y},z:{z},npc:{},dialog:{}}}",
                 json_text(&json!(step.npc)),
-                json_text(&json!(step.line.replace("{next}", next)))
+                json_text(&dialog)
             ));
         }
         let errands: Vec<String> = self

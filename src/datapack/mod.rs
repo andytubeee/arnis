@@ -259,6 +259,75 @@ const OUTBREAK: &[(&str, &[u8])] = static_files![
     "ov121/data/arnis/loot_table/outbreak/supply_drop.json",
 ];
 
+const NPC: &[(&str, &[u8])] = static_files![
+    "data/arnis/function/npc/load.mcfunction",
+    "data/arnis/function/npc/tick.mcfunction",
+    "ov80/data/arnis/advancement/npc/click.json",
+    "ov80/data/arnis/function/npc/act.mcfunction",
+    "ov80/data/arnis/function/npc/attach.mcfunction",
+    "ov80/data/arnis/function/npc/chat.mcfunction",
+    "ov80/data/arnis/function/npc/click.mcfunction",
+    "ov80/data/arnis/function/npc/clicked.mcfunction",
+    "ov80/data/arnis/function/npc/detach.mcfunction",
+    "ov80/data/arnis/function/npc/directions.mcfunction",
+    "ov80/data/arnis/function/npc/do.mcfunction",
+    "ov80/data/arnis/function/npc/follow.mcfunction",
+    "ov80/data/arnis/function/npc/hi.mcfunction",
+    "ov80/data/arnis/function/npc/hint.mcfunction",
+    "ov80/data/arnis/function/npc/left.mcfunction",
+    "ov80/data/arnis/function/npc/lines.mcfunction",
+    "ov80/data/arnis/function/npc/load.mcfunction",
+    "ov80/data/arnis/function/npc/name.mcfunction",
+    "ov80/data/arnis/function/npc/name_set.mcfunction",
+    "ov80/data/arnis/function/npc/nearest.mcfunction",
+    "ov80/data/arnis/function/npc/open.mcfunction",
+    "ov80/data/arnis/function/npc/point.mcfunction",
+    "ov80/data/arnis/function/npc/said.mcfunction",
+    "ov80/data/arnis/function/npc/say.mcfunction",
+    "ov80/data/arnis/function/npc/second.mcfunction",
+    "ov80/data/arnis/function/npc/show.mcfunction",
+    "ov80/data/arnis/function/npc/tick.mcfunction",
+    "ov80/data/arnis/function/npc/trait.mcfunction",
+];
+
+const STORIES: &[(&str, &[u8])] = static_files![
+    "data/arnis/function/story/load.mcfunction",
+    "data/arnis/function/story/tick.mcfunction",
+    "data/arnis/function/story/unsupported.mcfunction",
+    "ov80/data/arnis/function/story/advance.mcfunction",
+    "ov80/data/arnis/function/story/bar.mcfunction",
+    "ov80/data/arnis/function/story/catch_up.mcfunction",
+    "ov80/data/arnis/function/story/control.mcfunction",
+    "ov80/data/arnis/function/story/current.mcfunction",
+    "ov80/data/arnis/function/story/current_at.mcfunction",
+    "ov80/data/arnis/function/story/finish.mcfunction",
+    "ov80/data/arnis/function/story/gossip.mcfunction",
+    "ov80/data/arnis/function/story/grant.mcfunction",
+    "ov80/data/arnis/function/story/intro.mcfunction",
+    "ov80/data/arnis/function/story/load.mcfunction",
+    "ov80/data/arnis/function/story/next_place.mcfunction",
+    "ov80/data/arnis/function/story/second.mcfunction",
+    "ov80/data/arnis/function/story/show.mcfunction",
+    "ov80/data/arnis/function/story/skip.mcfunction",
+    "ov80/data/arnis/function/story/spawn.mcfunction",
+    "ov80/data/arnis/function/story/talk.mcfunction",
+    "ov80/data/arnis/function/story/tick.mcfunction",
+    "ov80/data/arnis/function/story/where.mcfunction",
+    "ov80/data/arnis/function/story/errand/accept.mcfunction",
+    "ov80/data/arnis/function/story/errand/arrived.mcfunction",
+    "ov80/data/arnis/function/story/errand/check.mcfunction",
+    "ov80/data/arnis/function/story/errand/done.mcfunction",
+    "ov80/data/arnis/function/story/errand/drop.mcfunction",
+    "ov80/data/arnis/function/story/errand/info.mcfunction",
+    "ov80/data/arnis/function/story/errand/lost.mcfunction",
+    "ov80/data/arnis/function/story/errand/offer.mcfunction",
+    "ov80/data/arnis/function/story/errand/parcel.mcfunction",
+    "ov80/data/arnis/function/story/errand/pick.mcfunction",
+    "ov80/data/arnis/function/story/errand/pick_at.mcfunction",
+    "ov80/data/arnis/function/story/errand/reset.mcfunction",
+    "ov80/data/arnis/function/story/errand/second.mcfunction",
+];
+
 const CRIME: &[(&str, &[u8])] = static_files![
     "data/arnis/function/crime/load.mcfunction",
     "data/arnis/function/crime/tick.mcfunction",
@@ -268,7 +337,6 @@ const CRIME: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/crime/control.mcfunction",
     "ov80/data/arnis/function/crime/cop.mcfunction",
     "ov80/data/arnis/function/crime/cop_killed.mcfunction",
-    "ov80/data/arnis/function/crime/crouch.mcfunction",
     "ov80/data/arnis/function/crime/crowd.mcfunction",
     "ov80/data/arnis/function/crime/dealer.mcfunction",
     "ov80/data/arnis/function/crime/dealer_spawn.mcfunction",
@@ -788,6 +856,12 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
     if ex.crime {
         add_static(CRIME);
     }
+    if ex.crime || ex.stories {
+        add_static(NPC);
+    }
+    if ex.stories {
+        add_static(STORIES);
+    }
     if ex.disasters {
         add_static(DISASTERS);
     }
@@ -814,6 +888,8 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
         (ex.pause_menu, "menu"),
         (ex.outbreak, "outbreak"),
         (ex.crime, "crime"),
+        (ex.crime || ex.stories, "npc"),
+        (ex.stories, "story"),
         (ex.disasters, "disaster"),
         (ex.cars, "cars"),
         (ex.trains, "trains"),
@@ -955,6 +1031,9 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
         if ex.crime {
             out.push((format!("{ov}/crime.json"), pretty(&dialogs::crime(ctx))));
         }
+        if ex.stories {
+            out.push((format!("{ov}/story.json"), pretty(&dialogs::story(ctx))));
+        }
         if let Some(plan) = disaster_plan.filter(|_| ex.disasters) {
             out.push((
                 format!("{ov}/disasters.json"),
@@ -965,6 +1044,14 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
 
     if let Some(plan) = disaster_plan.filter(|_| ex.disasters) {
         out.extend(plan.files(&ctx.area));
+    }
+
+    if ex.crime || ex.stories {
+        out.extend(
+            npc_functions(ctx)
+                .into_iter()
+                .map(|(p, t)| (p, t.into_bytes())),
+        );
     }
 
     if let Some(story) = ctx.story.as_ref().filter(|_| ex.stories) {
@@ -998,6 +1085,61 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
         ));
     }
     out
+}
+
+/// The menu's link to the modes that are on: their flags, the places to ask the way to, and
+/// one function per mode-specific choice, which calls into that mode or does nothing.
+fn npc_functions(ctx: &PackContext) -> Vec<(String, String)> {
+    let (crime, stories) = (ctx.extras.crime, ctx.extras.stories);
+    let places: Vec<String> = ctx
+        .places
+        .iter()
+        .map(|p| {
+            format!(
+                "{{name:{},x:{},z:{}}}",
+                json_text(&json!(p.name)),
+                p.anchor.0,
+                p.anchor.1
+            )
+        })
+        .collect();
+    let config = format!(
+        "scoreboard players set #crime arnis.npc {}\nscoreboard players set #stories arnis.npc {}\ndata modify storage arnis:npc places set value [{}]\n",
+        u8::from(crime),
+        u8::from(stories),
+        places.join(",")
+    );
+    let pick = |on: bool, yes: &str, no: &str| if on { yes } else { no }.to_string();
+    let off = "# Not in this world.\n";
+    [
+        ("flags", config),
+        ("rob", pick(crime, "function arnis:crime/rob\n", off)),
+        ("talk", pick(stories, "function arnis:story/talk\n", off)),
+        (
+            "errand",
+            pick(stories, "function arnis:story/errand/accept\n", off),
+        ),
+        (
+            "gossip",
+            pick(stories, "function arnis:story/gossip\n", off),
+        ),
+        (
+            "next_place",
+            pick(
+                stories,
+                "return run function arnis:story/next_place\n",
+                "return 0\n",
+            ),
+        ),
+    ]
+    .into_iter()
+    .map(|(name, text)| {
+        (
+            format!("ov80/data/arnis/function/npc/{name}.mcfunction"),
+            text,
+        )
+    })
+    .collect()
 }
 
 fn pack_mcmeta(ex: Extras) -> Value {
@@ -1138,7 +1280,8 @@ mod tests {
             disasters: extras
                 .disasters
                 .then(|| disasters::Plan::for_tests(CelestialBody::Moon)),
-            story: None,
+            // A world with City Stories always has its story; generation drops the mode otherwise.
+            story: extras.stories.then(test_story),
         }
     }
 
@@ -1158,8 +1301,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn the_story_is_written_into_the_pack() {
+    fn test_story() -> stories::pack::Story {
         use rand::SeedableRng;
         let places = (0..4)
             .map(|i| {
@@ -1171,12 +1313,109 @@ mod tests {
                 )
             })
             .collect();
-        let mut c = ctx(all());
-        c.story = stories::pack::Story::new(
+        stories::pack::Story::new(
             places,
             false,
             &mut rand_chacha::ChaCha8Rng::seed_from_u64(1),
+        )
+        .unwrap()
+    }
+
+    fn text_of(out: &[(String, Vec<u8>)], path: &str) -> Option<String> {
+        out.iter()
+            .find(|(p, _)| p == path)
+            .map(|(_, b)| String::from_utf8(b.clone()).unwrap())
+    }
+
+    #[test]
+    fn the_story_pack_ships_its_functions_and_dialog() {
+        let out = files(&ctx(all()));
+        for f in [
+            "load",
+            "tick",
+            "second",
+            "talk",
+            "advance",
+            "catch_up",
+            "next_place",
+            "gossip",
+            "control",
+            "errand/accept",
+        ] {
+            let path = format!("ov80/data/arnis/function/story/{f}.mcfunction");
+            assert!(text_of(&out, &path).is_some(), "{path}");
+        }
+        assert!(text_of(&out, "ov80/data/arnis/dialog/story.json").is_some());
+        let menu = text_of(&out, "ov80/data/arnis/dialog/menu.json").unwrap();
+        assert!(menu.contains("arnis:story"), "{menu}");
+        let load = text_of(&out, "data/minecraft/tags/function/load.json").unwrap();
+        assert!(load.contains("arnis:story/load"), "{load}");
+    }
+
+    #[test]
+    fn the_pause_page_never_names_the_storyline() {
+        let out = files(&ctx(all()));
+        let page = text_of(&out, "ov80/data/arnis/dialog/story.json").unwrap();
+        for line in &stories::lines::STORYLINES {
+            assert!(!page.contains(line.title), "{}", line.title);
+        }
+    }
+
+    #[test]
+    fn the_menu_ships_with_either_mode() {
+        let open = "ov80/data/arnis/function/npc/open.mcfunction";
+        for (crime, stories) in [(true, false), (false, true), (true, true), (false, false)] {
+            let mut ex = all();
+            ex.crime = crime;
+            ex.stories = stories;
+            let out = files(&ctx(ex));
+            assert_eq!(
+                text_of(&out, open).is_some(),
+                crime || stories,
+                "crime {crime} stories {stories}"
+            );
+        }
+    }
+
+    #[test]
+    fn rob_is_offered_only_with_crime() {
+        let config = "ov80/data/arnis/function/npc/flags.mcfunction";
+        let rob = "ov80/data/arnis/function/npc/rob.mcfunction";
+        let mut ex = all();
+        ex.stories = false;
+        let out = files(&ctx(ex));
+        assert!(text_of(&out, config)
+            .unwrap()
+            .contains("scoreboard players set #crime arnis.npc 1"));
+        assert!(text_of(&out, rob)
+            .unwrap()
+            .contains("function arnis:crime/rob"));
+        // Robbing is a menu choice now; crouching beside someone does nothing.
+        assert!(text_of(&out, "ov80/data/arnis/function/crime/crouch.mcfunction").is_none());
+        assert!(
+            !text_of(&out, "ov80/data/arnis/function/crime/player.mcfunction")
+                .unwrap()
+                .contains("sneak")
         );
+        ex.crime = false;
+        ex.stories = true;
+        let out = files(&ctx(ex));
+        assert!(text_of(&out, config)
+            .unwrap()
+            .contains("scoreboard players set #crime arnis.npc 0"));
+        assert!(!text_of(&out, rob).unwrap().contains("crime"));
+        let open = text_of(&out, "ov80/data/arnis/function/npc/open.mcfunction").unwrap();
+        let rob_line = open.lines().find(|l| l.contains("buttons.rob")).unwrap();
+        assert!(
+            rob_line.contains("#crime arnis.npc matches 1")
+                && rob_line.contains("tag=arnis.story_npc"),
+            "{rob_line}"
+        );
+    }
+
+    #[test]
+    fn the_story_is_written_into_the_pack() {
+        let mut c = ctx(all());
         let out = files(&c);
         let has = |p: &str| out.iter().any(|(path, _)| path == p);
         assert!(has("ov80/data/arnis/function/story/plan.mcfunction"));
@@ -1221,7 +1460,8 @@ mod tests {
     fn every_bundled_file_is_shipped_by_some_feature() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/minecraft/datapack_extras");
         let listed: std::collections::HashSet<&str> = [
-            CORE, GRAVITY, TRAFFIC, MENU, OUTBREAK, CRIME, DISASTERS, CARS, TRAINS, WALK,
+            CORE, GRAVITY, TRAFFIC, MENU, OUTBREAK, NPC, STORIES, CRIME, DISASTERS, CARS, TRAINS,
+            WALK,
         ]
         .iter()
         .flat_map(|set| set.iter().map(|(p, _)| *p))

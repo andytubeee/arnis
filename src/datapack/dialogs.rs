@@ -68,6 +68,13 @@ pub fn menu(ctx: &PackContext) -> Value {
             show("arnis:outbreak"),
         ));
     }
+    if ctx.extras.stories {
+        actions.push(button(
+            "City Stories",
+            "Where to go next, skip a step, your errand",
+            show("arnis:story"),
+        ));
+    }
     if ctx.extras.crime {
         actions.push(button(
             "Crime Spree",
@@ -187,6 +194,32 @@ pub fn outbreak(ctx: &PackContext) -> Value {
 }
 
 /// Three rows of three: difficulty, police on patrol and pedestrians, each Normal by default.
+/// City Stories' page. It never names the storyline, which is a surprise until its end.
+pub fn story(ctx: &PackContext) -> Value {
+    let pick = |n: u8, label: &str, tooltip: &str| {
+        button(
+            label,
+            tooltip,
+            run(&format!("trigger arnis.story.ctl set {n}")),
+        )
+    };
+    json!({
+        "type": "minecraft:multi_action",
+        "title": text("City Stories", "gold"),
+        "body": [
+            message(text("Right-click the glowing person at each stop to hear what happens next. Anyone can do a step for everyone, and passers-by sometimes wave you over for an errand.", "gray")),
+        ],
+        "columns": 1,
+        "actions": [
+            pick(1, "Where next?", "How far and which way to the next stop"),
+            pick(3, "My errand", "What the current errand is, if there is one"),
+            pick(2, "Skip this step", "For a stop that is hard to reach"),
+        ],
+        "exit_action": back(ctx.extras.pause_menu),
+        "pause": false,
+    })
+}
+
 pub fn crime(ctx: &PackContext) -> Value {
     let pick = |n: u8, label: &str, tooltip: &str| {
         button(
