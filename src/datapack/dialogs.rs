@@ -199,14 +199,14 @@ pub fn crime(ctx: &PackContext) -> Value {
         "type": "minecraft:multi_action",
         "title": text("Crime Spree", "red"),
         "body": [
-            message(text("Difficulty: how long you must stay out of sight before the countdown starts, how long the countdown is, and how many police hunt you.", "gray")),
+            message(text("Difficulty: how long you must stay out of sight before the countdown starts, how long the countdown is, and how many police hunt you at one star. Each star adds two officers and half the countdown again.", "gray")),
             message(text("Police: how many patrol near you while you are not wanted. Pedestrians: how many walk the streets around you.", "gray")),
         ],
         "columns": 3,
         "actions": [
-            pick(1, "Easy", "2 s out of sight, 20 s countdown, 4 hunting"),
-            pick(2, "Normal", "3 s out of sight, 30 s countdown, 6 hunting"),
-            pick(3, "Hard", "5 s out of sight, 45 s countdown, 8 hunting"),
+            pick(1, "Easy", "2 s out of sight, 20 s countdown, 4 hunting at one star"),
+            pick(2, "Normal", "3 s out of sight, 30 s countdown, 6 hunting at one star"),
+            pick(3, "Hard", "5 s out of sight, 45 s countdown, 8 hunting at one star"),
             pick(4, "Few Police", "2 on patrol near you"),
             pick(5, "Some Police", "4 on patrol near you"),
             pick(6, "Many Police", "6 on patrol near you"),
