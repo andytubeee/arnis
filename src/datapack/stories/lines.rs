@@ -288,26 +288,9 @@ pub fn pick(places: &[StoryPlace], rng: &mut impl Rng) -> Option<Plan> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::datapack::discoveries::{Category, Place};
+    use crate::datapack::stories::places::test_place as place;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn place(name: &str, x: i32, z: i32, role: Role) -> StoryPlace {
-        StoryPlace {
-            place: Place {
-                name: name.to_string(),
-                category: Category::Civic,
-                label: String::new(),
-                min: (x, z),
-                max: (x, z),
-                anchor: (x, z),
-                ground_y: None,
-                notable: false,
-                score: 0,
-            },
-            roles: vec![role, Role::Any],
-        }
-    }
 
     /// Three of every role, spread over a 900-block square.
     fn rich_map() -> Vec<StoryPlace> {

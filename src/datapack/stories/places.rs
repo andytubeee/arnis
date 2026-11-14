@@ -124,6 +124,25 @@ pub fn collect(elements: &[ProcessedElement], world: &XZBBox) -> Vec<StoryPlace>
     kept
 }
 
+/// A one-block place with `role`, for tests.
+#[cfg(test)]
+pub(crate) fn test_place(name: &str, x: i32, z: i32, role: Role) -> StoryPlace {
+    StoryPlace {
+        place: Place {
+            name: name.to_string(),
+            category: Category::Civic,
+            label: String::new(),
+            min: (x, z),
+            max: (x, z),
+            anchor: (x, z),
+            ground_y: Some(70),
+            notable: false,
+            score: 0,
+        },
+        roles: vec![role, Role::Any],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -672,6 +672,8 @@ pub struct PackContext {
     pub walk_functions: Vec<(String, String)>,
     /// Which disasters the area gets and the water maps they rise by.
     pub disasters: Option<disasters::Plan>,
+    /// The world's City Stories storyline, its places and errands.
+    pub story: Option<stories::pack::Story>,
 }
 
 impl PackContext {
@@ -965,6 +967,19 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
         out.extend(plan.files(&ctx.area));
     }
 
+    if let Some(story) = ctx.story.as_ref().filter(|_| ex.stories) {
+        out.push((
+            "ov80/data/arnis/function/story/plan.mcfunction".to_string(),
+            story.plan_function().into_bytes(),
+        ));
+        for (path, adv) in story.advancements() {
+            out.push((
+                format!("ov80/data/arnis/advancement/story/{path}.json"),
+                pretty(&adv),
+            ));
+        }
+    }
+
     if ex.outbreak {
         let subtitle = |target: &str, text: String, color: &str| {
             format!(
@@ -1123,6 +1138,7 @@ mod tests {
             disasters: extras
                 .disasters
                 .then(|| disasters::Plan::for_tests(CelestialBody::Moon)),
+            story: None,
         }
     }
 
@@ -1140,6 +1156,34 @@ mod tests {
             trains: true,
             pedestrians: true,
         }
+    }
+
+    #[test]
+    fn the_story_is_written_into_the_pack() {
+        use rand::SeedableRng;
+        let places = (0..4)
+            .map(|i| {
+                stories::places::test_place(
+                    &format!("P{i}"),
+                    i * 100,
+                    0,
+                    stories::places::Role::Any,
+                )
+            })
+            .collect();
+        let mut c = ctx(all());
+        c.story = stories::pack::Story::new(
+            places,
+            false,
+            &mut rand_chacha::ChaCha8Rng::seed_from_u64(1),
+        );
+        let out = files(&c);
+        let has = |p: &str| out.iter().any(|(path, _)| path == p);
+        assert!(has("ov80/data/arnis/function/story/plan.mcfunction"));
+        assert!(has("ov80/data/arnis/advancement/story/root.json"));
+        assert!(has("ov80/data/arnis/advancement/story/step_3.json"));
+        c.extras.stories = false;
+        assert!(!files(&c).iter().any(|(path, _)| path.contains("/story/")));
     }
 
     #[test]

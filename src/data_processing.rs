@@ -1551,26 +1551,29 @@ pub fn generate_world_with_options(
     }
 
     // The elements are gone by the time the pack is written.
+    let rel = |x: i32, z: i32| {
+        crate::coordinate_system::cartesian::XZPoint::new(x - xzbbox.min_x(), z - xzbbox.min_z())
+    };
+    let settle = |place: &mut crate::datapack::discoveries::Place| {
+        place.settle(
+            |x, z| {
+                xzbbox.contains(&crate::coordinate_system::cartesian::XZPoint::new(x, z))
+                    && !building_footprints.contains(x, z)
+                    && ground.cover_class(rel(x, z)) != crate::land_cover::LC_WATER
+            },
+            |x, z| road_mask.contains(x, z),
+            |x, z| ground.level(rel(x, z)),
+        )
+    };
     let extras_places = extras.wants_places().then(|| {
         let (mut places, settlement) = crate::datapack::discoveries::collect(&elements, &xzbbox);
-        let rel = |x: i32, z: i32| {
-            crate::coordinate_system::cartesian::XZPoint::new(
-                x - xzbbox.min_x(),
-                z - xzbbox.min_z(),
-            )
-        };
-        for place in &mut places {
-            place.settle(
-                |x, z| {
-                    xzbbox.contains(&crate::coordinate_system::cartesian::XZPoint::new(x, z))
-                        && !building_footprints.contains(x, z)
-                        && ground.cover_class(rel(x, z)) != crate::land_cover::LC_WATER
-                },
-                |x, z| road_mask.contains(x, z),
-                |x, z| ground.level(rel(x, z)),
-            );
-        }
+        places.iter_mut().for_each(settle);
         (places, settlement)
+    });
+    let story_places = extras.stories.then(|| {
+        let mut places = crate::datapack::stories::places::collect(&elements, &xzbbox);
+        places.iter_mut().for_each(|p| settle(&mut p.place));
+        places
     });
 
     // The flood maps are worked out from the world as it is written.
@@ -2809,6 +2812,23 @@ pub fn generate_world_with_options(
             eprintln!("Warning: Crime Spree left out, as the area has no footways for pedestrians to walk.");
             extras.crime = false;
         }
+        // Story people and errand-givers are pedestrians; the story needs a few places.
+        let story = story_places
+            .filter(|_| extras.stories && extras.pedestrians)
+            .and_then(|places| {
+                crate::datapack::stories::pack::Story::new(
+                    places,
+                    extras.outbreak,
+                    &mut rand::rng(),
+                )
+            });
+        if extras.stories && story.is_none() {
+            eprintln!("Warning: City Stories left out, as the area has too few named places or no footways for pedestrians.");
+            extras.stories = false;
+        }
+        if let Some(story) = &story {
+            println!("  City Stories: {} stops", story.plan.stops.len());
+        }
         let (places, settlement) = extras_places.unwrap_or_default();
         let surface = crate::datapack::disasters::Surface::finish();
         let disasters = disaster_woods.map(|wooded| {
@@ -2840,6 +2860,7 @@ pub fn generate_world_with_options(
                     }),
             ),
             places,
+            story,
             credits: crate::datapack::Credits::from_args(args),
             red_amber: matches!(
                 sign_region,
