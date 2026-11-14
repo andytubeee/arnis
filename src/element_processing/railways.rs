@@ -90,6 +90,10 @@ const RAIL_CLEARS: &[Block] = &[
 const RAIL_STEP_COST: f64 = 2.5;
 /// How far a rail bed may leave the ground to keep its slopes on straight track.
 const RAIL_BED_REACH: i32 = 10;
+/// Track pieces between powered rails: few enough on the level that a ridden minecart keeps
+/// near full speed, closer on a climb, where it slows fast.
+const POWER_EVERY: usize = 24;
+const POWER_EVERY_UPHILL: usize = 4;
 /// What a rail pays per cell it sits a block into or onto a road, against a block of cut.
 const ROAD_SHIFT_COST: f64 = 4.0;
 /// What a tunnel pays per block it runs shallower than its depth, against 1 for deeper.
@@ -341,14 +345,44 @@ fn generate_at_grade_rail(
         beyond(&ends[1], beds[n - 1], bridge_structures),
     );
 
+    // A mapped stop gets a minecart waiting on a powered rail; get in and press forward.
+    let stops: HashSet<(i32, i32)> = element
+        .nodes
+        .iter()
+        .filter(|node| is_stop(&node.tags))
+        .map(|node| (node.x, node.z))
+        .collect();
+    let mut since_powered = 0;
     for (i, &(x, z)) in cells.iter().enumerate() {
         let bed = beds[i];
         let lays = lays_cell(&ends, n, i);
+        since_powered += 1;
+        let stop = stops.contains(&(x, z));
+        let every = if is_ascending(shapes[i]) {
+            POWER_EVERY_UPHILL
+        } else {
+            POWER_EVERY
+        };
+        // Clear of the ends, whose rail a joining track shapes too. The redstone block
+        // that powers it stands in for the bed under it.
+        let powered = (lays
+            && !matches!(held[i], Held::Road(r) if bed < r)
+            && (2..n.saturating_sub(2)).contains(&i)
+            && (stop || since_powered >= every))
+            .then(|| powered_rail(shapes[i]))
+            .flatten();
+        let bed_block = |plain: Block| {
+            if powered.is_some() {
+                REDSTONE_BLOCK
+            } else {
+                plain
+            }
+        };
         match held[i] {
             Held::Free => {
                 // The ground pass then cuts or fills the terrain to the bed.
                 editor.register_road_surface_y(x, z, bed);
-                editor.set_block_absolute(GRAVEL, x, bed, z, None, None);
+                editor.set_block_absolute(bed_block(GRAVEL), x, bed, z, None, None);
             }
             // Sunk into the road: the rail takes the place of its surface.
             Held::Road(r) if bed < r => {
@@ -361,11 +395,26 @@ fn generate_at_grade_rail(
             // Raised over it: the road's own surface carries on up under the rail.
             Held::Road(r) if bed > r => {
                 let surface = editor.get_block_absolute(x, r, z).unwrap_or(GRAVEL);
-                editor.set_block_absolute(surface, x, bed, z, None, None);
+                editor.set_block_absolute(bed_block(surface), x, bed, z, None, None);
             }
-            _ => editor.set_block_absolute(GRAVEL, x, bed, z, None, None),
+            _ => editor.set_block_absolute(bed_block(GRAVEL), x, bed, z, None, None),
         }
-        if lays {
+        if let Some(rail) = powered {
+            editor.set_block_with_properties_absolute(rail, x, bed + 1, z, Some(RAIL_CLEARS), None);
+            since_powered = 0;
+            if stop {
+                let (cx, cz) = (x as f64 + 0.5, z as f64 + 0.5);
+                let seed = (x as i64) << 32 ^ z as i64;
+                editor.add_entity_exact(
+                    "minecraft:minecart",
+                    cx,
+                    (bed + 1) as f64,
+                    cz,
+                    seed,
+                    HashMap::new(),
+                );
+            }
+        } else if lays {
             editor.set_block_absolute(shapes[i], x, bed + 1, z, Some(RAIL_CLEARS), None);
         }
         editor.register_rail(element.id, x, z, bed + 1);
@@ -383,9 +432,52 @@ enum Held {
     Fixed(i32),
 }
 
+/// A stop on the line, where a train halts: the same tags the moving trains stop at.
+fn is_stop(tags: &HashMap<String, String>) -> bool {
+    matches!(
+        tags.get("railway").map(String::as_str),
+        Some("stop" | "tram_stop")
+    ) || tags.get("public_transport").map(String::as_str) == Some("stop_position")
+}
+
+fn is_ascending(shape: Block) -> bool {
+    [
+        RAIL_ASCENDING_EAST,
+        RAIL_ASCENDING_WEST,
+        RAIL_ASCENDING_NORTH,
+        RAIL_ASCENDING_SOUTH,
+    ]
+    .iter()
+    .any(|r| r.id() == shape.id())
+}
+
+/// A powered, switched-on rail in place of a straight or sloping one; None on a bend, which
+/// a powered rail cannot take.
+fn powered_rail(shape: Block) -> Option<BlockWithProperties> {
+    if ![RAIL_NORTH_SOUTH, RAIL_EAST_WEST]
+        .iter()
+        .any(|r| r.id() == shape.id())
+        && !is_ascending(shape)
+    {
+        return None;
+    }
+    let Some(fastnbt::Value::Compound(mut props)) = shape.properties() else {
+        return None;
+    };
+    props.insert(
+        "powered".to_string(),
+        fastnbt::Value::String("true".to_string()),
+    );
+    Some(BlockWithProperties::new(
+        POWERED_RAIL,
+        Some(fastnbt::Value::Compound(props)),
+    ))
+}
+
 fn is_rail_block(block: Block) -> bool {
     [
         RAIL,
+        POWERED_RAIL,
         RAIL_NORTH_SOUTH,
         RAIL_EAST_WEST,
         RAIL_ASCENDING_EAST,
@@ -2029,6 +2121,40 @@ mod tests {
         }
     }
 
+    #[test]
+    fn long_track_gets_powered_rails_over_hidden_redstone_and_a_minecart_at_its_stop() {
+        let mut way = straight_rail(&[("railway", "rail")]);
+        way.nodes.insert(
+            1,
+            ProcessedNode {
+                id: 3,
+                tags: HashMap::from([("railway".to_string(), "stop".to_string())]),
+                x: 25,
+                z: 50,
+            },
+        );
+        let mut editor = test_editor(rail_mask_bbox());
+        run(&mut editor, &way, &CoordinateBitmap::new(rail_mask_bbox()));
+
+        let powered: Vec<_> = laid_rails(&editor, 20, 50, 60, 50)
+            .into_iter()
+            .filter(|((x, z), y, _)| editor.get_block_absolute(*x, *y, *z) == Some(POWERED_RAIL))
+            .collect();
+        // The stop, then the next one POWER_EVERY blocks on.
+        let xs: Vec<i32> = powered.iter().map(|((x, _), _, _)| *x).collect();
+        assert_eq!(xs, vec![25, 25 + POWER_EVERY as i32]);
+        for ((x, z), y, _) in &powered {
+            assert_eq!(
+                editor.get_block_absolute(*x, y - 1, *z),
+                Some(REDSTONE_BLOCK)
+            );
+            let props = editor.block_properties_absolute(*x, *y, *z);
+            assert!(format!("{props:?}").contains("\"powered\""), "{props:?}");
+        }
+        let carts = editor.entities_of("minecraft:minecart");
+        assert_eq!(carts.len(), 1);
+    }
+
     fn run_collecting_tunnel_points(
         editor: &mut WorldEditor,
         way: &ProcessedWay,
@@ -2073,6 +2199,13 @@ mod tests {
         BBOX.get_or_init(|| XZBBox::rect_from_xz_lengths(200.0, 120.0).unwrap())
     }
 
+    fn shape_of(props: &Option<fastnbt::Value>) -> Option<fastnbt::Value> {
+        match props {
+            Some(fastnbt::Value::Compound(m)) => m.get("shape").cloned(),
+            _ => None,
+        }
+    }
+
     /// Every rail in a box, as (cell, rail y, block).
     fn laid_rails(
         editor: &WorldEditor,
@@ -2089,6 +2222,25 @@ mod tests {
                         .get_block_absolute(x, y, z)
                         .filter(|&b| is_rail_block(b))
                     {
+                        // A powered rail runs like the plain rail of its shape.
+                        let props = editor.block_properties_absolute(x, y, z);
+                        let b = [
+                            RAIL_NORTH_SOUTH,
+                            RAIL_EAST_WEST,
+                            RAIL_ASCENDING_EAST,
+                            RAIL_ASCENDING_WEST,
+                            RAIL_ASCENDING_NORTH,
+                            RAIL_ASCENDING_SOUTH,
+                        ]
+                        .into_iter()
+                        .find(|plain| {
+                            b.id() == POWERED_RAIL.id()
+                                && shape_of(&plain.properties()) == shape_of(&props)
+                        })
+                        .unwrap_or_else(|| {
+                            assert!(b.id() != POWERED_RAIL.id(), "unshaped {props:?}");
+                            b
+                        });
                         out.push(((x, z), y, b));
                     }
                 }
@@ -2197,7 +2349,13 @@ mod tests {
         run(&mut editor, &way, &CoordinateBitmap::new(&xzbbox));
         for x in 20..=60 {
             assert!(
-                editor.check_for_block_absolute(x, 1, 50, Some(&[RAIL_EAST_WEST]), None),
+                editor.check_for_block_absolute(
+                    x,
+                    1,
+                    50,
+                    Some(&[RAIL_EAST_WEST, POWERED_RAIL]),
+                    None
+                ),
                 "no rail at {x}"
             );
         }
