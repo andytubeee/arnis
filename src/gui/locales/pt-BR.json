@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Nenhum mundo gerado ainda",
   "placeholder_world_name": "Nome do próximo mundo",
   "start_generation": "Iniciar geração",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Seleção personalizada confirmada!",
   "error_coordinates_out_of_range": "Erro: as coordenadas estão fora do intervalo ou foram ordenadas incorretamente (é necessário Lat antes de Lng).",
   "invalid_format": "Formato inválido. Use 'lat,lng,lat,lng' ou 'lat lng lat lng'.",

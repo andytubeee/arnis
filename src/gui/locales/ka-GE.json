@@ -4,6 +4,7 @@
   "no_world_generated_yet": "სამყარო ჯერ არ შექმნილა",
   "placeholder_world_name": "შემდეგი სამყაროს სახელი",
   "start_generation": "გენერაციის დაწყება",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "ინდივიდუალური შერჩევა დადასტურებულია!",
   "error_coordinates_out_of_range": "შეცდომა: კოორდინატები დიაპაზონს სცილდება ან არასწორადაა დალაგებული (საჭიროა ჯერ განედის, შემდეგ კი გრძედის მითითება).",
   "invalid_format": "არასწორი ფორმატი. გთხოვთ, გამოიყენოთ „lat,lng,lat,lng“ ან „lat lng lat lng“.",

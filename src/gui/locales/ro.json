@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Nicio lume generată încă",
   "placeholder_world_name": "Numele următoarei lumi",
   "start_generation": "Începe generarea",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Selecție personalizată confirmată!",
   "error_coordinates_out_of_range": "Eroare: coordonatele sunt în afara intervalului sau ordonate incorect (latitudinea trebuie să fie înaintea longitudinii).",
   "invalid_format": "Format nevalid. Folosește „lat,lng,lat,lng” sau „lat lng lat lng”.",

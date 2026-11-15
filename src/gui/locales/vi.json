@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Chưa có thế giới nào được tạo",
   "placeholder_world_name": "Tên thế giới tiếp theo",
   "start_generation": "Bắt đầu tạo",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Đã xác nhận vùng chọn tùy chỉnh!",
   "error_coordinates_out_of_range": "Lỗi: Tọa độ nằm ngoài phạm vi hoặc sai thứ tự (Lat phải đứng trước Lng).",
   "invalid_format": "Định dạng không hợp lệ. Vui lòng dùng 'lat,lng,lat,lng' hoặc 'lat lng lat lng'.",

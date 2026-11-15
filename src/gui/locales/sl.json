@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Svet še ni generiran",
   "placeholder_world_name": "Ime naslednjega sveta",
   "start_generation": "Začni generiranje",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Izbira po meri potrjena!",
   "error_coordinates_out_of_range": "Napaka: Koordinate so izven obsega ali nepravilno urejene (zahtevana najprej zemljepisna širina, potem zemljepisna dolžina).",
   "invalid_format": "Neveljaven format. Uporabite 'lat,lng,lat,lng' ali 'lat lng lat lng'.",

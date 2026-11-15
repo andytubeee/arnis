@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Nie wygenerowano jeszcze świata",
   "placeholder_world_name": "Nazwa następnego świata",
   "start_generation": "Rozpocznij generowanie",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Niestandardowy wybór potwierdzony!",
   "error_coordinates_out_of_range": "Błąd: Współrzędne są poza zakresem lub w złej kolejności (wymagana szerokość przed długością).",
   "invalid_format": "Nieprawidłowy format. Użyj 'szer.,dł.,szer.,dł.' lub 'szer. dł. szer. dł.'.",

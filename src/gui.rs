@@ -236,6 +236,7 @@ pub fn run_gui() -> Result<(), String> {
             gui_bake_archive,
             gui_cancel_bake,
             gui_stop_generation,
+            gui_cancel_generation,
             gui_cells_control,
             gui_cells_remove,
             gui_get_version,
@@ -1278,25 +1279,53 @@ async fn gui_get_cache_size() -> Result<String, String> {
 }
 
 /// Every cache root's size added up, as a short human string.
-fn cache_size_string() -> String {
-    use crate::elevation::cache::{dir_size_bytes, format_size, get_base_cache_dir};
+/// Every folder the downloads are cached in.
+fn cache_roots() -> Vec<PathBuf> {
+    let mut roots = vec![
+        crate::elevation::cache::get_base_cache_dir(),
+        crate::land_cover::land_cover_cache_dir(),
+        crate::canopy::canopy_cache_dir(),
+        crate::overture::cache_root(),
+    ];
+    roots.extend(
+        [crate::osm_tiles::cache_root(), crate::osm_pbf::cache_dir()]
+            .into_iter()
+            .flatten(),
+    );
+    roots.extend(crate::models_3d::model_cache_roots());
+    roots
+}
 
-    // The tile cache root already contains the Mapillary facade cache, which
-    // lives under it as its own provider directory.
-    let mut total = dir_size_bytes(&get_base_cache_dir());
-    total = total.saturating_add(dir_size_bytes(&crate::land_cover::land_cover_cache_dir()));
-    total = total.saturating_add(dir_size_bytes(&crate::canopy::canopy_cache_dir()));
-    // Its own root beside the tile cache, and Clear Cache deletes it.
-    total = total.saturating_add(dir_size_bytes(&crate::overture::cache_root()));
-    for d in [crate::osm_tiles::cache_root(), crate::osm_pbf::cache_dir()]
-        .into_iter()
-        .flatten()
-    {
-        total = total.saturating_add(dir_size_bytes(&d));
+/// Deletes what was written under `dir` since `since`: files, and the folders that then
+/// hold nothing. What was there before stays, as later runs still read it.
+fn remove_written_since(dir: &Path, since: std::time::SystemTime) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(meta) = entry.metadata() else { continue };
+        if meta.is_dir() {
+            remove_written_since(&path, since);
+            let _ = fs::remove_dir(&path); // only succeeds once empty
+        } else if meta.modified().is_ok_and(|m| m >= since) {
+            let _ = fs::remove_file(&path);
+        }
     }
-    for root in crate::models_3d::model_cache_roots() {
-        total = total.saturating_add(dir_size_bytes(&root));
-    }
+}
+
+/// Stop: the running generation ends at its next step and takes what it made with it.
+#[tauri::command]
+fn gui_cancel_generation() {
+    progress::STOP.store(true, std::sync::atomic::Ordering::Release);
+}
+
+fn cache_size_string() -> String {
+    use crate::elevation::cache::{dir_size_bytes, format_size};
+    // The tile cache root already holds the Mapillary facade cache as its own provider folder.
+    let total = cache_roots()
+        .iter()
+        .fold(0u64, |t, d| t.saturating_add(dir_size_bytes(d)));
     format_size(total)
 }
 
@@ -2916,6 +2945,9 @@ fn gui_start_generation(
         }
     }
 
+    // A Stop from an earlier run is spent; this run's starts unset.
+    progress::STOP.store(false, std::sync::atomic::Ordering::Release);
+    let started = std::time::SystemTime::now();
     tauri::async_runtime::spawn(async move {
         // Held until the worker finishes, on every path, so the globals stay this run's.
         let _generation_slot = generation_slot;
@@ -3725,7 +3757,22 @@ fn gui_start_generation(
             Some(pool) => pool.install(work),
             None => work(),
         };
-        if let Err(e) = tokio::task::spawn_blocking(blocking).await {
+        let outcome = tokio::task::spawn_blocking(blocking).await;
+        let stopped = progress::STOP.swap(false, std::sync::atomic::Ordering::AcqRel);
+        if stopped && !matches!(outcome, Ok(Ok(()))) {
+            // The new world went with the unwind; what the run downloaded goes now.
+            for root in cache_roots() {
+                remove_written_since(&root, started);
+            }
+            emit_gui_progress_update(
+                progress::MESSAGE_ONLY,
+                if is_new_world {
+                    "Stopped. The new world and this run's downloads were removed."
+                } else {
+                    "Stopped. This run's downloads were removed; what it already wrote into the existing world stays."
+                },
+            );
+        } else if let Err(e) = outcome {
             let error_msg = format!("Error in blocking task: {e}");
             eprintln!("{error_msg}");
             emit_gui_error(&error_msg);
@@ -3914,6 +3961,28 @@ mod locale_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_stopped_run_removes_only_the_cache_it_wrote() {
+        let root = tempfile::tempdir().unwrap();
+        let old = root.path().join("old.bin");
+        fs::write(&old, b"kept").unwrap();
+        let hour = std::time::Duration::from_secs(3600);
+        let since = std::time::SystemTime::now() - hour;
+        fs::File::options()
+            .write(true)
+            .open(&old)
+            .unwrap()
+            .set_modified(since - hour)
+            .unwrap();
+        let new_dir = root.path().join("tiles/z15");
+        fs::create_dir_all(&new_dir).unwrap();
+        fs::write(new_dir.join("new.bin"), b"gone").unwrap();
+        remove_written_since(root.path(), since);
+        assert!(old.exists());
+        assert!(!root.path().join("tiles").exists());
+        assert!(root.path().exists());
+    }
 
     /// Startup removes only plan outlines, and only old ones.
     #[test]

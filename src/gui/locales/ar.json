@@ -4,6 +4,7 @@
   "no_world_generated_yet": "لم يتم توليد عالم بعد",
   "placeholder_world_name": "اسم العالم التالي",
   "start_generation": "بدء البناء",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "تم تأكيد التحديد المخصص!",
   "error_coordinates_out_of_range": "خطأ: الإحداثيات خارج النطاق أو مرتبة بشكل غير صحيح (مطلوب خط العرض قبل خط الطول).",
   "invalid_format": "تنسيق غير صالح. استخدم 'lat,lng,lat,lng' أو 'lat lng lat lng'.",

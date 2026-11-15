@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Pasaule vēl nav ģenerēta",
   "placeholder_world_name": "Nākamās pasaules nosaukums",
   "start_generation": "Sākt ģenerēšanu",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Pielāgota izvēle apstiprināta!",
   "error_coordinates_out_of_range": "Kļūda: koordinātas ir ārpus darbības zonas vai norādītas nepareizā secībā (vispirms platums, tad garums)",
   "invalid_format": "Nederīgs formāts. Izmantojiet 'platums,garums,platums,garums' vai 'platums garums platums garums'",

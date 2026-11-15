@@ -4,6 +4,7 @@
   "no_world_generated_yet": "尚未生成世界",
   "placeholder_world_name": "下一个世界的名称",
   "start_generation": "开始生成",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "自定义选择已确认！",
   "error_coordinates_out_of_range": "错误：坐标超出范围或顺序不正确（需要先纬度后经度）。",
   "invalid_format": "格式无效。请使用 'lat,lng,lat,lng' 或 'lat lng lat lng'。",

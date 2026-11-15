@@ -4,6 +4,7 @@
   "no_world_generated_yet": "ワールドはまだ生成されていません",
   "placeholder_world_name": "次のワールドの名前",
   "start_generation": "生成開始",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "カスタム選択を確認しました！",
   "error_coordinates_out_of_range": "エラー: 座標が範囲外か順序が正しくありません（緯度を経度より先に指定してください）。",
   "invalid_format": "形式が正しくありません。'lat,lng,lat,lng' または 'lat lng lat lng' を使用してください。",

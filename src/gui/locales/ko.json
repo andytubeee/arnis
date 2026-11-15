@@ -4,6 +4,7 @@
   "no_world_generated_yet": "아직 생성된 월드가 없습니다",
   "placeholder_world_name": "다음 월드의 이름",
   "start_generation": "생성 시작",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "사용자 지정 선택이 확인되었습니다!",
   "error_coordinates_out_of_range": "오류: 좌표가 범위를 벗어나거나 잘못된 순서입니다 (Lat이 Lng보다 먼저 필요합니다).",
   "invalid_format": "잘못된 형식입니다. 'lat,lng,lat,lng' 또는 'lat lng lat lng' 형식을 사용하세요.",

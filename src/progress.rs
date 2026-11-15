@@ -1,9 +1,24 @@
 use once_cell::sync::OnceCell;
 use serde_json::json;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use tauri::{Emitter, WebviewWindow};
 
 pub static MAIN_WINDOW: OnceCell<WebviewWindow> = OnceCell::new();
+
+/// Set by the window's Stop: the run ends at its next progress update.
+pub static STOP: AtomicBool = AtomicBool::new(false);
+
+/// What a stopped run unwinds with. `resume_unwind` skips the panic hook, so a stop is
+/// neither logged nor reported as a crash, and every guard on the way out (the new world's
+/// cleanup, its session lock) runs as it would on an error.
+pub struct Stopped;
+
+/// Ends the run here when it was stopped, except at its "Done!", when nothing is left to stop.
+fn stop_point(stop: &AtomicBool, progress: f64) {
+    if progress < 100.0 && stop.load(Ordering::Acquire) {
+        std::panic::resume_unwind(Box::new(Stopped));
+    }
+}
 
 // Highest progress emitted so far (percent * 100), keeps the bar monotonic.
 static PROGRESS_FLOOR: AtomicU32 = AtomicU32::new(0);
@@ -129,6 +144,7 @@ pub fn is_running_with_gui() -> bool {
 ///
 /// The function `emit_gui_progress_update` is used to send real-time progress updates to the UI.
 pub fn emit_gui_progress_update(progress: f64, message: &str) {
+    stop_point(&STOP, progress);
     if emits_suppressed(progress, message) {
         return;
     }
@@ -152,6 +168,7 @@ pub fn emit_gui_progress_update(progress: f64, message: &str) {
 /// ~instant when streaming, a real save otherwise). Additive payload field;
 /// only the two terrain emits use it, all other sites stay on the plain fn.
 pub fn emit_gui_progress_update_ex(progress: f64, message: &str, streaming: bool) {
+    stop_point(&STOP, progress);
     if emits_suppressed(progress, message) {
         return;
     }
@@ -215,6 +232,10 @@ fn error_payload(message: &str) -> serde_json::Value {
 }
 
 pub fn emit_gui_error(message: &str) {
+    // A part the stop cut short fails on its way out; the stop is what to say.
+    if STOP.load(Ordering::Acquire) {
+        return;
+    }
     crate::progress_json::error(message);
     let payload = error_payload(message);
     let shown = payload["message"].as_str().unwrap_or_default();
@@ -272,6 +293,16 @@ pub fn emit_live_status(status: &crate::live::Status) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_stopped_run_unwinds_at_its_next_update_but_never_at_done() {
+        let stop = std::sync::atomic::AtomicBool::new(false);
+        stop_point(&stop, 40.0);
+        stop.store(true, Ordering::Release);
+        stop_point(&stop, 100.0);
+        let unwound = std::panic::catch_unwind(|| stop_point(&stop, 40.0)).unwrap_err();
+        assert!(unwound.is::<Stopped>());
+    }
 
     fn last_status() -> String {
         LAST_STATUS.with(|s| s.borrow().clone())

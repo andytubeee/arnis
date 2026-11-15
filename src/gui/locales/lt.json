@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Pasaulis dar nesugeneruotas",
   "placeholder_world_name": "Kito pasaulio pavadinimas",
   "start_generation": "Pradėti generaciją",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Rėmo pasirinkimas patvirtintas!",
   "error_coordinates_out_of_range": "Klaida: Koordinatės yra už ribų arba neteisingai išdėstytos (plat turi būti prieš ilg).",
   "invalid_format": "Neteisingas formatas. Prašome naudoti 'plat,ilg,plat,ilg' arba 'plat ilg plat ilg'.",

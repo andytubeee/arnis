@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Maailmaa ei vielä generoitu",
   "placeholder_world_name": "Seuraavan maailman nimi",
   "start_generation": "Aloita generointi",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Mukautettu valinta vahvistettu!",
   "error_coordinates_out_of_range": "Virhe: Koordinaatit ovat kantaman ulkopuolella tai vääriin aseteltu (Lat ennen Lng vaadittu).",
   "invalid_format": "Väärä formaatti. Käytä 'lat,lng,lat,lng' tai 'lat lng lat lng'.",

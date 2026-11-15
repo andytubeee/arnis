@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Még nincs világ generálva",
   "placeholder_world_name": "A következő világ neve",
   "start_generation": "Generálás indítása",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Egyéni kiválasztás megerősítve",
   "error_coordinates_out_of_range": "Hiba: A koordináták tartományon kívül vannak vagy hibásan rendezettek (a szélességi foknak a hosszúsági fok előtt kell lennie)",
   "invalid_format": "Érvénytelen formátum. Kérjük, használja a 'lat,lng,lat,lng' vagy a 'lat lng lat lng' formátumot.'.",

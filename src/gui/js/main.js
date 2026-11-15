@@ -1235,7 +1235,8 @@ function setupProgressListener() {
           noteGenerationDone();
         }
       } else if (message.startsWith("Stopped.") || message.startsWith("The retried cells are built")) {
-        // A job in pieces ends here when stopped or when only some pieces were asked for.
+        // A job in pieces ends here when stopped or when only some pieces were asked for, and a
+        // plain run when stopped, its new world gone with it.
         progressInfo.style.color = "#ececec";
         setGenerationButtonEnabled(true);
         window.arnisPreview3D?.setGenerationRunning(false);
@@ -1243,6 +1244,8 @@ function setupProgressListener() {
         if (lastRunOneWorld) {
           oneWorldOverlayKey = null;
           refreshOneWorldState();
+        } else if (!lastRunPrewarm) {
+          setWorldNameLabel("");
         }
       } else {
         progressInfo.style.color = "#ececec";
@@ -4312,7 +4315,10 @@ function refreshStartButton() {
   // A job in pieces an earlier run built part of says how much.
   const plan = planPieces();
   const stopping = liveActive() && liveStatus.phase === 'stopping';
-  if (stopping) {
+  if (plainRunActive()) {
+    key = 'stop_generation';
+    fallback = 'Stop Generation';
+  } else if (stopping) {
     key = 'live_stopping_button';
     fallback = 'Stopping\u2026';
   } else if (liveActive()) {
@@ -4695,8 +4701,14 @@ let bakeRunning = false;
 // Central setter so every place that toggles generation state also
 // refreshes the world-name pencil (hidden/blocked while a generation, or a
 // rename, is in flight - see canEditCustomWorldName()).
+// A generation of one area is running: no job in pieces, prewarm or bake, which stop otherwise.
+function plainRunActive() {
+  return generationButtonEnabled === false && !lastRunOneWorld && !lastRunPrewarm && !bakeRunning && !liveActive();
+}
+
 function setGenerationButtonEnabled(enabled) {
   generationButtonEnabled = enabled;
+  refreshStartButton();
   if (!enabled) document.getElementById('run-confirm').hidden = true;
   showRunControls(!enabled);
   redrawProjects();
@@ -4800,6 +4812,8 @@ async function startGeneration(confirmed = false, prewarm = false) {
     return;
   }
   if (generationButtonEnabled === false) {
+    // A plain run's button is its Stop; a job in pieces has its own, which keeps finished pieces.
+    if (plainRunActive()) invoke('gui_cancel_generation');
     return;
   }
   // The backend refuses a run during a bake only after a new world was made for it.
@@ -4866,6 +4880,7 @@ async function startGeneration(confirmed = false, prewarm = false) {
     }
     lastRunOneWorld = oneWorld;
     lastRunPrewarm = prewarm;
+    refreshStartButton(); // a plain run's button becomes its Stop
     const place = oneWorld && !prewarm && document.getElementById('advanced-meld-features-toggle').checked
       ? placeForRun(searchedPlace, selectedBBox) : '';
     runPlace = place && oneWorldInfo && !oneWorldInfo.area_count ? { name: place, path: oneWorldInfo.world_path } : null;

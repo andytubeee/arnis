@@ -4,6 +4,7 @@
   "no_world_generated_yet": "Ingen värld genererad ännu",
   "placeholder_world_name": "Namn på nästa värld",
   "start_generation": "Starta generering",
+  "stop_generation": "Stop Generation",
   "custom_selection_confirmed": "Anpassad markering bekräftad!",
   "error_coordinates_out_of_range": "Fel: Koordinater är utanför området eller felaktigt ordnade (Lat före Lng krävs).",
   "invalid_format": "Ogiltigt format. Använd 'lat,lng,lat,lng' eller 'lat lng lat lng'.",
