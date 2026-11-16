@@ -352,10 +352,35 @@ fn generate_at_grade_rail(
         .filter(|node| is_stop(&node.tags))
         .map(|node| (node.x, node.z))
         .collect();
+    // A twin track a block over shares the cells of its bends with the one laid first, and its
+    // rails beside that one point into it. It keeps its bed and leaves the rail to the first,
+    // except at an end that joins another track. Read before this way lays any, so every
+    // rail found is another track's.
+    let joined = |i: usize| {
+        let near = |e: usize| {
+            (ends[e].into.is_some() || ends[e].shared) && i.abs_diff(end_cell(n, e)) <= 2
+        };
+        near(0) || near(1)
+    };
+    let beside_other: Vec<bool> = cells
+        .iter()
+        .zip(&beds)
+        .map(|(&(x, z), &bed)| {
+            [(x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)]
+                .into_iter()
+                .any(|(nx, nz)| {
+                    (bed - 1..=bed + 2).any(|y| {
+                        editor
+                            .get_block_absolute(nx, y, nz)
+                            .is_some_and(is_rail_block)
+                    })
+                })
+        })
+        .collect();
     let mut since_powered = 0;
     for (i, &(x, z)) in cells.iter().enumerate() {
         let bed = beds[i];
-        let lays = lays_cell(&ends, n, i);
+        let lays = lays_cell(&ends, n, i) && (joined(i) || !beside_other[i]);
         since_powered += 1;
         let stop = stops.contains(&(x, z));
         let every = if is_ascending(shapes[i]) {
@@ -2118,6 +2143,50 @@ mod tests {
                 },
             ],
             tags: t,
+        }
+    }
+
+    #[test]
+    fn a_bend_is_never_powered_and_only_slopes_count_as_uphill() {
+        // A powered rail cannot bend, and a powered rail goes in every 4 blocks only uphill.
+        assert!(powered_rail(RAIL_NORTH_EAST).is_none());
+        assert!(powered_rail(RAIL_NORTH_SOUTH).is_some());
+        assert!(powered_rail(RAIL_ASCENDING_EAST).is_some());
+        assert!(!is_ascending(RAIL_NORTH_SOUTH));
+        assert!(!is_ascending(RAIL_NORTH_EAST));
+        assert!(is_ascending(RAIL_ASCENDING_EAST));
+    }
+
+    #[test]
+    fn a_twin_track_one_block_over_leaves_the_first_one_clean() {
+        let diagonal = |id: u64, dx: i32| {
+            let mut way = straight_rail(&[("railway", "light_rail")]);
+            way.id = id;
+            way.nodes[0].x = 20 + dx;
+            way.nodes[0].z = 20;
+            way.nodes[1].x = 80 + dx;
+            way.nodes[1].z = 60;
+            way
+        };
+        let mut editor = test_editor(rail_mask_bbox());
+        let mask = CoordinateBitmap::new(rail_mask_bbox());
+        run(&mut editor, &diagonal(1, 0), &mask);
+        let first = laid_rails(&editor, 10, 10, 95, 70);
+        run(&mut editor, &diagonal(2, 1), &mask);
+        let after = laid_rails(&editor, 10, 10, 95, 70);
+        // The first track is untouched, and nothing of the second runs into it.
+        for rail in &first {
+            assert!(after.contains(rail), "first track lost {rail:?}");
+        }
+        let firsts: HashSet<(i32, i32)> = first.iter().map(|(c, _, _)| *c).collect();
+        for ((x, z), _, _) in after.iter().filter(|r| !first.contains(r)) {
+            for n in [(x + 1, *z), (x - 1, *z), (*x, z + 1), (*x, z - 1)] {
+                assert!(
+                    !firsts.contains(&n),
+                    "second track's rail at {:?} touches {n:?}",
+                    (x, z)
+                );
+            }
         }
     }
 
