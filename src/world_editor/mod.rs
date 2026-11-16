@@ -56,6 +56,12 @@ use crate::progress::emit_gui_error;
 #[cfg(feature = "gui")]
 use crate::telemetry::{send_log, LogLevel};
 
+/// A door block, either half; not a trapdoor.
+pub fn is_door(block: Block) -> bool {
+    let name = block.name();
+    name.ends_with("_door") && !name.ends_with("trapdoor")
+}
+
 /// The block each way's rails lie in, by (way, x, z).
 pub type RailHeights = Arc<Mutex<FnvHashMap<(u64, i32, i32), i32>>>;
 
@@ -2619,6 +2625,49 @@ impl<'a> WorldEditor<'a> {
         !self.flushed_regions.is_empty() && self.flushed_regions.contains(&(x >> 9, z >> 9))
     }
 
+    /// A whole door, lower half at `y_lower`. Any door it overlaps goes first, both halves,
+    /// so two placers meeting at one spot never leave a lone half, which breaks when opened.
+    pub fn place_door(
+        &mut self,
+        base: Block,
+        facing: &str,
+        hinge: &str,
+        x: i32,
+        y_lower: i32,
+        z: i32,
+    ) {
+        let door_at = |e: &Self, y| e.get_block_absolute(x, y, z).is_some_and(is_door);
+        // Each overlapping half and its partner: above a lower half, below an upper one.
+        let mut gone: Vec<i32> = Vec::new();
+        for y in (y_lower..=y_lower + 1).filter(|&y| door_at(self, y)) {
+            let props = self
+                .world
+                .get_properties(x, y, z)
+                .map(|p| p.as_ref().clone())
+                .or_else(|| {
+                    self.get_block_absolute(x, y, z)
+                        .and_then(|b| b.properties())
+                });
+            let upper = matches!(&props, Some(Value::Compound(m))
+                if m.get("half") == Some(&Value::String("upper".to_string())));
+            let partner = if upper { y - 1 } else { y + 1 };
+            gone.push(y);
+            if door_at(self, partner) {
+                gone.push(partner);
+            }
+        }
+        for y in gone {
+            self.set_block_absolute(AIR, x, y, z, None, Some(&[]));
+        }
+        for (half, y) in [("lower", y_lower), ("upper", y_lower + 1)] {
+            let block = crate::element_processing::buildings::cached_prop_block(
+                base,
+                &[("half", half), ("facing", facing), ("hinge", hinge)],
+            );
+            self.set_block_with_properties_absolute(block, x, y, z, None, Some(&[]));
+        }
+    }
+
     /// Sets a block with properties at the given coordinates with absolute Y value.
     #[inline]
     pub fn set_block_with_properties_absolute(
@@ -3541,6 +3590,43 @@ mod eviction_guard_tests {
 
     // Writing an entity or chest to an already-evicted region must NOT resurrect it,
     // or the truncating final save wipes the region's real ground (the empty-spawn-chunk bug).
+    // Two placers can put doors at one spot a block apart: the later door takes the
+    // place whole, and no lone half is left to break when it is opened.
+    #[test]
+    fn a_door_leaves_a_door_stacked_below_the_one_it_replaces_whole() {
+        let xzbbox = XZBBox::rect_from_min_max(0, 0, 63, 63).unwrap();
+        let llbbox = LLBBox::new(54.6, 9.9, 54.61, 9.91).unwrap();
+        let mut editor = WorldEditor::new(std::env::temp_dir(), &xzbbox, llbbox);
+        editor.place_door(OAK_DOOR, "north", "left", 10, 3, 10);
+        editor.place_door(DARK_OAK_DOOR_LOWER, "north", "left", 10, 5, 10);
+        editor.place_door(BIRCH_DOOR, "west", "left", 10, 6, 10);
+        let door = |y| editor.get_block_absolute(10, y, 10).filter(|b| is_door(*b));
+        assert!(
+            door(3).is_some() && door(4).is_some(),
+            "the door below stays whole"
+        );
+        assert!(door(5).is_none());
+    }
+
+    #[test]
+    fn a_door_replaces_the_doors_it_overlaps_and_leaves_no_half() {
+        let xzbbox = XZBBox::rect_from_min_max(0, 0, 63, 63).unwrap();
+        let llbbox = LLBBox::new(54.6, 9.9, 54.61, 9.91).unwrap();
+        let mut editor = WorldEditor::new(std::env::temp_dir(), &xzbbox, llbbox);
+        editor.place_door(DARK_OAK_DOOR_LOWER, "north", "left", 10, 5, 10);
+        editor.place_door(BIRCH_DOOR, "west", "left", 10, 6, 10);
+        let door = |y| {
+            editor
+                .get_block_absolute(10, y, 10)
+                .filter(|b| is_door(*b))
+                .map(|b| b.name().to_string())
+        };
+        assert_eq!(door(5), None);
+        assert_eq!(door(6).as_deref(), Some("birch_door"));
+        assert_eq!(door(7).as_deref(), Some("birch_door"));
+        assert_eq!(door(8), None);
+    }
+
     #[test]
     fn writes_to_a_flushed_region_do_not_resurrect_it() {
         let xzbbox = XZBBox::rect_from_min_max(0, 0, 1023, 1023).unwrap();

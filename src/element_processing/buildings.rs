@@ -7401,29 +7401,13 @@ fn render_entrance(
     };
 
     for ((dx, dz), hinge) in &door_positions {
-        let lower = cached_prop_block(
+        editor.place_door(
             base,
-            &[("half", "lower"), ("facing", facing), ("hinge", hinge)],
-        );
-        let upper = cached_prop_block(
-            base,
-            &[("half", "upper"), ("facing", facing), ("hinge", hinge)],
-        );
-        editor.set_block_with_properties_absolute(
-            lower,
+            facing,
+            hinge,
             *dx,
             config.start_y_offset + 1 + config.abs_terrain_offset,
             *dz,
-            None,
-            Some(&[]),
-        );
-        editor.set_block_with_properties_absolute(
-            upper,
-            *dx,
-            config.start_y_offset + 2 + config.abs_terrain_offset,
-            *dz,
-            None,
-            Some(&[]),
         );
 
         // Threshold block just outside the door (first writer wins the cell,

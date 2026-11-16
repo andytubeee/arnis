@@ -658,25 +658,15 @@ impl<'e, 'w> Canvas<'e, 'w> {
         if self.cell(x, z) != Cell::Free {
             return;
         }
-        let facing = facing(across);
-        let lower = cached_prop_block(
-            DARK_OAK_DOOR_LOWER,
-            &[("half", "lower"), ("facing", facing), ("hinge", "left")],
-        );
-        let upper = cached_prop_block(
-            DARK_OAK_DOOR_UPPER,
-            &[("half", "upper"), ("facing", facing), ("hinge", "left")],
-        );
-        self.editor
-            .set_block_with_properties_absolute(lower, x, self.floor_y + 1, z, None, None);
+        // A door needs two blocks of room; under a lower ceiling a lone half would break.
         if self.headroom() >= 2 {
-            self.editor.set_block_with_properties_absolute(
-                upper,
+            self.editor.place_door(
+                DARK_OAK_DOOR_LOWER,
+                facing(across),
+                "left",
                 x,
-                self.floor_y + 2,
+                self.floor_y + 1,
                 z,
-                None,
-                None,
             );
         }
         for y in self.floor_y + 3..=self.top {
@@ -1085,32 +1075,19 @@ impl<'e, 'w> Canvas<'e, 'w> {
     /// Turns a built interior wall cell into a door passable along `across`.
     fn open_wall(&mut self, w: (i32, i32), across: (i32, i32)) {
         let (x, z) = w;
-        let f = facing(across);
-        let lower = cached_prop_block(
-            DARK_OAK_DOOR_LOWER,
-            &[("half", "lower"), ("facing", f), ("hinge", "left")],
-        );
-        let upper = cached_prop_block(
-            DARK_OAK_DOOR_UPPER,
-            &[("half", "upper"), ("facing", f), ("hinge", "left")],
-        );
-        self.editor.set_block_with_properties_absolute(
-            lower,
-            x,
-            self.floor_y + 1,
-            z,
-            None,
-            Some(&[]),
-        );
+        // A door needs two blocks of room; under a lower ceiling the wall just opens.
         if self.headroom() >= 2 {
-            self.editor.set_block_with_properties_absolute(
-                upper,
+            self.editor.place_door(
+                DARK_OAK_DOOR_LOWER,
+                facing(across),
+                "left",
                 x,
-                self.floor_y + 2,
+                self.floor_y + 1,
                 z,
-                None,
-                Some(&[]),
             );
+        } else {
+            self.editor
+                .set_block_absolute(AIR, x, self.floor_y + 1, z, None, Some(&[]));
         }
         self.doors.insert(w);
         self.set_cell(x, z, Cell::Door);

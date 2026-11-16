@@ -990,28 +990,7 @@ fn kiosk(
     }
     // Door in the glazed front.
     let (dx, dz) = canopy.cell(0.0, b0 + 0.5);
-    editor.set_block_absolute(AIR, dx, base + 1, dz, Some(&[GLASS]), None);
-    editor.set_block_absolute(AIR, dx, base + 2, dz, Some(&[GLASS]), None);
-    place(
-        editor,
-        with_props(
-            IRON_DOOR,
-            &[("facing", facing_name(front)), ("half", "lower")],
-        ),
-        dx,
-        base + 1,
-        dz,
-    );
-    place(
-        editor,
-        with_props(
-            IRON_DOOR,
-            &[("facing", facing_name(front)), ("half", "upper")],
-        ),
-        dx,
-        base + 2,
-        dz,
-    );
+    editor.place_door(IRON_DOOR, facing_name(front), "left", dx, base + 1, dz);
 }
 
 #[cfg(test)]

@@ -19,7 +19,7 @@ pub fn generate_doors(editor: &mut WorldEditor, element: &ProcessedNode) {
 
         // Set the ground block and the door blocks
         editor.set_block(GRAY_CONCRETE, x, 0, z, None, None);
-        editor.set_block(DARK_OAK_DOOR_LOWER, x, 1, z, None, None);
-        editor.set_block(DARK_OAK_DOOR_UPPER, x, 2, z, None, None);
+        let y = editor.get_absolute_y(x, 1, z);
+        editor.place_door(DARK_OAK_DOOR_LOWER, "north", "left", x, y, z);
     }
 }
