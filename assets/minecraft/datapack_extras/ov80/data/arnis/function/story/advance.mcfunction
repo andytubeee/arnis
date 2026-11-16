@@ -5,7 +5,9 @@ scoreboard players remove #last arnis.story 1
 execute as @e[type=minecraft:villager,tag=arnis.story_npc] if score @s arnis.story = #step arnis.story run tag @s add arnis.story_here
 execute if score #step arnis.story = #last arnis.story at @e[tag=arnis.story_here,limit=1] run function arnis:story/finish_at with storage arnis:story cur
 execute if score #step arnis.story = #last arnis.story unless entity @e[tag=arnis.story_here] run function arnis:story/finish with storage arnis:story cur
+execute as @e[type=minecraft:villager,tag=arnis.story_here] at @s run function arnis:story/leave
 kill @e[type=minecraft:villager,tag=arnis.story_npc]
+tag @e[tag=arnis.story_here] remove arnis.story_here
 scoreboard players add #step arnis.story 1
 execute as @a run function arnis:story/catch_up
 function arnis:story/bar

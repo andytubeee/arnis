@@ -9,5 +9,5 @@ data modify entity @e[type=minecraft:villager,tag=arnis.story_new,limit=1] Custo
 scoreboard players set @e[type=minecraft:villager,tag=arnis.story_new] arnis.wk -1
 # Which step they belong to: one from an earlier step, saved in an unloaded chunk, is not it.
 scoreboard players operation @e[type=minecraft:villager,tag=arnis.story_new] arnis.story = #step arnis.story
-execute as @e[type=minecraft:villager,tag=arnis.story_new] store result score @s arnis.npc.tr run random value 0..11
+execute as @e[type=minecraft:villager,tag=arnis.story_new] store result score @s arnis.npc.tr run random value 0..23
 tag @e[type=minecraft:villager,tag=arnis.story_new] remove arnis.story_new

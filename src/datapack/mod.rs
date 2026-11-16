@@ -287,6 +287,7 @@ const NPC: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/npc/say.mcfunction",
     "ov80/data/arnis/function/npc/second.mcfunction",
     "ov80/data/arnis/function/npc/show.mcfunction",
+    "ov80/data/arnis/function/npc/sorry.mcfunction",
     "ov80/data/arnis/function/npc/tick.mcfunction",
     "ov80/data/arnis/function/npc/trait.mcfunction",
 ];
@@ -325,6 +326,11 @@ const STORIES: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/story/gossip.mcfunction",
     "ov80/data/arnis/function/story/grant.mcfunction",
     "ov80/data/arnis/function/story/intro.mcfunction",
+    "ov80/data/arnis/function/story/leave.mcfunction",
+    "ov80/data/arnis/function/story/leave_cell.mcfunction",
+    "ov80/data/arnis/function/story/leave_point.mcfunction",
+    "ov80/data/arnis/function/story/leave_row.mcfunction",
+    "ov80/data/arnis/function/story/leave_spot.mcfunction",
     "ov80/data/arnis/function/story/load.mcfunction",
     "ov80/data/arnis/function/story/next_place.mcfunction",
     "ov80/data/arnis/function/story/second.mcfunction",
@@ -1419,8 +1425,72 @@ mod tests {
         let out = files(&ctx(all()));
         let load = text_of(&out, "ov80/data/arnis/function/npc/load.mcfunction").unwrap();
         // The rule's name before 1.21.11 and after.
-        assert!(load.contains(r#"{rule:"sendCommandFeedback",value:"false"}"#), "{load}");
-        assert!(load.contains(r#"{rule:"send_command_feedback",value:"false"}"#), "{load}");
+        assert!(
+            load.contains(r#"{rule:"sendCommandFeedback",value:"false"}"#),
+            "{load}"
+        );
+        assert!(
+            load.contains(r#"{rule:"send_command_feedback",value:"false"}"#),
+            "{load}"
+        );
+    }
+
+    #[test]
+    fn a_story_person_walks_off_as_a_pedestrian_once_they_have_said_their_part() {
+        let out = files(&ctx(all()));
+        let advance = text_of(&out, "ov80/data/arnis/function/story/advance.mcfunction").unwrap();
+        assert!(
+            advance.contains("run function arnis:story/leave"),
+            "{advance}"
+        );
+        let leave = text_of(&out, "ov80/data/arnis/function/story/leave.mcfunction").unwrap();
+        assert!(
+            leave.contains("tag @s add arnis.walker")
+                && leave.contains("function arnis:walk/settle"),
+            "{leave}"
+        );
+    }
+
+    #[test]
+    fn three_in_ten_asked_for_directions_do_not_know() {
+        let out = files(&ctx(all()));
+        let directions =
+            text_of(&out, "ov80/data/arnis/function/npc/directions.mcfunction").unwrap();
+        assert!(
+            directions.contains("random value 1..10")
+                && directions.contains("matches 1..3 run return run function arnis:npc/sorry"),
+            "{directions}"
+        );
+    }
+
+    #[test]
+    fn every_dialogue_pick_lands_inside_its_list() {
+        let out = files(&ctx(all()));
+        let f = |name: &str| {
+            text_of(&out, &format!("ov80/data/arnis/function/{name}.mcfunction")).unwrap()
+        };
+        let lines = f("npc/lines");
+        let size = |list: &str| {
+            let line = lines
+                .lines()
+                .find(|l| l.contains(&format!("arnis:npc {list} set value")))
+                .unwrap();
+            if list == "names" {
+                line.matches("{text:").count()
+            } else {
+                line.matches("\",\"").count() + 1
+            }
+        };
+        let top = |text: &str, needle: &str| -> usize {
+            let line = text.lines().find(|l| l.contains(needle)).unwrap();
+            line.rsplit("..").next().unwrap().trim().parse().unwrap()
+        };
+        assert_eq!(top(&f("npc/name"), "pick.i"), size("names") - 1);
+        assert_eq!(top(&f("npc/name"), "arnis.npc.tr"), size("traits") - 1);
+        assert_eq!(top(&f("story/spawn"), "arnis.npc.tr"), size("traits") - 1);
+        assert_eq!(top(&f("npc/hi"), "pick.i"), size("replies") - 1);
+        assert_eq!(top(&f("npc/chat"), "pick.i"), size("chat") - 1);
+        assert_eq!(top(&f("npc/sorry"), "pick.i"), size("sorry") - 1);
     }
 
     #[test]
