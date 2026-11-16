@@ -282,6 +282,7 @@ const NPC: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/npc/nearest.mcfunction",
     "ov80/data/arnis/function/npc/open.mcfunction",
     "ov80/data/arnis/function/npc/point.mcfunction",
+    "ov80/data/arnis/function/npc/rule.mcfunction",
     "ov80/data/arnis/function/npc/said.mcfunction",
     "ov80/data/arnis/function/npc/say.mcfunction",
     "ov80/data/arnis/function/npc/second.mcfunction",
@@ -1411,6 +1412,15 @@ mod tests {
         for line in &stories::lines::STORYLINES {
             assert!(!page.contains(line.title), "{}", line.title);
         }
+    }
+
+    #[test]
+    fn menu_buttons_press_their_triggers_quietly() {
+        let out = files(&ctx(all()));
+        let load = text_of(&out, "ov80/data/arnis/function/npc/load.mcfunction").unwrap();
+        // The rule's name before 1.21.11 and after.
+        assert!(load.contains(r#"{rule:"sendCommandFeedback",value:"false"}"#), "{load}");
+        assert!(load.contains(r#"{rule:"send_command_feedback",value:"false"}"#), "{load}");
     }
 
     #[test]
