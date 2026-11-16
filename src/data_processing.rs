@@ -890,6 +890,7 @@ pub fn generate_world_with_options(
     housing_parts: HousingRelationParts,
 ) -> Result<PathBuf, String> {
     let output_path = options.path.clone();
+    railways::MINECARTS.store(false, std::sync::atomic::Ordering::Relaxed);
     let world_format = options.format;
     let generation_start = args.benchmark.then(std::time::Instant::now);
     // World-wide extras (map item, branding, world settings) belong to the
@@ -2779,6 +2780,11 @@ pub fn generate_world_with_options(
             args.mob_spawning,
         ) {
             eprintln!("Warning: Failed to apply world settings: {e}");
+        }
+        if railways::MINECARTS.load(std::sync::atomic::Ordering::Relaxed) {
+            if let Err(e) = crate::world_utils::fast_minecarts(&output_path) {
+                eprintln!("Warning: minecarts keep vanilla's speed limit: {e}");
+            }
         }
     }
 

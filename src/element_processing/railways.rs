@@ -90,6 +90,9 @@ const RAIL_CLEARS: &[Block] = &[
 const RAIL_STEP_COST: f64 = 2.5;
 /// How far a rail bed may leave the ground to keep its slopes on straight track.
 const RAIL_BED_REACH: i32 = 10;
+/// Set once this run puts a minecart at a stop, so the world lets it go fast.
+pub static MINECARTS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Track pieces between powered rails: few enough on the level that a ridden minecart keeps
 /// near full speed, closer on a climb, where it slows fast.
 const POWER_EVERY: usize = 24;
@@ -430,14 +433,16 @@ fn generate_at_grade_rail(
             if stop {
                 let (cx, cz) = (x as f64 + 0.5, z as f64 + 0.5);
                 let seed = (x as i64) << 32 ^ z as i64;
-                editor.add_entity_exact(
+                if editor.add_entity_exact(
                     "minecraft:minecart",
                     cx,
                     (bed + 1) as f64,
                     cz,
                     seed,
                     HashMap::new(),
-                );
+                ) {
+                    MINECARTS.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
             }
         } else if lays {
             editor.set_block_absolute(shapes[i], x, bed + 1, z, Some(RAIL_CLEARS), None);

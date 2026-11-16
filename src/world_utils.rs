@@ -1294,6 +1294,45 @@ pub fn start_in_survival(world: &Path) -> Result<(), String> {
     write_gzip_nbt(&path, &root)
 }
 
+/// Top speed of a minecart in blocks a second with the experiment on: four times vanilla's
+/// 8, fast between stations and still steady through the bends.
+pub const MINECART_MAX_SPEED: u32 = 32;
+
+/// Lifts vanilla's 8 blocks a second cap on minecarts. Only the Minecart Improvements
+/// experiment has a game rule for it, so it is switched on here too.
+pub fn fast_minecarts(world: &Path) -> Result<(), String> {
+    let path = world.join("level.dat");
+    let mut root = read_gzip_nbt(&path)?;
+    let Value::Compound(ref mut r) = root else {
+        return Err("level.dat root is not a compound".to_string());
+    };
+    let Some(Value::Compound(data)) = r.get_mut("Data") else {
+        return Err("level.dat missing Data compound".to_string());
+    };
+    let features = data
+        .entry("enabled_features".to_string())
+        .or_insert_with(|| Value::List(vec![Value::String("minecraft:vanilla".to_string())]));
+    if let Value::List(list) = features {
+        let flag = Value::String("minecraft:minecart_improvements".to_string());
+        if !list.contains(&flag) {
+            list.push(flag);
+        }
+    }
+    if let Value::Compound(rules) = data
+        .entry("GameRules".to_string())
+        .or_insert_with(|| Value::Compound(Default::default()))
+    {
+        // Under both names: the 1.21.4 one and 1.21.11's, in case its upgrade drops the old.
+        for name in ["minecartMaxSpeed", "max_minecart_speed"] {
+            rules.insert(
+                name.to_string(),
+                Value::String(MINECART_MAX_SPEED.to_string()),
+            );
+        }
+    }
+    write_gzip_nbt(&path, &root)
+}
+
 /// Why `name` cannot name a world folder, if it cannot.
 fn bad_world_name(name: &str) -> Option<&'static str> {
     const RESERVED: &[&str] = &[
@@ -2178,6 +2217,45 @@ mod tests {
         if let Some(Value::Compound(player)) = data.get("Player") {
             assert_eq!(player.get("playerGameType"), Some(&Value::Int(0)));
         }
+    }
+
+    #[test]
+    fn fast_minecarts_turn_on_the_experiment_and_lift_the_speed_cap_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let world = PathBuf::from(create_new_world(tmp.path()).unwrap());
+        fast_minecarts(&world).unwrap();
+        fast_minecarts(&world).unwrap();
+        let Value::Compound(mut root) = level_dat_root(&world) else {
+            panic!("root not a compound");
+        };
+        let Some(Value::Compound(mut data)) = root.remove("Data") else {
+            panic!("missing Data");
+        };
+        let Some(Value::List(features)) = data.remove("enabled_features") else {
+            panic!("missing enabled_features");
+        };
+        let features: Vec<_> = features
+            .iter()
+            .filter_map(|f| match f {
+                Value::String(s) => Some(s.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            features,
+            ["minecraft:vanilla", "minecraft:minecart_improvements"]
+        );
+        let Some(Value::Compound(rules)) = data.remove("GameRules") else {
+            panic!("missing GameRules");
+        };
+        assert_eq!(
+            rules.get("max_minecart_speed"),
+            Some(&Value::String(MINECART_MAX_SPEED.to_string()))
+        );
+        assert_eq!(
+            rules.get("minecartMaxSpeed"),
+            Some(&Value::String(MINECART_MAX_SPEED.to_string()))
+        );
     }
 
     #[test]
