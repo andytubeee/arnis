@@ -3,6 +3,7 @@
 use super::lines::{pick, Plan};
 use super::places::StoryPlace;
 use crate::datapack::json_text;
+use rand::seq::SliceRandom;
 use rand::Rng;
 use serde_json::{json, Value};
 use std::fmt::Write;
@@ -10,6 +11,12 @@ use std::fmt::Write;
 /// Most errands the pack carries, and how far apart their two places are, in blocks.
 const ERRANDS: usize = 24;
 const ERRAND_REACH: std::ops::RangeInclusive<f64> = 80.0..=600.0;
+/// The hunt's places are at least this far apart, so everyone goes somewhere else.
+const SPREAD: f64 = 80.0;
+
+fn dist(a: (i32, i32), b: (i32, i32)) -> f64 {
+    (((a.0 - b.0) as f64).powi(2) + ((a.1 - b.1) as f64).powi(2)).sqrt()
+}
 
 pub struct Story {
     pub plan: Plan,
@@ -17,6 +24,8 @@ pub struct Story {
     pub places: Vec<StoryPlace>,
     /// Errands as (from, to) indices into `places`.
     pub errands: Vec<(usize, usize)>,
+    /// Where the hunt's things lie, indices into `places`; empty when no spare place fits.
+    pub hunt: Vec<usize>,
     /// With a Zombie Outbreak running, night finales leave the time alone.
     pub outbreak: bool,
 }
@@ -34,16 +43,32 @@ impl Story {
                 rng.random_range(0..places.len()),
                 rng.random_range(0..places.len()),
             );
-            let (pa, pb) = (places[a].place.anchor, places[b].place.anchor);
-            let d = (((pa.0 - pb.0) as f64).powi(2) + ((pa.1 - pb.1) as f64).powi(2)).sqrt();
+            let d = dist(places[a].place.anchor, places[b].place.anchor);
             if ERRAND_REACH.contains(&d) && !errands.contains(&(a, b)) {
                 errands.push((a, b));
+            }
+        }
+        // Spare places a walk from the meeting place and from each other.
+        let at = |i: usize| places[i].place.anchor;
+        let meet = at(plan.stops[plan.stops.len() - 2]);
+        let mut spare: Vec<usize> = (0..places.len())
+            .filter(|i| !plan.stops.contains(i))
+            .collect();
+        spare.shuffle(rng);
+        let mut hunt: Vec<usize> = Vec::new();
+        for i in spare {
+            if hunt.len() < 3
+                && ERRAND_REACH.contains(&dist(at(i), meet))
+                && hunt.iter().all(|&j| dist(at(i), at(j)) >= SPREAD)
+            {
+                hunt.push(i);
             }
         }
         Some(Self {
             plan,
             places,
             errands,
+            hunt,
             outbreak,
         })
     }
@@ -65,18 +90,44 @@ impl Story {
         let stops = &self.plan.stops;
         let mut steps = Vec::new();
         let last = stops.len() - 1;
+        let hunt_step = if self.hunt.is_empty() {
+            None
+        } else {
+            Some(last - 1)
+        };
+        let things = &self.plan.line.hunt.items;
+        let mut items: Vec<String> = self
+            .hunt
+            .iter()
+            .zip(things)
+            .map(|(&i, (label, _))| format!("the {label} at {}", self.places[i].place.name))
+            .collect();
+        let tail = items.pop().unwrap_or_default();
+        let items = if items.is_empty() {
+            tail
+        } else {
+            format!("{} and {tail}", items.join(", "))
+        };
         for (k, (step, i)) in self.plan.steps().enumerate() {
             let next = stops
                 .get(k + 1)
                 .map_or("", |&j| self.places[j].place.name.as_str());
             let line = step.line.replace("{next}", next);
+            // At the hunt step the person sends everyone off first, and says their line
+            // once all are back.
+            let hunting = hunt_step == Some(k);
+            let said = if hunting {
+                self.plan.line.hunt.line.replace("{items}", &items)
+            } else {
+                line.clone()
+            };
             // Shown whole by a macro, which writes a compound out as valid SNBT.
             let dialog = json!({
                 "type": "minecraft:notice",
                 "title": { "text": step.npc, "color": "aqua" },
-                "body": { "type": "minecraft:plain_message", "contents": { "text": line } },
+                "body": { "type": "minecraft:plain_message", "contents": { "text": said } },
                 "action": {
-                    "label": if k == last { "Thank you!" } else { "On my way" },
+                    "label": if hunting { "Let's split up!" } else if k == last { "Thank you!" } else { "On my way" },
                     "action": {
                         "type": "run_command",
                         "command": format!("trigger arnis.story.ctl set {}", 10 + k),
@@ -87,10 +138,11 @@ impl Story {
             let (name, x, y, z) = self.spot(i);
             steps.push(format!(
                 // sy: spreadplayers searches down from there for ground, as travel does.
-                "{{name:{name},x:{x},y:{y},sy:{},z:{z},npc:{},dialog:{}}}",
+                "{{name:{name},x:{x},y:{y},sy:{},z:{z},npc:{},dialog:{},after:{}}}",
                 y + 3,
                 json_text(&json!(step.npc)),
-                json_text(&dialog)
+                json_text(&dialog),
+                json_text(&json!(line))
             ));
         }
         let errands: Vec<String> = self
@@ -102,7 +154,39 @@ impl Story {
                 format!("{{from:{from},fx:{fx},fy:{fy},fz:{fz},to:{to},tx:{tx},ty:{ty},tz:{tz}}}")
             })
             .collect();
+        let hunt: Vec<String> = self
+            .hunt
+            .iter()
+            .zip(things)
+            .enumerate()
+            .map(|(k, (&i, (label, item)))| {
+                let (name, x, y, z) = self.spot(i);
+                format!(
+                    "{{k:{k},label:{},item:\"{item}\",name:{name},x:{x},y:{y},sy:{},z:{z}}}",
+                    json_text(&json!(label)),
+                    y + 3
+                )
+            })
+            .collect();
         let mut out = String::new();
+        writeln!(
+            out,
+            "data modify storage arnis:story hunt set value [{}]",
+            hunt.join(",")
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "scoreboard players set #hunt_step arnis.story {}",
+            hunt_step.map_or(-1, |h| h as i64)
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "scoreboard players set #arts arnis.story {}",
+            hunt.len()
+        )
+        .unwrap();
         writeln!(
             out,
             "data modify storage arnis:story steps set value [{}]",
@@ -231,6 +315,67 @@ mod tests {
             text.contains("scoreboard players set #outbreak arnis.story 0"),
             "{text}"
         );
+    }
+
+    /// The story's four places and six more a street away, for the hunt.
+    fn town() -> Story {
+        let mut places: Vec<_> = (0..4)
+            .map(|i| test_place(&format!("Stop {i}"), i * 120, 0, Role::Any))
+            .collect();
+        places.extend((0..6).map(|i| test_place(&format!("Spare {i}"), i * 130, 250, Role::Any)));
+        Story::new(places, false, &mut ChaCha8Rng::seed_from_u64(5)).unwrap()
+    }
+
+    #[test]
+    fn the_hunt_sends_everyone_somewhere_else_near_the_meeting_place() {
+        let s = town();
+        assert!((1..=3).contains(&s.hunt.len()), "{:?}", s.hunt);
+        let at = |i: usize| s.places[i].place.anchor;
+        let meet = at(s.plan.stops[s.plan.stops.len() - 2]);
+        for (n, &i) in s.hunt.iter().enumerate() {
+            assert!(!s.plan.stops.contains(&i));
+            assert!(ERRAND_REACH.contains(&dist(at(i), meet)));
+            for &j in &s.hunt[..n] {
+                assert!(dist(at(i), at(j)) >= SPREAD);
+            }
+        }
+    }
+
+    #[test]
+    fn the_meeting_step_asks_to_split_up_and_keeps_its_line_for_the_reunion() {
+        let s = town();
+        let text = s.plan_function();
+        let h = s.plan.stops.len() - 2;
+        assert!(
+            text.contains(&format!(
+                "scoreboard players set #hunt_step arnis.story {h}"
+            )),
+            "{text}"
+        );
+        assert!(text.contains(&format!(
+            "scoreboard players set #arts arnis.story {}",
+            s.hunt.len()
+        )));
+        assert!(text.contains("Let's split up!"), "{text}");
+        assert!(text.contains(",after:"), "{text}");
+        assert!(
+            text.contains("data modify storage arnis:story hunt set value [{k:0,"),
+            "{text}"
+        );
+        let (label, item) = s.plan.line.hunt.items[0];
+        assert!(text.contains(label) && text.contains(item), "{text}");
+    }
+
+    #[test]
+    fn without_spare_places_there_is_no_hunt() {
+        let s = story();
+        assert!(s.hunt.is_empty());
+        let text = s.plan_function();
+        assert!(
+            text.contains("scoreboard players set #hunt_step arnis.story -1"),
+            "{text}"
+        );
+        assert!(!text.contains("Let's split up!"), "{text}");
     }
 
     #[test]

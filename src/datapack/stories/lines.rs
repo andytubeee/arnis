@@ -23,6 +23,15 @@ pub struct Storyline {
     pub title: &'static str,
     pub steps: &'static [Step],
     pub finale: Step,
+    pub hunt: Hunt,
+}
+
+/// The step before the finale splits the players up: each fetches one of `items` (a name
+/// and an item id) from its own place, then everyone meets back at that step's person.
+/// `{items}` in the line names them and their places.
+pub struct Hunt {
+    pub line: &'static str,
+    pub items: [(&'static str, &'static str); 3],
 }
 
 /// The storyline this world got, and its stops as indices into the places: the steps it
@@ -43,6 +52,10 @@ impl Plan {
     }
 }
 
+const fn hunt(line: &'static str, items: [(&'static str, &'static str); 3]) -> Hunt {
+    Hunt { line, items }
+}
+
 const fn step(roles: &'static [Role], npc: &'static str, line: &'static str) -> Step {
     Step { roles, npc, line }
 }
@@ -58,6 +71,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[Water, Bridge, Park], "A fisher", "Wet paws, muddy nose, happy as anything. He trotted off to {next}."),
         ],
         finale: step(&[Park, Any], "Biscuit", "There he is, tail going like mad. Mrs. Okafor says he picked you, so he's yours now."),
+        hunt: hunt("Biscuit won't go home without his things: {items}. Split up, then meet me back here!", [("Biscuit's Lead", "minecraft:lead"), ("Squeaky Ball", "minecraft:slime_ball"), ("Favourite Blanket", "minecraft:white_wool")]),
     },
     Storyline {
         key: "time_capsule",
@@ -69,6 +83,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[Park, Landmark, Any], "A dog walker", "There's an old marker post by the path. The map's last X points to {next}."),
         ],
         finale: step(&[Landmark, Park, Any], "The capsule", "A rusty tin full of letters from 1985. Everyone takes one to read."),
+        hunt: hunt("The capsule's locked, and the class hid what opens it: {items}. Split up and meet me back here.", [("Brass Key", "minecraft:tripwire_hook"), ("Class Photo", "minecraft:paper"), ("Combination Note", "minecraft:paper")]),
     },
     Storyline {
         key: "surprise_party",
@@ -80,6 +95,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[Civic, Landmark, Any], "Cousin Dee", "Fireworks, check. Lou loves the view, so the party is at {next}."),
         ],
         finale: step(&[Viewpoint, Park, Landmark], "Grandpa Lou", "SURPRISE! Lou nearly drops his hat. The whole street came to watch the fireworks."),
+        hunt: hunt("Lou's party still needs {items}. Split up, grab them, and meet me back here!", [("Bunting", "minecraft:red_banner"), ("Birthday Candles", "minecraft:candle"), ("Guest Book", "minecraft:writable_book")]),
     },
     Storyline {
         key: "band_reunion",
@@ -91,6 +107,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[FoodShop, Any], "Marisol", "Fine, one show! Tell everyone to meet at {next}."),
         ],
         finale: step(&[Park, Civic, Landmark], "The Night Owls", "Count it in! The Night Owls play their comeback show, and the crowd sings along."),
+        hunt: hunt("We can't play without our gear: {items}. Split up and meet me back here.", [("Lucky Drumsticks", "minecraft:stick"), ("Old Bass Strings", "minecraft:string"), ("Lyric Sheet", "minecraft:paper")]),
     },
     Storyline {
         key: "riddle_treasure",
@@ -102,6 +119,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[Water, Station, Any], "A soggy riddle", "\"Over the water, under the sky, the treasure waits at {next}.\""),
         ],
         finale: step(&[Bridge, Water, Landmark], "The treasure", "Tucked under the span, an old chest full of gold and diamonds. Not bad."),
+        hunt: hunt("\"Three torn pieces, scattered wide: {items}. Bring them here and set them side by side.\"", [("Map Corner", "minecraft:paper"), ("Map Middle", "minecraft:paper"), ("Map Edge", "minecraft:paper")]),
     },
     Storyline {
         key: "friendly_ghost",
@@ -113,6 +131,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[FoodShop, Any], "An old waiter", "Edith had tea here every Sunday. She said she'd rest at {next}."),
         ],
         finale: step(&[Faith, Landmark, Park], "Edith", "All my letters delivered. Thank you, friends. Edith smiles and fades into the light."),
+        hunt: hunt("Edith left three keepsakes for her goodbye: {items}. Split up, fetch them, and meet back here.", [("Pressed Rose", "minecraft:poppy"), ("Pocket Watch", "minecraft:clock"), ("Edith's Teacup", "minecraft:flower_pot")]),
     },
     Storyline {
         key: "stargazer",
@@ -124,6 +143,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[Viewpoint, Landmark, Any], "Dr. Lin's assistant", "All lit! Dr. Lin is setting up at {next}. Hurry, it's starting."),
         ],
         finale: step(&[Viewpoint, Park, Landmark], "Dr. Lin", "Look up! The sky fills with falling stars. Make a wish."),
+        hunt: hunt("Dr. Lin forgot half her kit: {items}. Split up and meet back here before the sky starts!", [("Brass Telescope", "minecraft:spyglass"), ("Star Chart", "minecraft:paper"), ("Thermos of Cocoa", "minecraft:honey_bottle")]),
     },
     Storyline {
         key: "cat_mayor",
@@ -135,6 +155,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[Faith, Culture, Any], "A sleepy caretaker", "A cat with a tiny sash? She's heading back towards {next}."),
         ],
         finale: step(&[Civic, Landmark, Any], "Mayor Whiskers", "Found her! Mayor Whiskers is crowned for another term, purring the whole time."),
+        hunt: hunt("The ceremony needs the mayor's regalia: {items}. Split up and meet me back here.", [("Tiny Crown", "minecraft:gold_nugget"), ("Ceremonial Sash", "minecraft:red_wool"), ("Golden Sardine", "minecraft:cod")]),
     },
     Storyline {
         key: "message_bottle",
@@ -146,6 +167,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[FoodShop, Any], "Rose", "Arthur kept my letter? Tell him to meet me at {next}."),
         ],
         finale: step(&[Bridge, Water, Viewpoint], "Rose and Arthur", "Two old friends meet again on the bridge, laughing like it was 1962."),
+        hunt: hunt("Before I see Arthur I want to bring {items}. Split up, and meet me back here?", [("Old Love Letter", "minecraft:paper"), ("Faded Photograph", "minecraft:paper"), ("Seashell", "minecraft:nautilus_shell")]),
     },
     Storyline {
         key: "allay_courier",
@@ -157,6 +179,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[School, Culture, Any], "A student", "It sang in our class and dropped a note block! It's waiting at {next}."),
         ],
         finale: step(&[Park, Landmark, Any], "The allay", "All its shiny things back! The allay twirls around you and decides to stay."),
+        hunt: hunt("The allay's last shiny things are scattered: {items}. Split up and meet me back here!", [("Shiny Bell", "minecraft:bell"), ("Tiny Note Block", "minecraft:note_block"), ("Jar of Glitter", "minecraft:glowstone_dust")]),
     },
     Storyline {
         key: "founders_festival",
@@ -168,6 +191,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[Station, Landmark, Any], "A busy conductor", "Banners and lanterns, perfect. Everyone's gathering at {next}."),
         ],
         finale: step(&[Park, Civic, Landmark], "The whole town", "Lanterns glow, music plays and the Founders' Festival begins. You made it happen."),
+        hunt: hunt("We're short on festival things: {items}. Split up and meet me back here!", [("Paper Lantern", "minecraft:lantern"), ("Founders' Flag", "minecraft:white_banner"), ("Festival Drum", "minecraft:note_block")]),
     },
     Storyline {
         key: "secret_garden",
@@ -179,6 +203,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[FoodShop, School, Any], "A florist", "Cornflowers, and a little extra. Mrs. Greene's garden is hidden at {next}."),
         ],
         finale: step(&[Park, Landmark, Any], "Mrs. Greene", "You plant the seeds and the whole garden bursts into bloom."),
+        hunt: hunt("Mrs. Greene needs her old tools too: {items}. Split up and meet me back here.", [("Garden Shears", "minecraft:shears"), ("Old Trowel", "minecraft:iron_shovel"), ("Magic Fertiliser", "minecraft:bone_meal")]),
     },
     Storyline {
         key: "golems_heart",
@@ -190,6 +215,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[Culture, Faith, Any], "A curator", "The golem's heart, still warm. Rebuild it at {next}."),
         ],
         finale: step(&[Civic, Landmark, Park], "The iron golem", "Clank by clank, the guardian stands again and gives you a poppy."),
+        hunt: hunt("The golem needs three more things to wake: {items}. Split up and meet me back here.", [("Iron Bolt", "minecraft:iron_nugget"), ("Copper Spring", "minecraft:copper_ingot"), ("Spark of Redstone", "minecraft:redstone")]),
     },
     Storyline {
         key: "picnic_bakeoff",
@@ -201,6 +227,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[FoodShop, School, Any], "A cafe owner", "Sugar and a pinch of cinnamon. The picnic is at {next}!"),
         ],
         finale: step(&[Park, Water, Any], "Chef Amara", "Everyone shares cake on the grass. Amara declares it a tie, so everyone wins."),
+        hunt: hunt("The picnic needs {items}. Split up and meet me back here!", [("Picnic Blanket", "minecraft:red_wool"), ("Jar of Honey", "minecraft:honey_bottle"), ("Basket of Berries", "minecraft:sweet_berries")]),
     },
     Storyline {
         key: "postcard_tour",
@@ -213,6 +240,7 @@ pub static STORYLINES: [Storyline; 15] = [
             step(&[Any], "A photographer", "Last postcard. The tourist is waiting at {next}."),
         ],
         finale: step(&[Any], "The tourist", "All my postcards! Here, take this painting of the town. Sign it, it's yours."),
+        hunt: hunt("Wait, my suitcase burst open too! Help me find {items}. Split up and meet me back here.", [("Lost Passport", "minecraft:book"), ("Travel Camera", "minecraft:spyglass"), ("Snow Globe", "minecraft:heart_of_the_sea")]),
     },
 ];
 
@@ -339,6 +367,18 @@ mod tests {
                 line.key
             );
             assert!(!line.finale.line.contains("{next}"), "{}", line.key);
+        }
+    }
+
+    #[test]
+    fn every_hunt_names_its_things_and_their_labels_fit_in_a_command() {
+        for line in &STORYLINES {
+            assert!(line.hunt.line.contains("{items}"), "{}", line.key);
+            for (label, item) in line.hunt.items {
+                assert!(item.starts_with("minecraft:"), "{item}");
+                // A label is written into a summon command by a macro, inside quotes.
+                assert!(!label.contains(['"', '\\']), "{label}");
+            }
         }
     }
 

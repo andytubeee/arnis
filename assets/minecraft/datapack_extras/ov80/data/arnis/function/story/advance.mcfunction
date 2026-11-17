@@ -1,3 +1,4 @@
+function arnis:story/hunt/stop
 function arnis:story/current
 scoreboard players operation #last arnis.story = #steps arnis.story
 scoreboard players remove #last arnis.story 1

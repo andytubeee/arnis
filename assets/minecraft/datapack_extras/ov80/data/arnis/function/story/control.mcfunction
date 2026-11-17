@@ -6,6 +6,6 @@ execute if score @s arnis.story.ctl matches 3 run function arnis:story/errand/in
 scoreboard players operation #want arnis.story = #step arnis.story
 scoreboard players add #want arnis.story 10
 execute as @e[type=minecraft:villager,tag=arnis.story_npc,distance=..8] if score @s arnis.story = #step arnis.story run tag @s add arnis.story_here
-execute if score @s arnis.story.ctl = #want arnis.story if entity @e[tag=arnis.story_here] run function arnis:story/advance
+execute if score @s arnis.story.ctl = #want arnis.story if entity @e[tag=arnis.story_here] run function arnis:story/press
 tag @e[tag=arnis.story_here] remove arnis.story_here
 scoreboard players reset @s arnis.story.ctl

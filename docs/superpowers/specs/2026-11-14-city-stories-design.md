@@ -190,3 +190,16 @@ place and errand only. One NPC and one interaction entity at a time.
 
 The exact lines of dialogue, NPC skins, rewards, distance numbers and errand timing, the
 direction-hint format, and how the weighting prefers a storyline, all within the rules above.
+
+## Scavenger hunt (added 2026-11-16)
+
+So friends don't all crowd the same stop, the step before the finale splits everyone up. Its
+person names three story things (each storyline has its own, like Biscuit's Lead or the Brass
+Key), each at a different spare real place 80–600 blocks from them and 80+ apart. "Let's split
+up!" gives every player their own job: a green bar with the thing, its place, and the distance
+and direction. A finished job moves you to the thing fewest people are after, so someone alone
+finds them all in turn and late joiners pick up a free one. Things glow and shimmer, and count
+once anyone holds one. When all are found everyone is told to regroup; the story goes on once
+everyone playing is back within 12 blocks, or 45 seconds after the first arrives, with
+fireworks, the person's line and 3 emeralds each. Skip ends the hunt cleanly. A map with no
+spare place skips the hunt.

@@ -333,6 +333,26 @@ const STORIES: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/story/leave_spot.mcfunction",
     "ov80/data/arnis/function/story/load.mcfunction",
     "ov80/data/arnis/function/story/next_place.mcfunction",
+    "ov80/data/arnis/function/story/hunt/assign.mcfunction",
+    "ov80/data/arnis/function/story/hunt/bar.mcfunction",
+    "ov80/data/arnis/function/story/hunt/count.mcfunction",
+    "ov80/data/arnis/function/story/hunt/first.mcfunction",
+    "ov80/data/arnis/function/story/hunt/found.mcfunction",
+    "ov80/data/arnis/function/story/hunt/got.mcfunction",
+    "ov80/data/arnis/function/story/hunt/jobs_off.mcfunction",
+    "ov80/data/arnis/function/story/hunt/mine.mcfunction",
+    "ov80/data/arnis/function/story/hunt/near.mcfunction",
+    "ov80/data/arnis/function/story/hunt/reunion.mcfunction",
+    "ov80/data/arnis/function/story/hunt/scene.mcfunction",
+    "ov80/data/arnis/function/story/hunt/second.mcfunction",
+    "ov80/data/arnis/function/story/hunt/seek.mcfunction",
+    "ov80/data/arnis/function/story/hunt/start.mcfunction",
+    "ov80/data/arnis/function/story/hunt/status.mcfunction",
+    "ov80/data/arnis/function/story/hunt/stop.mcfunction",
+    "ov80/data/arnis/function/story/hunt/tell.mcfunction",
+    "ov80/data/arnis/function/story/hunt/thing.mcfunction",
+    "ov80/data/arnis/function/story/hunt/where.mcfunction",
+    "ov80/data/arnis/function/story/press.mcfunction",
     "ov80/data/arnis/function/story/second.mcfunction",
     "ov80/data/arnis/function/story/show.mcfunction",
     "ov80/data/arnis/function/story/skip.mcfunction",
@@ -1377,6 +1397,35 @@ mod tests {
         assert!(menu.contains("arnis:story"), "{menu}");
         let load = text_of(&out, "data/minecraft/tags/function/load.json").unwrap();
         assert!(load.contains("arnis:story/load"), "{load}");
+    }
+
+    #[test]
+    fn the_hunt_step_splits_everyone_up_and_goes_on_once_they_regroup() {
+        let out = files(&ctx(all()));
+        let f = |p: &str| {
+            text_of(
+                &out,
+                &format!("ov80/data/arnis/function/story/{p}.mcfunction"),
+            )
+            .unwrap()
+        };
+        assert!(f("control").contains("function arnis:story/press"));
+        assert!(f("press").contains("return run function arnis:story/hunt/start"));
+        assert!(f("advance").contains("function arnis:story/hunt/stop"));
+        assert!(f("second").contains("function arnis:story/hunt/second"));
+        // Everyone playing must be back, or the wait after the first arrival runs out.
+        let near = f("hunt/near");
+        assert!(
+            near.contains("if score #here arnis.story >= #all arnis.story"),
+            "{near}"
+        );
+        assert!(
+            near.contains("if score #gather arnis.story matches ..0"),
+            "{near}"
+        );
+        // A finished thing frees its hunters for one nobody has found yet.
+        let assign = f("hunt/assign");
+        assert!(assign.contains("if score #f2 arnis.story matches 1 run scoreboard players set #c2 arnis.story 1000"), "{assign}");
     }
 
     #[test]
