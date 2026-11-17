@@ -56,6 +56,12 @@ pub fn install_police(world: &Path) -> Result<(), String> {
     install(world, &[(SKELETON_PATH, POLICE_PNG.to_vec(), stored())])
 }
 
+/// The street network the map mod routes along.
+pub fn install_roads(world: &Path, json: Vec<u8>) -> Result<(), String> {
+    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    install(world, &[(super::roads::PATH, json, deflated)])
+}
+
 fn stored() -> SimpleFileOptions {
     SimpleFileOptions::default().compression_method(CompressionMethod::Stored)
 }

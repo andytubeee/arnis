@@ -1571,6 +1571,8 @@ pub fn generate_world_with_options(
         places.iter_mut().for_each(settle);
         (places, settlement)
     });
+    let roads =
+        (extras.stories || extras.crime).then(|| crate::datapack::roads::Graph::build(&elements));
     let story_places = extras.stories.then(|| {
         let mut places = crate::datapack::stories::places::collect(&elements, &xzbbox);
         places.iter_mut().for_each(|p| settle(&mut p.place));
@@ -2867,6 +2869,7 @@ pub fn generate_world_with_options(
             ),
             places,
             story,
+            roads,
             credits: crate::datapack::Credits::from_args(args),
             red_amber: matches!(
                 sign_region,

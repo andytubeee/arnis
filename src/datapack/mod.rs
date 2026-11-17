@@ -11,6 +11,7 @@ mod dialogs;
 pub mod disasters;
 pub mod discoveries;
 mod resources;
+pub mod roads;
 pub mod stories;
 
 use crate::args::Args;
@@ -792,6 +793,8 @@ pub struct PackContext {
     pub disasters: Option<disasters::Plan>,
     /// The world's City Stories storyline, its places and errands.
     pub story: Option<stories::pack::Story>,
+    /// The streets, for the map mod's routes; only with City Stories or Crime Spree.
+    pub roads: Option<roads::Graph>,
 }
 
 impl PackContext {
@@ -856,6 +859,18 @@ pub fn install(world: &Path, ctx: &PackContext) -> Result<(), String> {
     }
     if ctx.extras.outbreak || ctx.extras.disasters || ctx.extras.crime {
         crate::world_utils::start_in_survival(world)?;
+    }
+    if let Some(graph) = &ctx.roads {
+        let story_places = ctx.story.iter().flat_map(|s| &s.places).map(|p| &p.place);
+        let places = ctx
+            .places
+            .iter()
+            .chain(story_places)
+            .map(|p| (p.name.as_str(), p.anchor));
+        if let Err(e) = resources::install_roads(world, graph.json(places).to_string().into_bytes())
+        {
+            eprintln!("Warning: the street map for the map mod was left out of resources.zip: {e}");
+        }
     }
     if ctx.extras.crime {
         if let Err(e) = resources::install_police(world) {
@@ -1332,6 +1347,7 @@ mod tests {
                 .then(|| disasters::Plan::for_tests(CelestialBody::Moon)),
             // A world with City Stories always has its story; generation drops the mode otherwise.
             story: extras.stories.then(test_story),
+            roads: None,
         }
     }
 
