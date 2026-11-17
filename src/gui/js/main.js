@@ -533,6 +533,8 @@ function initDialogs() {
   if (update) closeOnBackdrop(update, closeUpdateModal);
   if (preview3d) closeOnBackdrop(preview3d, () => window.closePreview3D && window.closePreview3D());
   if (discord) closeOnBackdrop(discord, closeDiscordModal);
+  const modpack = document.getElementById("modpack-modal");
+  if (modpack) closeOnBackdrop(modpack, () => closeModpackModal(false));
 }
 
 const DISCORD_INVITE_URL = "https://discord.gg/Tba5NKzKjT";
@@ -556,6 +558,33 @@ function noteGenerationDone() {
     showModal(modal);
   }, 1000);
 }
+
+const MODPACK_URL = "https://github.com/andytubeee/arnis/releases/download/v3.4.0-andytubeee/arnis-map.mrpack";
+const MODPACK_PROMPT_KEY = "modpack-prompt-never";
+
+// After a world with City Stories or Crime Spree, offers the modpack with the map and GPS,
+// until told not to. True when it showed, so the Discord invite waits its turn.
+function noteModpack() {
+  const modes = gameplayToggle("city-stories-toggle") || gameplayToggle("crime-spree-toggle");
+  const modal = document.getElementById("modpack-modal");
+  if (!modes || !modal || localStorage.getItem(MODPACK_PROMPT_KEY)) return false;
+  setTimeout(() => showModal(modal), 1000);
+  return true;
+}
+
+function closeModpackModal(never) {
+  if (never) localStorage.setItem(MODPACK_PROMPT_KEY, "true");
+  const modal = document.getElementById("modpack-modal");
+  if (modal) hideModal(modal);
+}
+
+function downloadModpack() {
+  openExternal(MODPACK_URL);
+  closeModpackModal(false);
+}
+
+window.closeModpackModal = closeModpackModal;
+window.downloadModpack = downloadModpack;
 
 function closeDiscordModal() {
   const modal = document.getElementById("discord-modal");
@@ -1232,7 +1261,7 @@ function setupProgressListener() {
           prefetchDone = true;
         } else {
           window.arnisPreview3D?.refreshFacades();
-          noteGenerationDone();
+          if (!noteModpack()) noteGenerationDone();
         }
       } else if (message.startsWith("Stopped.") || message.startsWith("The retried cells are built")) {
         // A job in pieces ends here when stopped or when only some pieces were asked for, and a
@@ -1392,11 +1421,14 @@ function initSettings() {
     const licenseOpen = licenseModal && licenseModal.style.display === "flex";
     const updateOpen = updateModal && updateModal.style.display === "flex";
     const discordOpen = discordModal && discordModal.style.display === "flex";
+    const modpackModal = document.getElementById("modpack-modal");
+    const modpackOpen = modpackModal && modpackModal.style.display === "flex";
 
     if (licenseOpen) closeLicense();
     if (updateOpen) closeUpdateModal();
     if (discordOpen) closeDiscordModal();
-    if (!licenseOpen && !updateOpen && !discordOpen && settingsModal.style.display === "flex") {
+    if (modpackOpen) closeModpackModal(false);
+    if (!licenseOpen && !updateOpen && !discordOpen && !modpackOpen && settingsModal.style.display === "flex") {
       closeSettings();
     }
   });

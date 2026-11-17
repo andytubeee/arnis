@@ -1,0 +1,20 @@
+{
+	"schemaVersion": 1,
+	"id": "arnis_map",
+	"version": "${version}",
+	"name": "Arnis Map",
+	"description": "GPS routes along the real streets of an Arnis world, drawn on JourneyMap and on the ground.",
+	"license": "Apache-2.0",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["dev.arnis.map.ArnisMap"],
+		"journeymap": ["dev.arnis.map.JourneyMapRoutes"]
+	},
+	"depends": {
+		"fabricloader": ">=0.17",
+		"minecraft": "1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": { "journeymap": "*" }
+}

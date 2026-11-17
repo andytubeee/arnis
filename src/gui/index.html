@@ -2367,6 +2367,32 @@
       </div>
     </div>
 
+    <!-- City Stories and Crime Spree: the optional modpack with the map and GPS -->
+    <div id="modpack-modal" class="modal" style="display: none;">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="modpack-modal-title" tabindex="-1">
+        <header class="dialog-header">
+          <div class="dialog-heading">
+            <h2 id="modpack-modal-title" data-localize="modpack_modal_title">Get the map and GPS</h2>
+          </div>
+          <button type="button" class="dialog-close" onclick="closeModpackModal(false)" aria-label="Close" title="Close (Esc)" data-localize-aria-label="close_label" data-localize-title="close_esc">
+            <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+          </button>
+        </header>
+        <div class="dialog-body">
+          <p data-localize="modpack_modal_text">City Stories and Crime Spree play best with the Arnis modpack: a minimap, a full map and GPS routes along this city's real streets. Right-click the map and pick Route here, or type /route and a place. It's optional, friends without it can still play.</p>
+          <p data-localize="modpack_modal_steps">Download it and drag the file into Prism Launcher to make a new instance, then generate your worlds into that instance's saves folder.</p>
+        </div>
+        <footer class="dialog-footer">
+          <button type="button" class="dialog-button" onclick="closeModpackModal(true)" data-localize="modpack_modal_never">Don't show again</button>
+          <button type="button" class="dialog-button" onclick="closeModpackModal(false)" data-localize="modpack_modal_dismiss">Not now</button>
+          <button type="button" class="dialog-button is-primary" onclick="downloadModpack()">
+            <svg class="icon" aria-hidden="true"><use href="#i-external"></use></svg>
+            <span data-localize="modpack_modal_download">Download modpack</span>
+          </button>
+        </footer>
+      </div>
+    </div>
+
     <!-- One World: asks before chunks already in the world are generated again -->
     <div id="one-world-confirm-modal" class="modal" style="display: none;">
       <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="one-world-confirm-title" tabindex="-1">
