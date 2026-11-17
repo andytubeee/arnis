@@ -339,7 +339,10 @@ const STORIES: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/story/hunt/first.mcfunction",
     "ov80/data/arnis/function/story/hunt/found.mcfunction",
     "ov80/data/arnis/function/story/hunt/got.mcfunction",
+    "ov80/data/arnis/function/story/hunt/heavy.mcfunction",
     "ov80/data/arnis/function/story/hunt/jobs_off.mcfunction",
+    "ov80/data/arnis/function/story/hunt/lift.mcfunction",
+    "ov80/data/arnis/function/story/hunt/light.mcfunction",
     "ov80/data/arnis/function/story/hunt/mine.mcfunction",
     "ov80/data/arnis/function/story/hunt/near.mcfunction",
     "ov80/data/arnis/function/story/hunt/reunion.mcfunction",
@@ -1423,6 +1426,15 @@ mod tests {
             near.contains("if score #gather arnis.story matches ..0"),
             "{near}"
         );
+        // With friends on, one thing takes two to lift; alone, or once friends leave, it doesn't.
+        assert!(f("hunt/start")
+            .contains("store success score #duo arnis.story if score #n arnis.story matches 2.."));
+        let lift = f("hunt/lift");
+        assert!(lift.contains("if score #duo arnis.story matches 0 run return run function arnis:story/hunt/light"), "{lift}");
+        assert!(lift.contains("if score #n arnis.story matches 2.. run return run function arnis:story/hunt/light"), "{lift}");
+        assert!(f("hunt/seek").contains(
+            "if score #n arnis.story matches ..1 run scoreboard players set #duo arnis.story 0"
+        ));
         // A finished thing frees its hunters for one nobody has found yet.
         let assign = f("hunt/assign");
         assert!(assign.contains("if score #f2 arnis.story matches 1 run scoreboard players set #c2 arnis.story 1000"), "{assign}");
