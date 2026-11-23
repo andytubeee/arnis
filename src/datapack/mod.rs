@@ -62,8 +62,12 @@ const GRAVITY: &[(&str, &[u8])] = static_files![
 const TRAFFIC: &[(&str, &[u8])] = static_files![
     "data/arnis/function/traffic/load.mcfunction",
     "data/arnis/function/traffic/tick.mcfunction",
-    "data/arnis/function/traffic/on.mcfunction",
-    "data/arnis/function/traffic/off.mcfunction",
+    "data/arnis/function/traffic/car/red.mcfunction",
+    "data/arnis/function/traffic/car/amber.mcfunction",
+    "data/arnis/function/traffic/car/green.mcfunction",
+    "data/arnis/function/traffic/car/red_amber.mcfunction",
+    "data/arnis/function/traffic/walk/red.mcfunction",
+    "data/arnis/function/traffic/walk/green.mcfunction",
     "data/arnis/function/traffic/catch_up.mcfunction",
     "data/arnis/function/traffic/switched.mcfunction",
     "data/arnis/function/traffic/phase/a_go.mcfunction",
@@ -100,6 +104,10 @@ const CARS: &[(&str, &[u8])] = static_files![
     "data/arnis/function/cars/despawn.mcfunction",
     "data/arnis/function/cars/cap.mcfunction",
     "data/arnis/function/cars/light.mcfunction",
+    "data/arnis/function/cars/crossing.mcfunction",
+    "data/arnis/function/cars/gate.mcfunction",
+    "data/arnis/function/cars/gate_crossing.mcfunction",
+    "data/arnis/function/cars/gated.mcfunction",
     "data/arnis/function/cars/brake_lights.mcfunction",
     "data/arnis/function/cars/brake_switch.mcfunction",
     "data/arnis/function/cars/enter.mcfunction",
@@ -121,6 +129,7 @@ const CARS: &[(&str, &[u8])] = static_files![
     "data/arnis/function/cars/seat_move.mcfunction",
     "data/arnis/function/cars/seat_free.mcfunction",
     "data/arnis/function/cars/seat_check.mcfunction",
+    "data/arnis/function/cars/watch.mcfunction",
     "data/arnis/advancement/cars/board.json",
 ];
 
@@ -143,6 +152,26 @@ const TRAINS: &[(&str, &[u8])] = static_files![
     "data/arnis/function/trains/gone_at.mcfunction",
     "data/arnis/function/trains/sweep.mcfunction",
     "data/arnis/function/trains/board.mcfunction",
+    "data/arnis/function/trains/air.mcfunction",
+    "data/arnis/function/trains/air_at.mcfunction",
+    "data/arnis/function/trains/air_put.mcfunction",
+    "data/arnis/function/trains/air_part.mcfunction",
+    "data/arnis/function/trains/air_gear0.mcfunction",
+    "data/arnis/function/trains/air_gear1.mcfunction",
+    "data/arnis/function/trains/watch.mcfunction",
+    "data/arnis/function/trains/watch_at.mcfunction",
+];
+
+/// The level crossings' functions; `check`, `boom` and one per crossing are generated.
+const CROSSINGS: &[(&str, &[u8])] = static_files![
+    "data/arnis/function/xing/load.mcfunction",
+    "data/arnis/function/xing/tick.mcfunction",
+    "data/arnis/function/xing/drive.mcfunction",
+    "data/arnis/function/xing/catch_up.mcfunction",
+    "data/arnis/function/xing/changed.mcfunction",
+    "data/arnis/function/xing/apply.mcfunction",
+    "data/arnis/function/xing/dark.mcfunction",
+    "data/arnis/function/xing/flash.mcfunction",
 ];
 
 const WALK: &[(&str, &[u8])] = static_files![
@@ -179,6 +208,9 @@ const WALK: &[(&str, &[u8])] = static_files![
     "data/arnis/function/walk/pick.mcfunction",
     "data/arnis/function/walk/pick_at.mcfunction",
     "data/arnis/function/walk/place.mcfunction",
+    "data/arnis/function/walk/rail.mcfunction",
+    "data/arnis/function/walk/rail_hold.mcfunction",
+    "data/arnis/function/walk/rail_open.mcfunction",
     "data/arnis/function/walk/reach.mcfunction",
     "data/arnis/function/walk/respawn.mcfunction",
     "data/arnis/function/walk/settle.mcfunction",
@@ -675,6 +707,8 @@ pub struct Extras {
     pub cars: bool,
     /// Set once the rail network turns out to have trains on it.
     pub trains: bool,
+    /// Set once a level crossing turns out to have trains to close for.
+    pub crossings: bool,
     pub pedestrians: bool,
 }
 
@@ -695,6 +729,7 @@ impl Extras {
             disasters: args.disasters,
             cars: args.moving_vehicles,
             trains: false,
+            crossings: false,
             pedestrians: args.pedestrians,
         }
     }
@@ -787,6 +822,8 @@ pub struct PackContext {
     /// The functions that hold the routes and timetables, run each train and summon its
     /// carriages.
     pub train_functions: Vec<(String, String)>,
+    /// The functions that close each level crossing for its trains.
+    pub crossing_functions: Vec<(String, String)>,
     /// The functions that hold the footways and move the walkers at the world's scale.
     pub walk_functions: Vec<(String, String)>,
     /// Which disasters the area gets and the water maps they rise by.
@@ -795,6 +832,8 @@ pub struct PackContext {
     pub story: Option<stories::pack::Story>,
     /// The streets, for the map mod's routes; only with City Stories or Crime Spree.
     pub roads: Option<roads::Graph>,
+    /// The resource pack files the moving vehicles are drawn with, as (path, bytes).
+    pub vehicle_pack: Vec<(String, Vec<u8>)>,
 }
 
 impl PackContext {
@@ -851,15 +890,11 @@ pub fn install(world: &Path, ctx: &PackContext) -> Result<(), String> {
         fs::write(&dest, bytes).map_err(|e| format!("Failed to write {dest:?}: {e}"))?;
     }
     crate::world_utils::enable_datapack_in_level_dat(world, PACK_NAME)?;
-    if ctx.extras.pause_menu {
-        // Only the logo needs it, so a failure costs the logo and nothing else.
-        if let Err(e) = resources::install_banner(world) {
-            eprintln!("Warning: the pause menu logo was left out of resources.zip: {e}");
-        }
-    }
     if ctx.extras.outbreak || ctx.extras.disasters || ctx.extras.crime {
         crate::world_utils::start_in_survival(world)?;
     }
+    // Everything the world's resource pack carries, written in one go.
+    let mut pack = ctx.vehicle_pack.clone();
     if let Some(graph) = &ctx.roads {
         let story_places = ctx.story.iter().flat_map(|s| &s.places).map(|p| &p.place);
         let places = ctx
@@ -867,14 +902,18 @@ pub fn install(world: &Path, ctx: &PackContext) -> Result<(), String> {
             .iter()
             .chain(story_places)
             .map(|p| (p.name.as_str(), p.anchor));
-        if let Err(e) = resources::install_roads(world, graph.json(places).to_string().into_bytes())
-        {
-            eprintln!("Warning: the street map for the map mod was left out of resources.zip: {e}");
-        }
+        pack.push((
+            roads::PATH.to_string(),
+            graph.json(places).to_string().into_bytes(),
+        ));
     }
     if ctx.extras.crime {
-        if let Err(e) = resources::install_police(world) {
-            eprintln!("Warning: the police uniform was left out of resources.zip: {e}");
+        pack.push(resources::police());
+    }
+    if ctx.extras.pause_menu || !pack.is_empty() {
+        // Only the logo, vehicles, street map and uniform need it, so a failure costs those.
+        if let Err(e) = resources::install(world, ctx.extras.pause_menu, &pack) {
+            eprintln!("Warning: resources.zip was not written, so the world lacks its logo, vehicle models, street map or police uniform: {e}");
         }
     }
     Ok(())
@@ -936,6 +975,9 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
     if ex.trains {
         add_static(TRAINS);
     }
+    if ex.crossings {
+        add_static(CROSSINGS);
+    }
     if ex.pedestrians {
         add_static(WALK);
     }
@@ -958,6 +1000,8 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
         (ex.disasters, "disaster"),
         (ex.cars, "cars"),
         (ex.trains, "trains"),
+        // After the trains, whose clock the crossings read.
+        (ex.crossings, "xing"),
         (ex.pedestrians, "walk"),
     ]
     .into_iter()
@@ -998,6 +1042,13 @@ fn files(ctx: &PackContext) -> Vec<(String, Vec<u8>)> {
     if ex.trains {
         out.extend(
             ctx.train_functions
+                .iter()
+                .map(|(path, text)| (path.clone(), text.clone().into_bytes())),
+        );
+    }
+    if ex.crossings {
+        out.extend(
+            ctx.crossing_functions
                 .iter()
                 .map(|(path, text)| (path.clone(), text.clone().into_bytes())),
         );
@@ -1218,6 +1269,7 @@ fn pack_mcmeta(ex: Extras) -> Value {
         (ex.disasters, "disasters"),
         (ex.cars, "moving cars"),
         (ex.trains, "trains"),
+        (ex.crossings, "level crossings"),
         (ex.pedestrians, "pedestrians"),
     ] {
         if on {
@@ -1341,6 +1393,7 @@ mod tests {
             red_amber: true,
             car_functions: Vec::new(),
             train_functions: Vec::new(),
+            crossing_functions: Vec::new(),
             walk_functions: Vec::new(),
             disasters: extras
                 .disasters
@@ -1348,6 +1401,7 @@ mod tests {
             // A world with City Stories always has its story; generation drops the mode otherwise.
             story: extras.stories.then(test_story),
             roads: None,
+            vehicle_pack: Vec::new(),
         }
     }
 
@@ -1363,6 +1417,7 @@ mod tests {
             disasters: true,
             cars: true,
             trains: true,
+            crossings: true,
             pedestrians: true,
         }
     }
@@ -1670,7 +1725,7 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/minecraft/datapack_extras");
         let listed: std::collections::HashSet<&str> = [
             CORE, GRAVITY, TRAFFIC, MENU, OUTBREAK, NPC, STORIES, CRIME, DISASTERS, CARS, TRAINS,
-            WALK,
+            CROSSINGS, WALK,
         ]
         .iter()
         .flat_map(|set| set.iter().map(|(p, _)| *p))
@@ -1735,6 +1790,10 @@ mod tests {
                     // network, which the test has none of.
                     let networked = [
                         "clear",
+                        "conflict",
+                        "gate_at",
+                        "gate_queue",
+                        "path/",
                         "ease",
                         "look",
                         "network",
@@ -1749,7 +1808,10 @@ mod tests {
                             || name.starts_with(&format!("arnis:trains/{f}"))
                     }) || ["network", "move", "ahead", "gap", "behind", "aside"]
                         .iter()
-                        .any(|f| name == format!("arnis:walk/{f}"));
+                        .any(|f| name == format!("arnis:walk/{f}"))
+                        || ["check", "boom"]
+                            .iter()
+                            .any(|f| name == format!("arnis:xing/{f}"));
                     if name.contains("$(") || networked {
                         continue;
                     }

@@ -134,6 +134,13 @@ pub struct PrescanResult {
 }
 
 impl PrescanResult {
+    /// Without the aeroplanes where `taken` says an airfield has aircraft of its own,
+    /// which they would stand in the way of.
+    pub fn without(mut self, taken: impl Fn(i32, i32) -> bool) -> Self {
+        self.placements.retain(|p| !taken(p.anchor_x, p.anchor_z));
+        self
+    }
+
     pub fn placement_count(&self) -> usize {
         self.placements.len()
     }
@@ -296,8 +303,12 @@ fn collect_aeroways(elements: &[ProcessedElement]) -> Vec<AerowayStrip> {
     for i in 0..segs.len() {
         groups.entry(uf.find(i)).or_default().push(i);
     }
+    // In map order, not the hash map's: the spacing and the plane cap keep the first ones,
+    // so the order decides which planes stand.
+    let mut groups: Vec<Vec<usize>> = groups.into_values().collect();
+    groups.sort_unstable_by_key(|g| g[0]);
     groups
-        .values()
+        .iter()
         .filter_map(|g| strip_from_group(&segs, g))
         .collect()
 }
@@ -848,6 +859,25 @@ mod tests {
         assert_eq!(collect_aeroways(&[gravel]).len(), 1);
     }
 
+    /// The strips come in map order on every run, so the spacing and the plane cap keep the
+    /// same planes; a hash map's order differs from one map to the next.
+    #[test]
+    fn aeroways_come_in_map_order() {
+        let ways: Vec<ProcessedElement> = (0..40u64)
+            .map(|i| {
+                let z = i as i32 * 30;
+                runway_way(
+                    100 - i,
+                    vec![mk_node(2 * i, 0, z), mk_node(2 * i + 1, 300, z)],
+                )
+            })
+            .collect();
+        for _ in 0..5 {
+            let order: Vec<u64> = collect_aeroways(&ways).iter().map(|s| s.rep_id).collect();
+            assert_eq!(order, (0..40u64).map(|i| 100 - i).collect::<Vec<_>>());
+        }
+    }
+
     #[test]
     fn merges_collinear_split_segments() {
         // Two halves of one 200-block runway, sharing the middle node id (5).
@@ -1012,5 +1042,31 @@ mod tests {
             build_placements(&strips, &[], 1.0).is_empty(),
             "a bent taxiway should not park a plane"
         );
+    }
+    /// Where an airfield has aircraft of its own the block-built aeroplanes are left out,
+    /// and only there.
+    #[test]
+    fn aeroplanes_keep_off_the_ground_that_is_taken() {
+        let at = |x: i32| Placement {
+            rep_id: x as u64,
+            kind: PlaneKind::Parked,
+            anchor_x: x,
+            anchor_z: 0,
+            yaw_degrees: 0.0,
+            pitch_degrees: 0.0,
+            elevation_blocks: 0,
+            footprint: Bbox {
+                min_x: x - 20,
+                min_z: -20,
+                max_x: x + 20,
+                max_z: 20,
+            },
+        };
+        let all = PrescanResult {
+            placements: vec![at(100), at(900), at(5000)],
+        };
+        let kept = all.without(|x, _| x < 1000);
+        assert_eq!(kept.placement_count(), 1);
+        assert_eq!(kept.placements[0].anchor_x, 5000);
     }
 }

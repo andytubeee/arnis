@@ -13,7 +13,7 @@ pub use index::{Claim, InteriorUseIndex};
 pub use uses::{plan_interior, InteriorPlan, PlanInputs};
 
 use crate::block_definitions::*;
-use crate::element_processing::buildings::{cached_prop_block, BUILDING_PASSAGE_HEIGHT};
+use crate::element_processing::buildings::cached_prop_block;
 use crate::element_processing::subprocessor::buildings_loot::{themed_chest_loot, LootTheme};
 use crate::floodfill_cache::CoordinateBitmap;
 use crate::world_editor::WorldEditor;
@@ -37,6 +37,8 @@ pub struct InteriorRequest<'a> {
     pub plan: &'a InteriorPlan,
     pub abandoned: bool,
     pub passages: &'a CoordinateBitmap,
+    /// Rows the passages are open for over the floor.
+    pub passage_height: i32,
     /// Doors in the outer wall at ground level.
     pub entrances: &'a [Entry],
     /// Corners of the outline's bounding box.
@@ -103,7 +105,7 @@ pub fn generate_building_interior(editor: &mut WorldEditor, req: &InteriorReques
     } else {
         None
     };
-    let passage_top = req.start_y_offset + BUILDING_PASSAGE_HEIGHT.min(req.building_height);
+    let passage_top = req.start_y_offset + req.passage_height.min(req.building_height);
     let homes_fit = max_x - min_x + 1 >= 8 && max_z - min_z + 1 >= 8 && own.len() > 100;
 
     for (i, &floor_rel) in req.floor_levels.iter().enumerate() {
@@ -499,10 +501,13 @@ mod tests {
         let ctx = BuildingContext {
             flood_fill_cache: &cache,
             building_passages: &passages,
+            rail_passages: crate::element_processing::railways::RailPassages::none(),
             road_mask: &road,
             building_footprints: &footprints,
             group_members: &groups,
             housing_relation_parts: &Default::default(),
+            neighbour_heights: crate::element_processing::buildings::no_neighbour_heights(),
+            inset_plan: crate::element_processing::buildings::no_inset_plan(),
             interior_uses: &index,
         };
         let args = interior_args();
@@ -549,12 +554,13 @@ mod tests {
         blocks.iter().filter(|b| b.name().ends_with(suffix)).count()
     }
 
-    /// Rows holding a floor slab across most of the footprint.
+    /// Rows holding a floor slab across most of the footprint, inside walls
+    /// that may stand a block in from the outline under a pitched roof's eave.
     fn floor_rows(editor: &WorldEditor, way: &ProcessedWay, max_y: i32) -> Vec<i32> {
         let (x0, x1, z0, z1) = bbox(way);
         let ring: Vec<(i32, i32)> = way.nodes.iter().map(|n| (n.x, n.z)).collect();
-        let cells: Vec<(i32, i32)> = (z0 + 1..z1)
-            .flat_map(|z| (x0 + 1..x1).map(move |x| (x, z)))
+        let cells: Vec<(i32, i32)> = (z0 + 2..z1 - 1)
+            .flat_map(|z| (x0 + 2..x1 - 1).map(move |x| (x, z)))
             .filter(|&(x, z)| index::covers(&ring, x, z))
             .collect();
         (0..max_y)
@@ -1011,10 +1017,13 @@ mod tests {
         let ctx = BuildingContext {
             flood_fill_cache: &cache,
             building_passages: &passages,
+            rail_passages: crate::element_processing::railways::RailPassages::none(),
             road_mask: &road,
             building_footprints: &footprints,
             group_members: &groups,
             housing_relation_parts: &Default::default(),
+            neighbour_heights: crate::element_processing::buildings::no_neighbour_heights(),
+            inset_plan: crate::element_processing::buildings::no_inset_plan(),
             interior_uses: InteriorUseIndex::empty(),
         };
         generate_buildings(
@@ -1159,6 +1168,12 @@ mod tests {
             let way = way_of(&elements);
             let (x0, x1, z0, z1) = bbox(way);
             let mut doors = 0;
+            // The walls stand on the outline, or a block in under an eave.
+            let (x0, x1, z0, z1) = if editor.get_block_absolute(x0, 2, (z0 + z1) / 2).is_some() {
+                (x0, x1, z0, z1)
+            } else {
+                (x0 + 1, x1 - 1, z0 + 1, z1 - 1)
+            };
             for (x, z) in (z0..=z1).flat_map(|z| (x0..=x1).map(move |x| (x, z))) {
                 let on_rim = x == x0 || x == x1 || z == z0 || z == z1;
                 let is_door = editor

@@ -6,10 +6,13 @@ use crate::clipping::clip_way_to_bbox;
 use crate::colors::color_text_to_rgb_tuple;
 use crate::deterministic_rng::{coord_rng, element_rng};
 use crate::element_processing::building_facade::{
-    compute_facade_plan, BaySlot, BuildingContext, ColumnFacade, FacadeAnchor, FacadeClass,
-    FacadePlan, MIN_FACADE_FOOTPRINT,
+    compute_facade_plan, compute_stepped_facade_plan, BaySlot, BuildingContext, ColumnFacade,
+    FacadeAnchor, FacadeClass, FacadePlan, MIN_FACADE_FOOTPRINT,
 };
+use crate::element_processing::building_inset;
+use crate::element_processing::fortifications;
 use crate::element_processing::historic;
+use crate::element_processing::railways::RailThrough;
 use crate::element_processing::rooftops::{self, RoofDeck, RoofMembrane, RooftopBrief};
 use crate::element_processing::subprocessor::interior::{
     generate_building_interior, plan_interior, Entry, InteriorRequest, PlanInputs,
@@ -114,6 +117,22 @@ pub(crate) enum BuildingRegion {
     NorthAmerica,
     Europe,
     Other,
+}
+
+impl MaterialRegion {
+    /// Traditions of steep tile and slate roofs; elsewhere a house roof is low.
+    fn steep_roofs(self) -> bool {
+        matches!(
+            self,
+            Self::Central
+                | Self::CentralEast
+                | Self::BrickNorth
+                | Self::BritishIsles
+                | Self::France
+                | Self::EastEurope
+                | Self::CentralAsia
+        )
+    }
 }
 
 impl BuildingRegion {
@@ -915,6 +934,30 @@ pub(crate) struct HolePolygon {
 /// Walls and floors below this height are removed at tunnel=building_passage
 /// highway coordinates, creating a ground-level opening through the building.
 pub(crate) const BUILDING_PASSAGE_HEIGHT: i32 = 4;
+
+/// Buildings track runs into as one hall whatever their height: sheds, depots, stations.
+fn rail_hall_type(building_type: &str) -> bool {
+    matches!(
+        building_type,
+        "train_station"
+            | "transportation"
+            | "train_shed"
+            | "depot"
+            | "industrial"
+            | "manufacture"
+            | "factory"
+            | "warehouse"
+            | "storage"
+            | "hangar"
+            | "service"
+            | "shed"
+            | "barn"
+            | "farm_auxiliary"
+            | "garage"
+            | "garages"
+            | "roof"
+    )
+}
 
 /// Smallest footprint, in cells, that gets an interior.
 const MIN_INTERIOR_CELLS: usize = 24;
@@ -2667,7 +2710,6 @@ pub struct BuildingStyle {
     // Accent features
     pub use_accent_roof_line: bool,
     pub use_accent_lines: bool,
-    pub use_vertical_accent: bool,
 
     // Roof
     pub roof_type: RoofType,
@@ -2803,20 +2845,42 @@ impl BuildingStyle {
             } else if category == BuildingCategory::GlassySkyscraper {
                 rng.random_bool(0.6)
             } else {
-                has_multiple_floors && rng.random_bool(0.2)
+                false
             }
         });
 
-        // Vertical accent: only if no accent lines and multi-floor
-        let use_vertical_accent = preset
-            .use_vertical_accent
-            .unwrap_or_else(|| has_multiple_floors && !use_accent_lines && rng.random_bool(0.1));
+        // Storey stripes only where a type asks; the roll stays so later draws keep their place.
+        let striped = preset.use_accent_lines.is_none()
+            && !matches!(
+                category,
+                BuildingCategory::ModernSkyscraper | BuildingCategory::GlassySkyscraper
+            )
+            && has_multiple_floors
+            && rng.random_bool(0.2);
+
+        // The vertical accent's roll, kept so later draws keep their place.
+        if preset.use_vertical_accent.is_none()
+            && has_multiple_floors
+            && !use_accent_lines
+            && !striped
+        {
+            let _ = rng.random_bool(0.1);
+        }
 
         // === Roof ===
 
-        // Priority: roof:shape tag, preset default, auto-gable, then flat.
+        // Priority: roof:shape tag, the shape the laser saw, preset default,
+        // auto-gable, then flat. A part or a building closed in by others keeps
+        // the generator's lid whatever the laser saw.
+        let measured_roof = element
+            .tags
+            .get(crate::survey::roofs::SHAPE_HINT)
+            .filter(|_| !roof_ctx.enclosed && !element.tags.contains_key("building:part"))
+            .map(|s| parse_roof_type(s));
         let (roof_type, generate_roof) = if let Some(roof_shape) = element.tags.get("roof:shape") {
             (parse_roof_type(roof_shape), true)
+        } else if let Some(rt) = measured_roof {
+            (rt, true)
         } else if let Some(rt) = preset.roof_type {
             let should_generate = preset.generate_roof.unwrap_or(rt != RoofType::Flat);
             (rt, should_generate)
@@ -2920,6 +2984,7 @@ impl BuildingStyle {
         // default rules gives way to a pitched one, and a pitched default
         // stays as it was.
         let defaulted = !element.tags.contains_key("roof:shape")
+            && measured_roof.is_none()
             && preset.roof_type.is_none()
             && !roof_ctx.enclosed;
         let (roof_type, generate_roof) = match roof_levels_roof(element, era, roof_ctx) {
@@ -2937,9 +3002,9 @@ impl BuildingStyle {
                 RoofType::Gabled | RoofType::Hipped | RoofType::Mansard | RoofType::Gambrel
             )
             && diagonality < DIAGONAL_THRESHOLD
-            && dominant_axis_angle(&element.nodes).to_degrees().abs() > 10.0
+            && outline_is_turned(&element.nodes)
         {
-            RoofType::Pyramidal
+            RoofType::Hipped
         } else {
             roof_type
         };
@@ -3093,7 +3158,6 @@ impl BuildingStyle {
             has_windows,
             use_accent_roof_line,
             use_accent_lines,
-            use_vertical_accent,
             roof_type,
             has_chimney,
             generate_roof,
@@ -3152,7 +3216,6 @@ struct BuildingConfig {
     use_horizontal_windows: bool,
     use_accent_roof_line: bool,
     use_accent_lines: bool,
-    use_vertical_accent: bool,
     is_abandoned_building: bool,
     has_windows: bool,
     has_garage_door: bool,
@@ -3181,6 +3244,9 @@ struct BuildingConfig {
     window_archetype: WindowArchetype,
     /// Window and pier widths the wall runs are laid out with.
     bays: BayRhythm,
+    /// The outline the walls stepped in from, where they did. A stepped
+    /// wall keeps the windows of the outline wall in front of it.
+    eave_outline: Option<Rc<[ProcessedNode]>>,
     /// Panel between storeys in a shaft whose spandrels recede with the glass.
     spandrel_block: Block,
     /// Stone base and capital of a masonry tower, if it has them.
@@ -3199,8 +3265,35 @@ struct BuildingConfig {
     ground: GroundFloor,
     /// Light stone for lintels, sills, string courses and the cornice.
     trim_block: Block,
-    /// Flush trim-stone frames around the windows of historic European
-    /// stucco (Faschen).
+    /// Traditional masonry fabric, dressed in trim stone (`dressed_fabric`).
+    dressed: bool,
+    /// Its pitched roof is laid 1:2 in slabs (`takes_low_pitch_roof`).
+    low_pitch_roof: bool,
+    /// Timber frame standing in the reveals of its wide windows, if any.
+    window_reveal: Option<Block>,
+    /// Pane glazing standing in the wall plane between the piers, instead of set-back glass.
+    window_pane: Option<Block>,
+    /// Fascia band along the top of a plain shop or hall: block and rows.
+    top_band: Option<(Block, i32)>,
+    /// Shutters hung beside every window, if any.
+    shutters: Option<Block>,
+    /// Slab shading every window head of a front in the hot regions.
+    sunshade: Option<Block>,
+    /// Flats here hang window air conditioners: Asia, the Middle East, hot Latin America.
+    hot_window_units: bool,
+    /// Split units' condensers hang under the odd window of a plain block of flats.
+    split_units: bool,
+    /// Panel between the windows of one column on a plain modern front.
+    window_panel: Option<Block>,
+    /// Band at every storey of a plain modern front that has no panels.
+    floor_band: Option<Block>,
+    /// Pilasters up the piers of every so many bays, and their block.
+    pilasters: Option<(i32, Block)>,
+    /// A ledge at every storey in place of a sill per window.
+    coursed: bool,
+    /// A fire escape up the street front, which takes the place of balconies.
+    fire_escape: bool,
+    /// Flush trim-stone frames around the windows (Faschen).
     surrounds: bool,
     /// Dark frame of a shopfront or lobby: its piers and sign band.
     shop_frame: Block,
@@ -3227,6 +3320,11 @@ struct BuildingConfig {
     /// already owns, and a column flattened for a photograph that never comes
     /// loses its window, its plinth and its accent line for nothing.
     preset_shell: Arc<FnvHashSet<(i32, i32)>>,
+    /// Rows a road or a train passing through is open for over the floor.
+    passage_height: i32,
+    /// Track runs into it at ground level: one hall over the tracks, with no storeys
+    /// and no passage walls inside.
+    rail_hall: bool,
 }
 
 /// Base, shaft and capital of a masonry tower: a stone base of one to four
@@ -3396,7 +3494,8 @@ fn pick_window_frame(
     wall_block: Block,
     element_id: u64,
 ) -> Option<WindowFrameStyle> {
-    if detail == DetailTier::Minimal {
+    // A house keeps its frames however small it is.
+    if detail == DetailTier::Minimal && category != BuildingCategory::House {
         return None;
     }
     use WindowFrameStyle::*;
@@ -3597,6 +3696,16 @@ impl BuildingConfig {
         self.piano_nobile && h > gft && h <= gft + self.floor_cycle
     }
 
+    /// Top glazed row of a plain ground-floor window.
+    fn ground_window_top(&self) -> i32 {
+        let rows = if self.category == BuildingCategory::House {
+            2
+        } else {
+            3
+        };
+        (self.start_y_offset + 1 + rows).min(self.ground_floor_top())
+    }
+
     /// Glazed rows a punched window of an upper storey is capped at, if any.
     /// European fabric keeps its windows two rows tall in a taller storey,
     /// three on the piano nobile, so a solid head row stays over each.
@@ -3679,7 +3788,12 @@ impl BuildingConfig {
 
     /// Bays of a straight wall run `len` columns long, upper floors and ground.
     fn run_layouts(&self, len: i32) -> (BayLayout, BayLayout) {
-        let upper = BayLayout::plan(len, self.bays);
+        self.with_shopfront(BayLayout::plan(len, self.bays))
+    }
+
+    /// A run's upper bays and the shopfront under them.
+    fn with_shopfront(&self, upper: BayLayout) -> (BayLayout, BayLayout) {
+        let len = upper.len;
         // A masonry tower's piers run down to the pavement as they are.
         if self.masonry_lobby() {
             return (upper, upper);
@@ -3933,6 +4047,419 @@ fn pick_ground_floor(
     }
 }
 
+/// Fascia band (and sign zone) of a plain low shop or hall: two rows, three on a tall hall.
+fn top_band_for(
+    category: BuildingCategory,
+    wall_block: Block,
+    wall_height: i32,
+    floor_cycle: i32,
+    footprint_cells: usize,
+    group_seed: u64,
+) -> Option<(Block, i32)> {
+    let hall = matches!(
+        category,
+        BuildingCategory::Industrial | BuildingCategory::Warehouse
+    );
+    // An untyped building this large and low is a shop or a hall too.
+    let big_box = category == BuildingCategory::Default && footprint_cells >= 1000;
+    if !(hall || big_box || category == BuildingCategory::Commercial)
+        || footprint_cells < 150
+        || wall_height > 3 * floor_cycle + GROUND_FLOOR_BONUS
+        || wall_height < 5
+        || is_glass_wall(wall_block)
+    {
+        return None;
+    }
+    let light = matches!(
+        wall_block,
+        WHITE_CONCRETE
+            | LIGHT_GRAY_CONCRETE
+            | LIGHT_GRAY_CONCRETE_POWDER
+            | SMOOTH_STONE
+            | CALCITE
+            | QUARTZ_BLOCK
+            | QUARTZ_BRICKS
+            | WHITE_TERRACOTTA
+            | MUSHROOM_STEM
+            | SMOOTH_SANDSTONE
+            | POLISHED_DIORITE
+            | POLISHED_ANDESITE
+    );
+    let bands: &[Block] = if light {
+        &[
+            GRAY_CONCRETE,
+            GRAY_TERRACOTTA,
+            CYAN_TERRACOTTA,
+            BROWN_TERRACOTTA,
+            RED_TERRACOTTA,
+        ]
+    } else {
+        &[LIGHT_GRAY_CONCRETE, SMOOTH_STONE, WHITE_CONCRETE]
+    };
+    let band = bands[element_rng(group_seed ^ 0x70FB_A4D0_0000_0001).random_range(0..bands.len())];
+    let rows = if hall && wall_height >= 8 { 3 } else { 2 };
+    (band != wall_block).then_some((band, rows))
+}
+
+/// Shutters on every window or none: houses by frame style, dressed fabric where shutters are the habit.
+fn shutters_for(
+    category: BuildingCategory,
+    dressed: bool,
+    roof_ctx: RoofContext,
+    storeys: i32,
+    frame: Option<WindowFrameStyle>,
+    group_seed: u64,
+) -> Option<Block> {
+    if category == BuildingCategory::House {
+        return frame.and_then(WindowFrameStyle::shutter_block);
+    }
+    let shuttered_fabric = matches!(
+        roof_ctx.materials,
+        MaterialRegion::France
+            | MaterialRegion::Mediterranean
+            | MaterialRegion::Central
+            | MaterialRegion::CentralEast
+            | MaterialRegion::LatinAmerica
+            | MaterialRegion::SoutheastAsia
+    );
+    let mut rng = element_rng(group_seed ^ 0x5A07_7E25_0000_0001);
+    (dressed
+        && shuttered_fabric
+        && storeys <= 5
+        && matches!(
+            category,
+            BuildingCategory::Residential | BuildingCategory::Default
+        )
+        && rng.random_bool(0.45))
+    .then(|| {
+        [
+            SPRUCE_TRAPDOOR,
+            DARK_OAK_TRAPDOOR,
+            SPRUCE_TRAPDOOR,
+            WARPED_TRAPDOOR,
+        ][rng.random_range(0..4)]
+    })
+}
+
+/// Slab over each window head of a plain front in the hot regions, in the trim stone.
+fn sunshade_for(
+    category: BuildingCategory,
+    dressed: bool,
+    roof_ctx: RoofContext,
+    wall_block: Block,
+    trim_block: Block,
+    group_seed: u64,
+) -> Option<Block> {
+    let chance = match roof_ctx.materials {
+        MaterialRegion::SouthAsia => 0.75,
+        MaterialRegion::SoutheastAsia => 0.45,
+        MaterialRegion::MiddleEast | MaterialRegion::SubSaharanAfrica => 0.3,
+        _ => return None,
+    };
+    let fits = !dressed
+        && !is_glass_wall(wall_block)
+        && matches!(
+            category,
+            BuildingCategory::House
+                | BuildingCategory::Residential
+                | BuildingCategory::Default
+                | BuildingCategory::Commercial
+                | BuildingCategory::Office
+                | BuildingCategory::Hotel
+        );
+    (fits && element_rng(group_seed ^ 0x5D5A_DE00_0000_0001).random_bool(chance))
+        .then(|| trim_slab(trim_block))
+}
+
+/// Which air conditioners hang on the flats: window units in the sash, and split units'
+/// condensers on the wall. Where both are common a building has one kind.
+fn air_conditioning_for(
+    roof_ctx: RoofContext,
+    climate: Climate,
+    dressed: bool,
+    group_seed: u64,
+) -> (bool, bool) {
+    let hot = match roof_ctx.materials {
+        MaterialRegion::EastAsia
+        | MaterialRegion::SoutheastAsia
+        | MaterialRegion::SouthAsia
+        | MaterialRegion::MiddleEast => true,
+        MaterialRegion::LatinAmerica => matches!(
+            climate,
+            Climate::TropicalSavanna | Climate::HotDesert | Climate::HotSteppe
+        ),
+        _ => false,
+    };
+    let window_units = hot && element_rng(group_seed ^ 0xA1C0_0D17_0000_0005).random_bool(0.6);
+    let split_region = matches!(
+        roof_ctx.materials,
+        MaterialRegion::EastEurope | MaterialRegion::Mediterranean | MaterialRegion::CentralAsia
+    );
+    (
+        window_units,
+        !dressed && (split_region || (hot && !window_units)),
+    )
+}
+
+/// Panes in the wall plane for a share of plain fronts whose reveals hold no frame.
+fn window_pane_for(
+    category: BuildingCategory,
+    dressed: bool,
+    archetype: WindowArchetype,
+    window_block: Block,
+    framed_or_tall: bool,
+    group_seed: u64,
+) -> Option<Block> {
+    let pane = match window_block {
+        GRAY_STAINED_GLASS => GRAY_STAINED_GLASS_PANE,
+        GLASS => GLASS_PANE,
+        _ => return None,
+    };
+    let fits = !dressed
+        && !framed_or_tall
+        && matches!(archetype, WindowArchetype::Portrait | WindowArchetype::Wide)
+        && matches!(
+            category,
+            BuildingCategory::House
+                | BuildingCategory::Residential
+                | BuildingCategory::Default
+                | BuildingCategory::Commercial
+                | BuildingCategory::Office
+                | BuildingCategory::Hotel
+                | BuildingCategory::School
+                | BuildingCategory::Hospital
+        );
+    (fits && element_rng(group_seed ^ 0x9A2E_0000_0000_0001).random_bool(0.35)).then_some(pane)
+}
+
+/// Trapdoor of the timber frame in the window reveals, for unshuttered dressed fronts and houses.
+fn window_reveal_for(
+    category: BuildingCategory,
+    dressed: bool,
+    roof_ctx: RoofContext,
+    shutters: Option<Block>,
+    group_seed: u64,
+) -> Option<Block> {
+    if shutters.is_some() {
+        return None;
+    }
+    let mut rng = element_rng(group_seed ^ 0x2E7E_A100_0000_0001);
+    let roll = rng.random_range(0..10u32);
+    let timber_house = category == BuildingCategory::House
+        && (roof_ctx.region == BuildingRegion::NorthAmerica
+            || roof_ctx.materials == MaterialRegion::Nordic);
+    if timber_house {
+        // White-painted frames, mostly.
+        return (roll < 8).then_some(if roll < 5 {
+            BIRCH_TRAPDOOR
+        } else {
+            SPRUCE_TRAPDOOR
+        });
+    }
+    if !dressed && category == BuildingCategory::House {
+        return (roll < 6).then_some(if roll < 3 {
+            SPRUCE_TRAPDOOR
+        } else {
+            DARK_OAK_TRAPDOOR
+        });
+    }
+    if !dressed {
+        return None;
+    }
+    let dark = match roll {
+        0..=5 => DARK_OAK_TRAPDOOR,
+        6..=8 => SPRUCE_TRAPDOOR,
+        _ => BIRCH_TRAPDOOR,
+    };
+    Some(dark)
+}
+
+/// Pilasters every second or third bay, and their block; mostly civic fronts.
+#[allow(clippy::too_many_arguments)]
+fn pilasters_for(
+    category: BuildingCategory,
+    era: ArchEra,
+    dressed: bool,
+    archetype: WindowArchetype,
+    wall_block: Block,
+    trim_block: Block,
+    storeys: i32,
+    tall: bool,
+    group_seed: u64,
+) -> Option<(i32, Block)> {
+    if tall
+        || storeys < 3
+        || is_glass_wall(wall_block)
+        || !matches!(
+            archetype,
+            WindowArchetype::Portrait | WindowArchetype::Wide | WindowArchetype::Hooded
+        )
+    {
+        return None;
+    }
+    let civic = matches!(
+        category,
+        BuildingCategory::Commercial
+            | BuildingCategory::Office
+            | BuildingCategory::Hotel
+            | BuildingCategory::School
+            | BuildingCategory::Hospital
+            | BuildingCategory::Historic
+    );
+    let housing = matches!(
+        category,
+        BuildingCategory::Residential | BuildingCategory::Default
+    );
+    let chance = match (civic, housing, dressed) {
+        (true, _, true) => 0.75,
+        (true, _, false) => 0.4,
+        (_, true, true) if storeys >= 4 => 0.3,
+        _ => return None,
+    };
+    let mut rng = element_rng(group_seed ^ 0x9114_57E2_0000_0001);
+    if !rng.random_bool(chance) {
+        return None;
+    }
+    let every = if rng.random_bool(0.6) { 2 } else { 3 };
+    let stone =
+        dressed && (era == ArchEra::HistoricOrnate || category == BuildingCategory::Historic);
+    Some((every, if stone { trim_block } else { wall_block }))
+}
+
+/// Accent tone of a plain modern front: panels up the window columns (true) or a band per storey.
+fn modern_accent_for(
+    category: BuildingCategory,
+    dressed: bool,
+    archetype: WindowArchetype,
+    wall_block: Block,
+    storeys: i32,
+    tall: bool,
+    group_seed: u64,
+) -> Option<(Block, bool)> {
+    if dressed
+        || storeys < 2
+        || !matches!(archetype, WindowArchetype::Portrait | WindowArchetype::Wide)
+        || !matches!(
+            category,
+            BuildingCategory::TallBuilding
+                | BuildingCategory::Residential
+                | BuildingCategory::Office
+                | BuildingCategory::Commercial
+                | BuildingCategory::Hotel
+                | BuildingCategory::School
+                | BuildingCategory::Hospital
+                | BuildingCategory::Default
+        )
+        || is_glass_wall(wall_block)
+    {
+        return None;
+    }
+    let mut rng = element_rng(group_seed ^ 0x9A4E_1000_0000_0001);
+    let roll = rng.random_range(0..6u32);
+    if roll == 0 {
+        return None;
+    }
+    let pale = matches!(
+        wall_block,
+        WHITE_CONCRETE
+            | CALCITE
+            | QUARTZ_BLOCK
+            | WHITE_TERRACOTTA
+            | MUSHROOM_STEM
+            | SMOOTH_SANDSTONE
+    );
+    let grey = matches!(
+        wall_block,
+        LIGHT_GRAY_CONCRETE | LIGHT_GRAY_CONCRETE_POWDER | SMOOTH_STONE | POLISHED_ANDESITE
+    );
+    let tones: &[Block] = if pale {
+        &[
+            LIGHT_GRAY_CONCRETE,
+            GRAY_CONCRETE,
+            CYAN_TERRACOTTA,
+            BROWN_TERRACOTTA,
+        ]
+    } else if grey {
+        &[GRAY_CONCRETE, WHITE_CONCRETE, CYAN_TERRACOTTA]
+    } else {
+        &[LIGHT_GRAY_CONCRETE, SMOOTH_STONE, WHITE_CONCRETE]
+    };
+    let tone = tones[rng.random_range(0..tones.len())];
+    // Bands at every storey of a tall front would stripe it.
+    (tone != wall_block).then_some((tone, tall || roll <= 3))
+}
+
+/// Whether a low building outside the steep-roof traditions gets a 1:2 slab roof.
+fn takes_low_pitch_roof(
+    category: BuildingCategory,
+    materials: MaterialRegion,
+    wall_height: i32,
+    floor_cycle: i32,
+) -> bool {
+    !materials.steep_roofs()
+        && wall_height <= 3 * floor_cycle + GROUND_FLOOR_BONUS
+        && matches!(
+            category,
+            BuildingCategory::House
+                | BuildingCategory::Residential
+                | BuildingCategory::Default
+                | BuildingCategory::Farm
+                | BuildingCategory::Commercial
+                | BuildingCategory::Garage
+                | BuildingCategory::Shed
+        )
+}
+
+/// Whether windows and wall top are dressed in trim stone: by era when dated, else by region and wall.
+fn dressed_fabric(
+    category: BuildingCategory,
+    era: ArchEra,
+    roof_ctx: RoofContext,
+    wall_block: Block,
+    storeys: i32,
+) -> bool {
+    if !matches!(
+        category,
+        BuildingCategory::House
+            | BuildingCategory::Residential
+            | BuildingCategory::Commercial
+            | BuildingCategory::Office
+            | BuildingCategory::Hotel
+            | BuildingCategory::School
+            | BuildingCategory::Hospital
+            | BuildingCategory::Historic
+            | BuildingCategory::MasonrySkyscraper
+            | BuildingCategory::TallBuilding
+            | BuildingCategory::Default
+    ) {
+        return false;
+    }
+    match era {
+        ArchEra::HistoricOrnate | ArchEra::TraditionalPreWar => true,
+        ArchEra::PostWarPanel | ArchEra::Contemporary => false,
+        ArchEra::Unknown => {
+            // Bare concrete is post-war whatever the map says.
+            let panel = matches!(
+                wall_block,
+                LIGHT_GRAY_CONCRETE
+                    | GRAY_CONCRETE
+                    | LIGHT_GRAY_CONCRETE_POWDER
+                    | SMOOTH_STONE
+                    | POLISHED_ANDESITE
+                    | BLACK_CONCRETE
+            );
+            let town = roof_ctx.attached || storeys >= 3;
+            match roof_ctx.region {
+                BuildingRegion::Europe if roof_ctx.materials == MaterialRegion::Nordic => {
+                    town && !panel
+                }
+                BuildingRegion::Europe => !panel,
+                _ => town && is_masonry_wall(wall_block),
+            }
+        }
+    }
+}
+
 /// Light stone for lintels, sills and cornices, set off against the wall the
 /// way limestone and brownstone trim is against brick and stucco.
 fn trim_block_for_wall(wall: Block, seed: u64) -> Block {
@@ -4137,7 +4664,7 @@ fn window_pool_for_category(category: BuildingCategory) -> &'static [Block] {
 /// pattern reads as architecture where scattered singles read as noise.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BalconyBand {
-    /// Legacy per-window random balconies.
+    /// The odd stack of balconies up one bay.
     Scattered,
     /// A balcony on every street-facing bay of every upper floor.
     EveryBay,
@@ -4334,11 +4861,9 @@ fn pick_balcony_kit(
 /// rows between storeys read. Laid out per wall run by [`BayLayout`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WindowArchetype {
-    /// 1-wide portrait sashes a pier apart: the walk-up tenement rhythm.
-    Sash,
     /// 2-wide portrait windows between 2-wide piers.
     Portrait,
-    /// 1-wide windows between 2-wide piers: stucco fabric, churches, farms.
+    /// 1-wide windows between 2-wide piers: churches. Elsewhere the draw becomes the pair.
     Spaced,
     /// 3-wide windows: shops, schools, workshops.
     Wide,
@@ -4349,7 +4874,7 @@ enum WindowArchetype {
     /// Tower shaft of paired windows between continuous 1-wide piers, the
     /// spandrels between storeys set back with the glass.
     Piers,
-    /// Tower shaft of 1-wide glass strips between 1-wide piers, spandrels set back.
+    /// Tower shaft of 2-wide glass strips between 2-wide piers, spandrels set back.
     Strips,
     /// Masonry tower shaft of the early skyscraper: pairs of 1-wide windows
     /// split by a stone mullion, a wide pier between pairs, in a flush wall.
@@ -4363,13 +4888,12 @@ impl WindowArchetype {
     /// Window and pier widths in columns.
     fn rhythm(self) -> BayRhythm {
         let (window, pier, corner) = match self {
-            Self::Sash => (1, 1, 1),
             Self::Portrait | Self::Hooded => (2, 2, 2),
             Self::Spaced => (1, 2, 2),
             Self::Wide => (3, 2, 2),
             Self::Ribbon => (4, 1, 1),
             Self::Piers | Self::DecoPiers => (2, 1, 2),
-            Self::Strips => (1, 1, 1),
+            Self::Strips => (2, 2, 2),
             Self::PairedPunched => (3, 2, 2),
         };
         BayRhythm {
@@ -4417,8 +4941,8 @@ fn curtain_rhythm(style_seed: u64, era: ArchEra) -> BayRhythm {
     }
 }
 
-/// Upper-floor bays of a department store or shopping centre: narrow slits
-/// far apart in a mostly closed, clad wall rather than an office grid, as the
+/// Upper-floor bays of a department store or shopping centre: windows far
+/// apart in a mostly closed, clad wall rather than an office grid, as the
 /// sales floors behind it are lit from inside. Only for big stores of three
 /// storeys or more; a glass facade keeps its glass.
 fn closed_retail_bays(
@@ -4442,8 +4966,8 @@ fn closed_retail_bays(
         && config.has_windows
         && !is_glass_wall(config.wall_block))
     .then_some(BayRhythm {
-        window: 1,
-        pier: 5,
+        window: 2,
+        pier: 4,
         corner: 3,
     })
 }
@@ -4549,7 +5073,7 @@ fn archetype_allows_window(archetype: WindowArchetype, floor_row: i32, floor_cyc
         // So does an art-deco shaft, under its windows rather than over them.
         WindowArchetype::DecoPiers if floor_cycle >= 4 => (1..floor_cycle - 1).contains(&floor_row),
         // Single sashes stay two rows tall, portrait rather than slit.
-        WindowArchetype::Spaced | WindowArchetype::Sash => (1..=2).contains(&floor_row),
+        WindowArchetype::Spaced => (1..=2).contains(&floor_row),
         _ => floor_row >= 1,
     }
 }
@@ -4668,35 +5192,21 @@ fn pick_window_archetype(
         !cues.dwelling && cues.start_year.is_some_and(|y| (1960..=1995).contains(&y));
     // (archetype, weight), summing to 100 per row
     let table: &[(WindowArchetype, u32)] = match category {
-        BuildingCategory::House => &[(Portrait, 45), (Spaced, 30), (Sash, 10), (Wide, 15)],
+        BuildingCategory::House => &[(Portrait, 55), (Spaced, 20), (Wide, 25)],
         // Walk-up tenements in North America, stucco blocks in Europe.
-        BuildingCategory::Residential if america => &[
-            (Sash, 40),
-            (Portrait, 30),
-            (Spaced, 10),
-            (Ribbon, 10),
-            (Wide, 10),
-        ],
-        // Central European stucco: 1-wide windows on a period of three.
-        BuildingCategory::Residential if europe => &[
-            (Spaced, 60),
-            (Portrait, 32),
-            (Sash, 4),
-            (Ribbon, 2),
-            (Wide, 2),
-        ],
-        BuildingCategory::Residential => &[
-            (Portrait, 40),
-            (Spaced, 20),
-            (Sash, 15),
-            (Ribbon, 15),
-            (Wide, 10),
-        ],
+        BuildingCategory::Residential if america => {
+            &[(Portrait, 65), (Spaced, 15), (Ribbon, 5), (Wide, 15)]
+        }
+        // Central European stucco.
+        BuildingCategory::Residential if europe => {
+            &[(Spaced, 25), (Portrait, 70), (Ribbon, 2), (Wide, 3)]
+        }
+        BuildingCategory::Residential => &[(Portrait, 55), (Spaced, 20), (Ribbon, 10), (Wide, 15)],
         BuildingCategory::Default if america => {
-            &[(Sash, 30), (Portrait, 40), (Ribbon, 15), (Wide, 15)]
+            &[(Portrait, 65), (Spaced, 10), (Ribbon, 10), (Wide, 15)]
         }
         BuildingCategory::Default if europe => {
-            &[(Spaced, 55), (Portrait, 33), (Ribbon, 6), (Wide, 6)]
+            &[(Spaced, 25), (Portrait, 63), (Ribbon, 6), (Wide, 6)]
         }
         BuildingCategory::Default => &[(Portrait, 45), (Spaced, 20), (Ribbon, 20), (Wide, 15)],
         BuildingCategory::Commercial | BuildingCategory::Office => {
@@ -4733,7 +5243,8 @@ fn pick_window_archetype(
             &[(Ribbon, 70), (Wide, 30)]
         }
         BuildingCategory::ContemporarySkyscraper => return Wide,
-        BuildingCategory::Religious | BuildingCategory::Farm => return Spaced,
+        // A church keeps its lancets.
+        BuildingCategory::Religious => return Spaced,
         _ => return Portrait,
     };
     let mut rng = element_rng(group_seed ^ 0x57A2_C0DE_A5C1_0007);
@@ -4763,23 +5274,22 @@ fn pick_window_archetype(
     let undated_masonry = era == ArchEra::Unknown
         && region != BuildingRegion::Other
         && (cues.old_row_fabric || is_masonry_wall(wall_block));
-    match (era, picked) {
+    let picked = match (era, picked) {
         (ArchEra::HistoricOrnate, Portrait) if era_rng.random_bool(0.6) => Hooded,
         (ArchEra::HistoricOrnate | ArchEra::TraditionalPreWar, Ribbon | Wide) => Portrait,
-        (ArchEra::Unknown, Ribbon | Wide) if undated_masonry => {
-            if europe {
-                Spaced
-            } else {
-                Portrait
-            }
-        }
-        (ArchEra::PostWarPanel | ArchEra::Contemporary, Sash | Spaced | Hooded) => {
+        (ArchEra::Unknown, Ribbon | Wide) if undated_masonry => Portrait,
+        (ArchEra::PostWarPanel | ArchEra::Contemporary, Spaced | Hooded) => {
             if era_rng.random_bool(0.5) {
                 Ribbon
             } else {
                 Wide
             }
         }
+        _ => picked,
+    };
+    // A window one block wide reads as a slit; every front takes the pair.
+    match picked {
+        Spaced => Portrait,
         _ => picked,
     }
 }
@@ -5966,16 +6476,9 @@ fn get_wall_block_for_category(
     }
 }
 
-/// Gross block height of one upper floor: 3 for residential-scale types
-/// (~3 m storeys), 4 for commercial/institutional. Tags only, because the
-/// category is resolved after the height and cannot be used here.
-/// `housing_group`: the part belongs to a building of flats or houses.
-fn floor_cycle_for(
-    building_type: &str,
-    tags: &HashMap<String, String>,
-    housing_group: bool,
-) -> i32 {
-    const RESIDENTIAL_SCALE: &[&str] = &[
+/// Building types with storeys of about three metres: housing and the untyped building.
+fn housing_scale(building_type: &str) -> bool {
+    const TYPES: &[&str] = &[
         "house",
         "detached",
         "semidetached_house",
@@ -5991,6 +6494,16 @@ fn floor_cycle_for(
         "shed",
         "static_caravan",
     ];
+    TYPES.contains(&building_type) || building_type == "yes"
+}
+
+/// Block height of an upper floor: from mapped height and levels, else 3 for mapped housing, else 4.
+fn floor_cycle_for(
+    building_type: &str,
+    tags: &HashMap<String, String>,
+    housing_group: bool,
+    levels_known: bool,
+) -> i32 {
     if tags.contains_key("building:part") {
         // One cycle for all parts of a building keeps stacked volumes flush
         // at the seams, as building:min_level counts in it too. The parts of
@@ -6008,7 +6521,8 @@ fn floor_cycle_for(
         let cycle = ((height - GROUND_FLOOR_BONUS as f64) / levels).floor() as i32;
         return cycle.clamp(3, 5);
     }
-    if RESIDENTIAL_SCALE.contains(&building_type) || building_type == "yes" {
+    // Mapped housing storeys are three metres; a guessed one is laid at four.
+    if housing_scale(building_type) && levels_known {
         3
     } else {
         4
@@ -6142,6 +6656,537 @@ fn infer_building_height(
 /// floor slab row (the "+2" in the wall grammar).
 const GROUND_FLOOR_BONUS: i32 = 2;
 
+/// Walls, in metres, of a garage, carport or shed: the three blocks an
+/// untyped one is inferred at.
+const ACCESSORY_WALLS_M: i32 = 3;
+
+/// A garage, carport or shed: a single low storey, whatever its storey count
+/// says, and never raised towards the houses it stands against.
+fn is_accessory_building(building_type: &str) -> bool {
+    matches!(building_type, "garage" | "garages" | "carport" | "shed")
+}
+
+/// A garage, carport or shed mapped with one storey (or none): drawn at the
+/// three blocks its untagged kind gets, not a storey and the town's raised
+/// ground floor (a carport against a house came out as high as the house's
+/// eaves).
+fn accessory_storey(building_type: &str, tags: &HashMap<String, String>) -> bool {
+    is_accessory_building(building_type)
+        && parse_building_height_tag(tags).is_none()
+        && tags
+            .get("building:levels")
+            .and_then(|v| v.trim().parse::<f64>().ok())
+            .is_none_or(|l| l <= 1.0)
+}
+
+/// Least footprint, in square metres, an untagged building needs to rise
+/// towards its neighbours: smaller ones are sheds, bins and garages.
+const MIN_RISING_M2: f64 = 40.0;
+
+/// Whether an untagged building may rise towards taller neighbours: one of
+/// the main buildings of a street, a house, block of flats, shop, office or
+/// hotel, standing finished. A bungalow, kiosk, conservatory, garage, toilet
+/// block, boathouse, ruin or building site is as low as it is beside them.
+fn may_rise_to_neighbours(building_type: &str, tags: &HashMap<String, String>) -> bool {
+    matches!(
+        building_type,
+        "yes"
+            | "house"
+            | "detached"
+            | "terrace"
+            | "semidetached_house"
+            | "residential"
+            | "apartments"
+            | "commercial"
+            | "office"
+            | "hotel"
+    ) && !matches!(
+        BuildingCondition::from_tags(tags),
+        BuildingCondition::Construction | BuildingCondition::Ruined
+    )
+}
+
+/// Untagged building way id -> wall heights, in metres, of the tagged
+/// buildings it shares a wall with (two or more nodes).
+pub type NeighbourHeights = FnvHashMap<u64, Vec<f64>>;
+
+/// An empty `NeighbourHeights`, for contexts without one.
+#[cfg(test)]
+pub(crate) fn no_neighbour_heights() -> &'static NeighbourHeights {
+    static EMPTY: std::sync::OnceLock<NeighbourHeights> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(NeighbourHeights::default)
+}
+
+/// Whether a building stands raised off the ground on its `min_height` or
+/// `building:min_level`: a bridge between two houses rises with neither.
+fn lifted_off_the_ground(tags: &HashMap<String, String>) -> bool {
+    ["min_height", "building:min_level"].iter().any(|k| {
+        tags.get(*k)
+            .and_then(|v| v.trim_end_matches('m').trim().parse::<f64>().ok())
+            .is_some_and(|v| v > 0.0)
+    })
+}
+
+/// Whether a building carries a height of its own: `height` or storeys.
+fn has_mapped_height(tags: &HashMap<String, String>) -> bool {
+    parse_building_height_tag(tags).is_some()
+        || tags
+            .get("building:levels")
+            .and_then(|v| v.trim().parse::<f64>().ok())
+            .is_some_and(|l| l >= 1.0)
+}
+
+/// Whether a building stands out of the row it shares a wall with: a church,
+/// a tower, a chimney or another structure. An annex built against one is not
+/// a storey short of it.
+fn landmark_neighbour(tags: &HashMap<String, String>) -> bool {
+    matches!(
+        tags.get("building").map(String::as_str),
+        Some(
+            "church"
+                | "cathedral"
+                | "chapel"
+                | "basilica"
+                | "mosque"
+                | "synagogue"
+                | "temple"
+                | "shrine"
+                | "tower"
+                | "bell_tower"
+                | "campanile"
+                | "minaret"
+                | "water_tower"
+        )
+    ) || tags.get("amenity").map(String::as_str) == Some("place_of_worship")
+        || tags.contains_key("man_made")
+        || tags.contains_key("tower:type")
+}
+
+/// Height in metres of a tagged neighbour's walls, the eave an untagged
+/// building beside it rises towards: storeys without the roof over them, a
+/// mapped `height` less the roof under it (a mapped `roof:height`, else the
+/// pitch `mapped_height_roof_rise` gives a roof of no mapped shape or a
+/// pitched one). None for a building raised off the ground.
+fn neighbour_walls_m(
+    nodes: &[ProcessedNode],
+    tags: &HashMap<String, String>,
+    scale: f64,
+) -> Option<f64> {
+    let metres = |k: &str| {
+        tags.get(k)
+            .and_then(|v| v.trim_end_matches('m').trim().parse::<f64>().ok())
+            .filter(|m| m.is_finite())
+    };
+    if metres("min_height").is_some_and(|m| m > 0.0)
+        || metres("building:min_level").is_some_and(|m| m > 0.0)
+    {
+        return None;
+    }
+    let (walls, _) = mapped_parts(tags, HeightHint::default())?;
+    let Some(height) = parse_building_height_tag(tags) else {
+        return Some(walls);
+    };
+    if read_roof_shape(tags).is_some_and(|s| parse_roof_type(s) == RoofType::Flat) {
+        return Some(height);
+    }
+    if let Some(rise) = metres("roof:height").filter(|m| *m > 0.0) {
+        return Some((height - rise).max(height.min(3.0)));
+    }
+    // A low pitch over the shorter half-span, as the generator draws it. A
+    // piece of a multipolygon's outer ring has no area to tell it by.
+    if nodes.first().map(|n| n.id) != nodes.last().map(|n| n.id) {
+        return None;
+    }
+    let mut diameter: f64 = 1.0;
+    for (i, a) in nodes.iter().enumerate() {
+        for b in &nodes[i + 1..] {
+            diameter = diameter.max(f64::from(a.x - b.x).hypot(f64::from(a.z - b.z)));
+        }
+    }
+    let short_half_m = ring_area_blocks(nodes) / diameter / 2.0 / scale;
+    let rise = (short_half_m * 0.85).min(9.0).min(height * 0.375);
+    Some(height - rise)
+}
+
+/// For every untagged building way, the wall heights of the tagged buildings
+/// and building multipolygons it shares a wall with, churches, towers and
+/// structures left out. An untagged house in a dense core gets a village
+/// height from its type and footprint alone (Munich's old town came out
+/// 5.8 m low against laser heights); halfway towards its neighbours cut the
+/// error in all five measured areas, while taking their height outright made
+/// Regensburg worse. It only rises towards them (`rise_to_neighbours`).
+/// `scale` is in blocks per metre.
+pub fn tagged_neighbour_heights(
+    elements: &[crate::osm_parser::ProcessedElement],
+    scale: f64,
+) -> NeighbourHeights {
+    use crate::osm_parser::{ProcessedElement, ProcessedMemberRole};
+    let is_building = |tags: &HashMap<String, String>| {
+        tags.contains_key("building")
+            && !tags.contains_key("building:part")
+            && !is_underground_building(tags)
+    };
+    let mut tagged: Vec<(&[ProcessedNode], &HashMap<String, String>)> = Vec::new();
+    let mut untagged: Vec<&ProcessedWay> = Vec::new();
+    for element in elements {
+        match element {
+            ProcessedElement::Way(w) if is_building(&w.tags) => {
+                if has_mapped_height(&w.tags) {
+                    tagged.push((&w.nodes, &w.tags));
+                } else if may_rise_to_neighbours(
+                    w.tags.get("building").map_or("yes", String::as_str),
+                    &w.tags,
+                ) && !lifted_off_the_ground(&w.tags)
+                {
+                    untagged.push(w);
+                }
+            }
+            ProcessedElement::Relation(r) if is_building(&r.tags) && has_mapped_height(&r.tags) => {
+                tagged.extend(
+                    r.members
+                        .iter()
+                        .filter(|m| m.role == ProcessedMemberRole::Outer)
+                        .map(|m| (m.way.nodes.as_slice(), &r.tags)),
+                );
+            }
+            _ => {}
+        }
+    }
+    let walls: Vec<Option<f64>> = tagged
+        .iter()
+        .map(|&(nodes, tags)| {
+            if landmark_neighbour(tags) {
+                None
+            } else {
+                neighbour_walls_m(nodes, tags, scale)
+            }
+        })
+        .collect();
+    let distinct_nodes = |nodes: &[ProcessedNode]| {
+        let mut ids: Vec<u64> = nodes.iter().map(|n| n.id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    };
+    // Only the tagged rings' nodes are indexed, sorted for a binary search: a
+    // map over every node of every building took a gigabyte on a big area.
+    let mut index: Vec<(u64, u32)> = tagged
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| walls[i].is_some())
+        .flat_map(|(i, &(nodes, _))| {
+            distinct_nodes(nodes)
+                .into_iter()
+                .map(move |id| (id, i as u32))
+        })
+        .collect();
+    index.sort_unstable();
+    let mut out = NeighbourHeights::default();
+    let mut shared: Vec<u32> = Vec::new();
+    for w in untagged {
+        shared.clear();
+        for id in distinct_nodes(&w.nodes) {
+            let from = index.partition_point(|&(n, _)| n < id);
+            shared.extend(
+                index[from..]
+                    .iter()
+                    .take_while(|&&(n, _)| n == id)
+                    .map(|&(_, j)| j),
+            );
+        }
+        if shared.len() < 2 {
+            continue;
+        }
+        shared.sort_unstable();
+        // Tagged neighbours sharing two nodes or more: a wall, not a corner.
+        let heights: Vec<f64> = shared
+            .chunk_by(|a, b| a == b)
+            .filter(|run| run.len() >= 2)
+            .filter_map(|run| walls[run[0] as usize])
+            .collect();
+        if !heights.is_empty() {
+            out.insert(w.id, heights);
+        }
+    }
+    out
+}
+
+/// The step decisions of buildings that share a wall, made together: way id
+/// to the edges that step in, None for none. Buildings not in it decide alone.
+pub type InsetPlan = FnvHashMap<u64, Option<Vec<bool>>>;
+
+/// What the buildings learn of their neighbours before any is built.
+pub struct Neighbours {
+    /// Untagged buildings and the wall heights of the tagged ones they share a wall with.
+    pub heights: NeighbourHeights,
+    /// Which walls of attached buildings step in under the eave.
+    pub steps: InsetPlan,
+}
+
+/// An empty `InsetPlan`, for contexts without one.
+#[cfg(test)]
+pub(crate) fn no_inset_plan() -> &'static InsetPlan {
+    static EMPTY: std::sync::OnceLock<InsetPlan> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(InsetPlan::default)
+}
+
+/// Whether a building's walls may step in under its eave, as far as its tags
+/// and outline tell before its style is chosen: not a part, a garage or shed
+/// (whose roof is flat), lifted off the ground, turned off the grid, drawn
+/// from a cadastre or a photographed facade, nor under a mapped roof that
+/// hangs no eave.
+fn may_step_walls(way: &ProcessedWay) -> bool {
+    let tags = &way.tags;
+    let kind = tags.get("building").map_or("yes", String::as_str);
+    !tags.contains_key("building:part")
+        && !is_underground_building(tags)
+        && !is_accessory_building(kind)
+        && !lifted_off_the_ground(tags)
+        && !outline_is_turned(&way.nodes)
+        && !outline_traces_walls(tags)
+        && tags
+            .get("roof:shape")
+            .is_none_or(|shape| roof_has_eaves(parse_roof_type(shape)))
+        && !crate::mapillary::facades::has_building(way.id)
+}
+
+/// Edges of two buildings that run on as one wall past a node they share:
+/// (way, edge) of one, (way, edge) of the other, indices into `ways` and
+/// into each ring's edges.
+type WallRun = ((usize, usize), (usize, usize));
+
+/// Fronts and backs that run on past a party wall, found where two
+/// buildings share a node: each one's edge leaving the node that is not the
+/// party wall, the two in line.
+fn walls_running_on(ways: &[&ProcessedWay]) -> Vec<WallRun> {
+    // In line: within about 20 degrees, the two edges leaving opposite ways.
+    const IN_LINE: f64 = -0.94;
+    let mut index: Vec<(u64, u32)> = ways
+        .iter()
+        .enumerate()
+        .flat_map(|(i, w)| {
+            let n = w.nodes.len() - 1;
+            w.nodes[..n].iter().map(move |node| (node.id, i as u32))
+        })
+        .collect();
+    index.sort_unstable();
+    index.dedup();
+    // Each ring's node ids, sorted, made once for the rings that share one.
+    let mut ids: FnvHashMap<u32, Vec<u64>> = FnvHashMap::default();
+    for group in index.chunk_by(|a, b| a.0 == b.0).filter(|g| g.len() >= 2) {
+        for &(_, w) in group {
+            ids.entry(w).or_insert_with(|| {
+                let mut v: Vec<u64> = ways[w as usize].nodes.iter().map(|n| n.id).collect();
+                v.sort_unstable();
+                v.dedup();
+                v
+            });
+        }
+    }
+    // The edges at each place a ring passes a node, leaving it: (edge, direction).
+    let edges_at = |w: &ProcessedWay, id: u64| -> Vec<(usize, (f64, f64))> {
+        let n = w.nodes.len() - 1;
+        let mut out = Vec::new();
+        for k in (0..n).filter(|&k| w.nodes[k].id == id) {
+            let here = &w.nodes[k];
+            for (edge, other) in [
+                (k, &w.nodes[k + 1]),
+                ((k + n - 1) % n, &w.nodes[(k + n - 1) % n]),
+            ] {
+                let (dx, dz) = (f64::from(other.x - here.x), f64::from(other.z - here.z));
+                let len = dx.hypot(dz);
+                if len > 0.0 {
+                    out.push((edge, (dx / len, dz / len)));
+                }
+            }
+        }
+        out
+    };
+    let mut runs = Vec::new();
+    for group in index.chunk_by(|a, b| a.0 == b.0).filter(|g| g.len() >= 2) {
+        let id = group[0].0;
+        for (i, &(_, a)) in group.iter().enumerate() {
+            for &(_, b) in &group[i + 1..] {
+                let (wa, wb) = (ways[a as usize], ways[b as usize]);
+                let (ids_a, ids_b) = (&ids[&a], &ids[&b]);
+                // An edge both ends of which the other ring has: the party wall.
+                let party = |w: &ProcessedWay, edge: usize, other: &[u64]| {
+                    [&w.nodes[edge], &w.nodes[edge + 1]]
+                        .iter()
+                        .all(|n| other.binary_search(&n.id).is_ok())
+                };
+                for (ea, da) in edges_at(wa, id) {
+                    if party(wa, ea, ids_b) {
+                        continue;
+                    }
+                    for &(eb, db) in &edges_at(wb, id) {
+                        if !party(wb, eb, ids_a) && da.0 * db.0 + da.1 * db.1 < IN_LINE {
+                            runs.push(((a as usize, ea), (b as usize, eb)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    runs
+}
+
+/// Which walls of attached buildings step in under the eave, decided for a
+/// row or pair at once: a front or back that runs on past a party wall steps
+/// on both sides of it or on neither, so a pair of semis or a house and the
+/// garage mapped flush with it keep one wall line. Alone, the smaller of two
+/// halves could keep its walls while its twin a block wider stepped in,
+/// leaving a one-block jog and the eave ending at the party wall.
+pub fn plan_attached_steps(
+    elements: &[crate::osm_parser::ProcessedElement],
+    cache: &FloodFillCache,
+    footprints: &CoordinateBitmap,
+    scale: f64,
+) -> InsetPlan {
+    use crate::osm_parser::ProcessedElement;
+    use rayon::prelude::*;
+    let mut plan = InsetPlan::default();
+    if scale < building_inset::MIN_INSET_SCALE {
+        return plan;
+    }
+    let ways: Vec<&ProcessedWay> = elements
+        .iter()
+        .filter_map(|e| match e {
+            ProcessedElement::Way(w)
+                if w.tags.contains_key("building")
+                    && w.nodes.len() >= 4
+                    && w.nodes.first().map(|n| n.id) == w.nodes.last().map(|n| n.id) =>
+            {
+                Some(w)
+            }
+            _ => None,
+        })
+        .collect();
+    let runs = walls_running_on(&ways);
+    if runs.is_empty() {
+        return plan;
+    }
+    let mut members: Vec<usize> = runs.iter().flat_map(|&(a, b)| [a.0, b.0]).collect();
+    members.sort_unstable();
+    members.dedup();
+    let slot = |w: usize| members.binary_search(&w).unwrap_or(0);
+    // Each member's fill, if it may step at all; then what it decides alone.
+    let fills: Vec<Option<crate::floodfill_cache::FloodFillResult>> = members
+        .par_iter()
+        .map(|&w| {
+            may_step_walls(ways[w])
+                .then(|| cache.transient_fill(ways[w].id))
+                .flatten()
+                .filter(|f| !f.is_empty())
+        })
+        .collect();
+    let mut off: Vec<Vec<bool>> = members
+        .iter()
+        .map(|&w| vec![false; ways[w].nodes.len() - 1])
+        .collect();
+    let decide = |m: usize, off: &[bool]| -> Option<Vec<bool>> {
+        let fill = fills[m].as_ref()?;
+        building_inset::step_plan(&ways[members[m]].nodes, fill, footprints, off)
+    };
+    let mut steps: Vec<Option<Vec<bool>>> = (0..members.len())
+        .into_par_iter()
+        .map(|m| decide(m, &off[m]))
+        .collect();
+    // An edge that steps against one that stays is kept; flags only ever
+    // turn off, so this settles. Each round's changed buildings decide anew
+    // side by side.
+    loop {
+        let mut changed: Vec<usize> = Vec::new();
+        for &((a, ea), (b, eb)) in &runs {
+            let (ma, mb) = (slot(a), slot(b));
+            let steps_at = |m: usize, e: usize| steps[m].as_ref().is_some_and(|s| s[e]);
+            match (steps_at(ma, ea), steps_at(mb, eb)) {
+                (true, false) => {
+                    off[ma][ea] = true;
+                    changed.push(ma);
+                }
+                (false, true) => {
+                    off[mb][eb] = true;
+                    changed.push(mb);
+                }
+                _ => {}
+            }
+        }
+        if changed.is_empty() {
+            break;
+        }
+        changed.sort_unstable();
+        changed.dedup();
+        let again: Vec<Option<Vec<bool>>> =
+            changed.par_iter().map(|&m| decide(m, &off[m])).collect();
+        for (m, step) in changed.into_iter().zip(again) {
+            steps[m] = step;
+        }
+    }
+    for (m, step) in steps.into_iter().enumerate() {
+        plan.insert(ways[members[m]].id, step);
+    }
+    plan
+}
+
+/// Most storeys an untagged building rises to beside its neighbours: more
+/// is what `calculate_building_height` calls tall.
+const MAX_RISEN_STOREYS: f64 = 7.0;
+
+/// Most storeys an untagged building gains beside its neighbours.
+const MAX_STOREYS_RISEN: f64 = 2.0;
+
+/// The height an untagged building of storeys, `own` blocks tall at
+/// `floor_cycle`, takes beside tagged neighbours whose walls are
+/// `neighbours_m` tall: halfway up to their median, in whole storeys, two
+/// at most and never past seven, where that is taller than its own.
+/// Neighbours over twice its height stand out of its row and do not count.
+/// It never comes down to lower neighbours: met halfway, the garages and
+/// sheds Overture gives three or four metres took a storey off the village
+/// houses they stand against, and left the upper windows half under the eave.
+fn rise_to_neighbours(
+    own: i32,
+    neighbours_m: &[f64],
+    floor_cycle: i32,
+    scale_factor: f64,
+) -> Option<i32> {
+    let cycle = f64::from(floor_cycle);
+    let bonus = f64::from(GROUND_FLOOR_BONUS);
+    let own_m = f64::from(own) / scale_factor;
+    let mut near: Vec<f64> = neighbours_m
+        .iter()
+        .copied()
+        .filter(|&m| m <= 2.0 * own_m)
+        .collect();
+    if near.is_empty() {
+        return None;
+    }
+    near.sort_by(f64::total_cmp);
+    let n = near.len();
+    let median = if n % 2 == 1 {
+        near[n / 2]
+    } else {
+        (near[n / 2 - 1] + near[n / 2]) / 2.0
+    };
+    let own_storeys = ((own_m - bonus) / cycle).round().max(1.0);
+    let halfway = (own_m + median) / 2.0;
+    let storeys = ((halfway - bonus) / cycle)
+        .round()
+        .min(own_storeys + MAX_STOREYS_RISEN)
+        .min(MAX_RISEN_STOREYS);
+    let height = ((storeys * cycle + bonus) * scale_factor) as i32;
+    (height > own).then_some(height)
+}
+
+/// Area of a closed ring of block coordinates, in square blocks.
+fn ring_area_blocks(nodes: &[ProcessedNode]) -> f64 {
+    let twice: i64 = nodes
+        .windows(2)
+        .map(|w| i64::from(w[0].x) * i64::from(w[1].z) - i64::from(w[1].x) * i64::from(w[0].z))
+        .sum();
+    twice.unsigned_abs() as f64 / 2.0
+}
+
 /// Tallest `height` tag taken at face value. The tallest building is about
 /// 830 m; values beyond this are usually an elevation mapped into `height`.
 const MAX_PLAUSIBLE_HEIGHT_M: f64 = 1000.0;
@@ -6241,12 +7286,16 @@ fn mapped_parts(tags: &HashMap<String, String>, hint: HeightHint) -> Option<(f64
         hint.levels
     }
     .filter(|l| l.is_finite() && *l >= 1.0)?;
-    let mut cycle = floor_cycle_for(building_type, tags, false);
+    let mut cycle = floor_cycle_for(building_type, tags, false, true);
     // More than seven storeys is what `calculate_building_height` calls tall.
     if takes_commercial_rhythm(levels > 7.0, building_type, cycle, tags) {
         cycle = 4;
     }
-    let walls = levels * f64::from(cycle) + f64::from(GROUND_FLOOR_BONUS);
+    let walls = if own && accessory_storey(building_type, tags) {
+        f64::from(ACCESSORY_WALLS_M)
+    } else {
+        levels * f64::from(cycle) + f64::from(GROUND_FLOOR_BONUS)
+    };
     if walls > MAX_PLAUSIBLE_HEIGHT_M {
         return None;
     }
@@ -6335,6 +7384,16 @@ fn free_roof_rise_m(
     }
 }
 
+/// How steeply the roof `mapped_height_roof_rise` allows for climbs.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RisePitch {
+    /// 1:2 in slabs.
+    Low,
+    Standard,
+    /// A church gable.
+    Steep,
+}
+
 /// Rise of the pitched roof the generator will put on a building whose mapped
 /// `height` already includes it, or None when the walls keep the full height:
 /// flat roofs, a mapped roof:height or roof:angle (roof_peak_cap reads those),
@@ -6345,9 +7404,10 @@ fn mapped_height_roof_rise(
     condition: BuildingCondition,
     wall_height: i32,
     footprint_cells: usize,
-    steep: bool,
+    pitch: RisePitch,
     scale_factor: f64,
 ) -> Option<i32> {
+    let steep = pitch == RisePitch::Steep;
     let pitched = matches!(
         style.roof_type,
         RoofType::Gabled
@@ -6380,6 +7440,10 @@ fn mapped_height_roof_rise(
     let short_half = footprint_cells as f64 / diameter / 2.0;
     let slope_rise = if style.roof_type == RoofType::Mansard {
         4.0 * scale_factor + ((short_half - 2.0) / 2.0).max(0.0)
+    } else if pitch == RisePitch::Low
+        && matches!(style.roof_type, RoofType::Gabled | RoofType::Hipped)
+    {
+        short_half * 0.5
     } else {
         short_half * 0.85
     };
@@ -6424,6 +7488,9 @@ fn calculate_building_height(
                 };
                 building_height =
                     (((lev * floor_cycle as f64 + bonus) * scale_factor) as i32).max(3);
+                if min_level == 0 && accessory_storey(building_type, &element.tags) {
+                    building_height = multiply_scale(ACCESSORY_WALLS_M, scale_factor).max(3);
+                }
                 has_source = true;
                 if levels > 7.0 {
                     is_tall_building = true;
@@ -6511,6 +7578,16 @@ fn calculate_building_height(
             group_seed,
         ) {
             InferredHeight::Levels(levels) => {
+                // A guessed count is of three-metre storeys. Laid in taller
+                // ones it keeps its height, not its count.
+                let levels = if housing_scale(building_type)
+                    && floor_cycle > 3
+                    && !element.tags.contains_key("building:part")
+                {
+                    (levels * 3.0 / f64::from(floor_cycle)).round().max(1.0)
+                } else {
+                    levels
+                };
                 // subtract min_level like the tagged branches, parts top out flush
                 let lev = (levels - min_level as f64).max(1.0);
                 let bonus = if min_level > 0 {
@@ -6614,6 +7691,7 @@ fn generate_roof_only_structure(
             .unwrap_or("roof"),
         &element.tags,
         housing_group,
+        element.tags.contains_key("building:levels"),
     );
 
     // Determine where the roof structure starts vertically.
@@ -6857,6 +7935,10 @@ fn generate_roof_only_structure(
 /// Footprints this small are pillars: no windows, no doors.
 const THIN_RING_MAX_CELLS: usize = 4;
 
+/// Least share of its bounding box a tower or short stretch of wall fills; a long wall
+/// mapped on the slant fills less.
+const COMPACT_FILL: f64 = 0.4;
+
 /// Cells on a closed ring's edges, for footprints the flood fill leaves
 /// empty because no lattice cell lies strictly inside them.
 fn thin_ring_cells(nodes: &[ProcessedNode]) -> Vec<(i32, i32)> {
@@ -6956,6 +8038,18 @@ fn door_style_for(category: BuildingCategory, wall_block: Block, group_seed: u64
     }
 }
 
+/// The longest segment of a facade that is not a party wall.
+fn longest_free_segment(facade: &FacadePlan) -> Option<usize> {
+    facade
+        .segments
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
+        .filter(|(_, s)| s.class != FacadeClass::Party)
+        .max_by_key(|(_, s)| s.len)
+        .map(|(i, _)| i)
+}
+
 /// Plans a synthetic street-facing entrance for buildings whose outline has no
 /// mapped entrance node. Every ordinary ground-level building gets one door.
 fn plan_synthetic_entrance(
@@ -7000,15 +8094,27 @@ fn plan_synthetic_entrance(
     } else if let Some(front) = facade.front_segment {
         front
     } else {
-        // Rural fallback: the longest non-party segment still gets a door.
+        longest_free_segment(facade)?
+    };
+    // A front the step under the eave left too short for a door, which it
+    // had on the outline, hands the door to the longest free wall instead.
+    let too_short = |i: usize| {
+        let n = |k: usize| element.nodes.get(k).map(|n| (n.x, n.z));
+        let span = match (n(i), n(i + 1)) {
+            (Some(a), Some(b)) => (a.0 - b.0).abs().max((a.1 - b.1).abs()) + 1,
+            _ => 0,
+        };
         facade
             .segments
-            .iter()
-            .enumerate()
-            .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
-            .filter(|(_, s)| s.class != FacadeClass::Party)
-            .max_by_key(|(_, s)| s.len)
-            .map(|(i, _)| i)?
+            .get(i)
+            .and_then(|s| s.as_ref())
+            .is_none_or(|s| s.len < 4)
+            || span < 5
+    };
+    let seg_index = if too_short(seg_index) && config.eave_outline.is_some() {
+        longest_free_segment(facade).filter(|&i| !too_short(i))?
+    } else {
+        seg_index
     };
 
     let seg = facade.segments.get(seg_index)?.as_ref()?;
@@ -7119,7 +8225,7 @@ fn plan_synthetic_entrance(
             config.category,
             BuildingCategory::House | BuildingCategory::Residential | BuildingCategory::Historic
         )
-        && dress_rng.random_bool(0.35);
+        && dress_rng.random_bool(0.6);
 
     Some(EntrancePlan {
         x,
@@ -7516,6 +8622,8 @@ struct WallColumn {
     /// Window layout of that run: upper floors, then shopfront.
     upper: BayLayout,
     shop: BayLayout,
+    /// The segment steps off the grid every few blocks; nothing stands proud of it.
+    stepped: bool,
 }
 
 impl WallColumn {
@@ -7570,13 +8678,22 @@ const RUN_HEADING_COS: f64 = 0.97;
 /// the same ring in turn, so the last ring is kept per thread and handed out
 /// again rather than laid out once per pass.
 fn facade_columns(nodes: &[ProcessedNode], config: &BuildingConfig) -> Rc<[WallColumn]> {
-    // Keyed on everything the layout reads: the ring, the bays and whether
-    // the shopfront takes the bays of the floors above.
-    type Memo = Option<(Vec<(i32, i32)>, (BayRhythm, bool), Rc<[WallColumn]>)>;
+    // Keyed on everything the layout reads: the ring, the bays, whether
+    // the shopfront takes the bays of the floors above, and the outline a
+    // stepped ring takes its windows from.
+    type Memo = Option<(
+        Vec<(i32, i32)>,
+        (BayRhythm, bool, Option<u64>),
+        Rc<[WallColumn]>,
+    )>;
     thread_local! {
         static LAST: RefCell<Memo> = const { RefCell::new(None) };
     }
-    let key = (config.bays, config.masonry_lobby());
+    let key = (
+        config.bays,
+        config.masonry_lobby(),
+        config.eave_outline.as_ref().map(|_| config.element_id),
+    );
     LAST.with(|last| {
         let mut last = last.borrow_mut();
         if let Some((ring, last_key, columns)) = last.as_ref() {
@@ -7598,6 +8715,104 @@ fn facade_columns(nodes: &[ProcessedNode], config: &BuildingConfig) -> Rc<[WallC
 }
 
 fn lay_out_facade_columns(nodes: &[ProcessedNode], config: &BuildingConfig) -> Vec<WallColumn> {
+    let mut columns = lay_out_ring_columns(nodes, config);
+    if let Some(outline) = config.eave_outline.as_deref() {
+        let same = outline.len() == nodes.len()
+            && outline
+                .iter()
+                .zip(nodes)
+                .all(|(a, b)| (a.x, a.z) == (b.x, b.z));
+        if !same {
+            keep_outline_bays(&mut columns, &lay_out_ring_columns(outline, config), config);
+        }
+    }
+    columns
+}
+
+/// A stepped ring's runs take the bays of the outline runs they stand behind.
+/// Laid out afresh, a wall two blocks shorter often fits a window fewer, and
+/// the stepped house lost a window on most fronts, with its shutters, sills
+/// and flower pots. A run keeps the outline's windows where they were, on
+/// corner piers as much narrower as it stepped in at either end, while those
+/// piers keep a block. Where they would not, as on a short gable, it keeps
+/// as many windows on narrower piers between them, and only where even
+/// one-block piers leave no room does it keep its own bays.
+fn keep_outline_bays(columns: &mut [WallColumn], outline: &[WallColumn], config: &BuildingConfig) {
+    let facing: FnvHashMap<(i32, i32, (i32, i32)), &WallColumn> = outline
+        .iter()
+        .filter(|c| c.normal != (0, 0))
+        .map(|c| ((c.x, c.z, c.normal), c))
+        .collect();
+    let runs = columns.iter().map(|c| c.run + 1).max().unwrap_or(0);
+    // Per run: the outline column a block out from each of its columns, as
+    // (outline run, offset along it, bays), while they all agree.
+    let mut found: Vec<Option<(usize, i32, BayLayout, BayLayout)>> = vec![None; runs];
+    let mut broken = vec![false; runs];
+    for c in columns.iter() {
+        let r = c.run;
+        if broken[r] {
+            continue;
+        }
+        let Some(o) = facing.get(&(c.x + c.normal.0, c.z + c.normal.1, c.normal)) else {
+            broken[r] = true;
+            continue;
+        };
+        let here = (o.run, o.pos - c.pos, o.upper, o.shop);
+        match found[r] {
+            None => found[r] = Some(here),
+            Some(seen) if (seen.0, seen.1) == (here.0, here.1) => {}
+            Some(_) => broken[r] = true,
+        }
+    }
+    let shifted = |own: &BayLayout, outline: &BayLayout, k: i32| -> Option<BayLayout> {
+        if outline.count == 0 {
+            return Some(BayLayout {
+                lead: own.len,
+                count: 0,
+                ..*own
+            });
+        }
+        let lead = outline.lead - k;
+        (lead >= 1 && outline.len == own.len + 2 * k).then_some(BayLayout {
+            len: own.len,
+            lead,
+            ..*outline
+        })
+    };
+    // The outline's windows over `len` columns, the piers between them as
+    // wide as they can be up to the outline's, the ends a block at least.
+    let squeezed = |len: i32, outline: &BayLayout| -> Option<BayLayout> {
+        let count = outline.count;
+        (1..=outline.pier).rev().find_map(|pier| {
+            let spare = len - count * outline.window - (count - 1) * pier;
+            let odd = spare % 2 == 1;
+            (spare >= 2).then_some(BayLayout {
+                len,
+                lead: spare / 2,
+                window: outline.window,
+                pier,
+                count,
+                wide_window: odd && count % 2 == 1,
+                wide_pier: odd && count % 2 == 0,
+            })
+        })
+    };
+    for c in columns.iter_mut() {
+        let Some((_, k, upper, shop)) = found[c.run].filter(|_| !broken[c.run]) else {
+            continue;
+        };
+        if let Some(u) = shifted(&c.upper, &upper, k) {
+            c.shop = shifted(&c.shop, &shop, k).unwrap_or_else(|| config.with_shopfront(u).1);
+            c.upper = u;
+        } else if upper.count > c.upper.count {
+            if let Some(u) = squeezed(c.upper.len, &upper) {
+                (c.upper, c.shop) = config.with_shopfront(u);
+            }
+        }
+    }
+}
+
+fn lay_out_ring_columns(nodes: &[ProcessedNode], config: &BuildingConfig) -> Vec<WallColumn> {
     let n_seg = nodes.len().saturating_sub(1);
     if n_seg == 0 {
         return Vec::new();
@@ -7678,6 +8893,7 @@ fn lay_out_facade_columns(nodes: &[ProcessedNode], config: &BuildingConfig) -> V
         let normal = compute_outward_normal(a.x, a.z, b.x, b.z, outward);
         let seg_axis_x = segment_axis_x(a.x, a.z, b.x, b.z);
         let start_axis_x = segment_start_axis_x(nodes, seg + 1, seg_axis_x);
+        let stepped = segment_is_stepped(a.x, a.z, b.x, b.z);
         for (idx, &(x, z)) in points[seg].iter().enumerate() {
             let (run, pos) = placed[seg][idx];
             out.push(WallColumn {
@@ -7690,6 +8906,7 @@ fn lay_out_facade_columns(nodes: &[ProcessedNode], config: &BuildingConfig) -> V
                 pos: pos.max(0),
                 upper: layouts[run].0,
                 shop: layouts[run].1,
+                stepped,
             });
         }
     }
@@ -7718,10 +8935,9 @@ fn build_wall_ring(
     let mut segments: Vec<WallSegmentKind> =
         vec![WallSegmentKind::default(); nodes.len().saturating_sub(1)];
 
-    let passage_height = BUILDING_PASSAGE_HEIGHT.min(config.building_height);
+    let passage_height = config.passage_height.min(config.building_height);
     let columns = facade_columns(nodes, config);
     let ring_cells: FnvHashSet<(i32, i32)> = columns.iter().map(|c| (c.x, c.z)).collect();
-    let mut variety = WallVariety::new(config);
 
     for wc in columns.iter() {
         let (bx, bz) = (wc.x, wc.z);
@@ -7736,7 +8952,7 @@ fn build_wall_ring(
             let local_ground_level = editor.terrain_level(bx, bz).unwrap_or(args.ground_level);
 
             for y in local_ground_level..config.start_y_offset + 1 {
-                let block = apply_block_variety(config.wall_block, bx, y, bz, config, &mut variety);
+                let block = facade_texture_block(config.wall_block, bx, y, bz, config);
                 editor.set_block_absolute(block, bx, y + config.abs_terrain_offset, bz, None, None);
             }
         }
@@ -7812,12 +9028,23 @@ fn build_wall_ring(
         } else {
             door_top
         };
+        let pane_along = config.window_pane.map(|pane| {
+            let along_x = wc.normal.1 != 0;
+            let (x, z) = if along_x {
+                ("true", "false")
+            } else {
+                ("false", "true")
+            };
+            cached_prop_block(
+                pane,
+                &[("east", x), ("west", x), ("north", z), ("south", z)],
+            )
+        });
         let backdrop = (shop && door_top == i32::MIN && !flat && !is_passage)
             .then(|| shop_backdrop_cell(config, wc, floor_cells, &ring_cells))
             .flatten();
         for h in wall_start..=column_top {
-            let block =
-                determine_wall_block_at_position(bx, h, bz, config, col, flat, &mut variety);
+            let block = determine_wall_block_at_position(bx, h, bz, config, col, flat);
             let glazed = !flat
                 && (block == config.window_block
                     || block == GLASS
@@ -7830,11 +9057,27 @@ fn build_wall_ring(
                 && (is_glass_wall(block)
                     || (block == config.accent_block && !col.corner && config.floor_row(h) == 0));
             let face = curtain_cell.then(|| config.curtain_face(h, col)).flatten();
-            let set_back = h > door_top
+            // Panes stand in the wall plane, joined to the piers either side.
+            let pane = pane_along
+                .as_ref()
+                .filter(|_| block == config.window_block && !wc.stepped && h > door_top);
+            let set_back = pane.is_none()
+                && h > door_top
                 && ((recess && config.set_back(h, col, block, glazed))
                     || (curtain_cell && (face.is_some() || !in_fill || config.floor_row(h) != 0)));
             let (x, z) = if set_back { inner } else { (bx, bz) };
-            editor.set_block_absolute(block, x, h + config.abs_terrain_offset, z, None, None);
+            if let Some(pane) = pane {
+                editor.set_block_with_properties_absolute(
+                    pane.clone(),
+                    x,
+                    h + config.abs_terrain_offset,
+                    z,
+                    None,
+                    None,
+                );
+            } else {
+                editor.set_block_absolute(block, x, h + config.abs_terrain_offset, z, None, None);
+            }
             if set_back {
                 if let Some(face) = face {
                     editor.set_block_with_properties_absolute(
@@ -7898,7 +9141,11 @@ fn build_wall_ring(
             // building the photograph does not show, so the shell
             // keeps its own colour up here too, and so does a wall
             // the presets flatten for a picture of their own.
-            let roof_line_block = if config.use_accent_roof_line && !photo && !flat {
+            let roof_line_block = if photo || flat {
+                config.wall_block
+            } else if let Some((band, _)) = config.top_band {
+                band
+            } else if config.use_accent_roof_line {
                 config.accent_block
             } else {
                 config.wall_block
@@ -8147,6 +9394,107 @@ fn report_wall_segments(
     );
 }
 
+/// Loading doors along the longest straight wall of a hall: a shutter set back in a framed
+/// opening. Returns the columns it took, which the facade passes keep clear of.
+fn generate_loading_doors(
+    editor: &mut WorldEditor,
+    element: &ProcessedWay,
+    config: &BuildingConfig,
+    building_passages: &CoordinateBitmap,
+    facade: &FacadePlan,
+) -> Vec<(i32, i32)> {
+    let hall = matches!(
+        config.category,
+        BuildingCategory::Industrial | BuildingCategory::Warehouse
+    );
+    let door_h = (config.building_height - 2).min(5);
+    if !hall || !config.is_ground_level || element.tags.contains_key("building:part") || door_h < 3
+    {
+        return Vec::new();
+    }
+    let columns = facade_columns(&element.nodes, config);
+    let mut runs: FnvHashMap<usize, Vec<WallColumn>> = FnvHashMap::default();
+    for wc in columns
+        .iter()
+        .filter(|wc| !wc.stepped && wc.normal != (0, 0))
+    {
+        runs.entry(wc.run).or_default().push(*wc);
+    }
+    let Some(mut run) = runs
+        .into_values()
+        .filter(|r| r.len() >= 12)
+        .max_by_key(|r| (r.len(), std::cmp::Reverse(r[0].run)))
+    else {
+        return Vec::new();
+    };
+    run.sort_by_key(|wc| wc.pos);
+    run.dedup_by_key(|wc| wc.pos);
+
+    let mut rng = element_rng(config.style_seed ^ 0x10AD_D00E_0000_0001);
+    let shutters: Vec<Block> = [
+        LIGHT_GRAY_CONCRETE,
+        GRAY_CONCRETE,
+        WHITE_CONCRETE,
+        CYAN_TERRACOTTA,
+    ]
+    .into_iter()
+    .filter(|&b| b != config.wall_block)
+    .collect();
+    let shutter = shutters[rng.random_range(0..shutters.len())];
+    let frame = config.top_band.map_or(
+        if config.trim_block != config.wall_block {
+            config.trim_block
+        } else {
+            POLISHED_ANDESITE
+        },
+        |(band, _)| band,
+    );
+
+    let len = run.len() as i32;
+    let width = if len >= 20 { 4 } else { 3 };
+    let count = ((len - 4) / (width + 8)).clamp(1, 3);
+    let gap = (len - count * width) / (count + 1);
+    let abs = config.abs_terrain_offset;
+    let base = config.start_y_offset;
+    let mut taken = Vec::new();
+    for i in 0..count {
+        let from = gap + i * (width + gap);
+        // The opening and a jamb either side, all on one straight stretch of own wall.
+        let span: Vec<&WallColumn> = run
+            .iter()
+            .filter(|wc| (from - 1..=from + width).contains(&wc.pos))
+            .collect();
+        let clear = span.len() == (width + 2) as usize
+            && span.iter().all(|wc| {
+                wc.normal == span[0].normal
+                    && !facade.is_door(wc.x, wc.z)
+                    && !facade.is_party(wc.x, wc.z)
+                    && !building_passages.contains(wc.x, wc.z)
+                    && !config.is_flat_column(wc.x, wc.z)
+            });
+        if from < 2 || from + width > len - 2 || !clear {
+            continue;
+        }
+        for wc in &span {
+            let opening = (from..from + width).contains(&wc.pos);
+            let (ix, iz) = (wc.x - wc.normal.0, wc.z - wc.normal.1);
+            for h in (base + 1)..=(base + door_h + 1) {
+                let (block, inner) = if opening && h <= base + door_h {
+                    (AIR, Some(shutter))
+                } else {
+                    (frame, None)
+                };
+                editor.set_block_absolute(block, wc.x, h + abs, wc.z, None, Some(&[]));
+                if let Some(shutter) = inner {
+                    editor.set_block_absolute(shutter, ix, h + abs, iz, None, Some(&[]));
+                }
+            }
+            taken.push((wc.x, wc.z));
+        }
+    }
+    taken
+}
+
 /// Generates special doors for garages (double door) and sheds (single door)
 fn generate_special_doors(
     editor: &mut WorldEditor,
@@ -8280,7 +9628,6 @@ fn determine_wall_block_at_position(
     config: &BuildingConfig,
     col: ColumnFacade,
     flat: bool,
-    variety: &mut WallVariety,
 ) -> Block {
     // A column with a photograph coming over it is a plain shell: the facade
     // cell or panel above it decides what shows, and a procedural window or
@@ -8292,38 +9639,14 @@ fn determine_wall_block_at_position(
     } else {
         determine_wall_block_at_position_pristine(h, config, col)
     };
-    let chosen = apply_block_variety(chosen, bx, h, bz, config, variety);
+    let chosen = facade_texture_block(chosen, bx, h, bz, config);
     apply_condition_variation(chosen, bx, h, bz, config)
 }
 
-/// Rolls `apply_block_variety` keeps for one wall instead of seeding per block.
-struct WallVariety {
-    flat_field: bool,
-    /// Last patch rolled per band (mod 64): walls go up column by column, so a
-    /// patch's blocks come together, and an evicted patch rolls the same again.
-    patches: [Option<(i32, i32, i32, Block)>; 64],
-}
-
-impl WallVariety {
-    fn new(config: &BuildingConfig) -> Self {
-        // A fifth of the buildings keep one flat field.
-        let mut rng = element_rng(config.element_id ^ 0xBABE_F1A1_2222_8888);
-        Self {
-            flat_field: rng.random_bool(0.20),
-            patches: [None; 64],
-        }
-    }
-}
-
-/// Substitutes the wall block with a same-family alternative for variety.
-fn apply_block_variety(
-    chosen: Block,
-    bx: i32,
-    h: i32,
-    bz: i32,
-    config: &BuildingConfig,
-    variety: &mut WallVariety,
-) -> Block {
+/// The block a photographed facade puts in a wall cell, else `chosen`. A wall
+/// is otherwise one flat field of its block: patches of a sibling tone read
+/// as stains, not weathering.
+fn facade_texture_block(chosen: Block, bx: i32, h: i32, bz: i32, config: &BuildingConfig) -> Block {
     // From two blocks per metre up a facade texture cell wins over every
     // procedural choice for this position.
     if let Some(block) = crate::mapillary::facades::block_at(
@@ -8359,36 +9682,7 @@ fn apply_block_variety(
             return block;
         }
     }
-    let pool = substitute_pool_only(chosen);
-    if pool.is_empty() || variety.flat_field {
-        return chosen;
-    }
-
-    // Weathering comes in patches of a same-tone sibling, three wide and two
-    // high, rather than as speckle on single blocks. Each band of patches is
-    // offset like a brick course so they do not line up in columns.
-    let band = h.div_euclid(2);
-    let shift = band.rem_euclid(3);
-    let (px, pz) = ((bx + shift).div_euclid(3), (bz + shift).div_euclid(3));
-    let slot = &mut variety.patches[band.rem_euclid(64) as usize];
-    // `chosen` is always the wall block here, so one roll serves the whole patch.
-    if let Some((x, z, b, block)) = *slot {
-        if (x, z, b) == (px, pz, band) {
-            return block;
-        }
-    }
-    let mut patch_rng = coord_rng(
-        px,
-        pz,
-        config.element_id ^ 0x5050_3030_AAFF_BBCC ^ ((band as u64) << 20),
-    );
-    let block = if patch_rng.random_range(0u32..100) < 12 {
-        pool[patch_rng.random_range(0..pool.len())]
-    } else {
-        chosen
-    };
-    *slot = Some((px, pz, band, block));
-    block
+    chosen
 }
 
 /// Swaps wall blocks that genuinely don't work as a roof.
@@ -8436,8 +9730,8 @@ const COPPER_ROOF: Block = WAXED_OXIDIZED_COPPER;
 const METAL_GREEN: Block = DARK_PRISMARINE;
 const METAL_RED: Block = RED_NETHER_BRICKS;
 
-/// For `--surface-patches`: the full block in the colour of a family's stairs and
-/// slabs, so a ridge or hip block left showing does not read as a dot.
+/// The full block in the colour of a family's stairs and slabs, so a full
+/// block among them does not read as a dot.
 fn full_block_like_its_stairs(roof: Block) -> Block {
     match roof {
         TILE_RED | ORANGE_TERRACOTTA => BRICK,
@@ -8472,7 +9766,9 @@ const TILE_FAMILIES: [Block; 5] = [TILE_RED, TILE_BRICK, TILE_DARK, TILE_BROWN, 
 
 type RoofPool = &'static [(Block, u8)];
 
-/// Bavaria, Austria, Switzerland, Berlin: bright clay tile, some slate.
+/// Bavaria, Austria, Switzerland, Berlin: bright clay tile, some slate. Aerial
+/// photos show a town about half red, but a village drawn half grey reads as
+/// the north; halls and post-war roofs take other pools and bring it down.
 const CENTRAL_ROOFS: RoofPool = &[
     (TILE_RED, 55),
     (TILE_BRICK, 10),
@@ -8720,8 +10016,9 @@ const SPIRE_ROOFS: RoofPool = &[(COPPER_ROOF, 45), (SLATE_DARK, 40), (GLAZED_BLA
 const MANSARD_ROOFS: RoofPool = &[(SLATE_DARK, 50), (ZINC, 30), (SLATE, 20)];
 const FRENCH_MANSARD_ROOFS: RoofPool = &[(ZINC, 50), (SLATE_DARK, 50)];
 
-/// Factory and warehouse halls: metal sheet, fibre cement, old tile.
-const INDUSTRIAL_ROOFS: RoofPool = &[(ZINC, 40), (TILE_BRICK, 20), (SLATE, 25), (SLATE_DARK, 15)];
+/// Factory and warehouse halls: metal sheet and fibre cement. Not one roof of
+/// a Munich industrial estate is red.
+const INDUSTRIAL_ROOFS: RoofPool = &[(ZINC, 45), (SLATE, 30), (SLATE_DARK, 25)];
 
 /// Every roof pool, for the export-coverage and stair tests.
 #[cfg(test)]
@@ -8925,6 +10222,19 @@ fn tagged_roof_block(
     colour.map(|rgb| roof_family_for_colour(rgb, rng))
 }
 
+/// A dome or onion mapped in gold is gilded, as the Dome of the Rock and the Kremlin's are.
+fn gilded_dome(tags: &HashMap<String, String>, roof_type: RoofType) -> bool {
+    let gold = crate::colors::oklab_components(&(246, 208, 62));
+    matches!(roof_type, RoofType::Dome | RoofType::Onion)
+        && tags
+            .get("roof:colour")
+            .and_then(|c| color_text_to_rgb_tuple(c))
+            .is_some_and(|rgb| {
+                let (l, a, b) = crate::colors::oklab_components(&rgb);
+                (l - gold.0).hypot((a - gold.1).hypot(b - gold.2)) < 0.1
+            })
+}
+
 /// Whether a `roof:material` value is sheet metal, whose colour is paint or
 /// patina rather than a material of its own.
 fn is_sheet_metal(material: &str) -> bool {
@@ -9126,69 +10436,6 @@ fn flat_parapet_for(
         share
     };
     element_rng(group_seed ^ 0x534F_F154_4AAE_E0F0).random_bool(share)
-}
-
-/// Same-tone substitutes for the wall variety patches; empty slice = no
-/// variety. Only siblings close enough in colour to read as weathering or
-/// repair, never a second material.
-fn substitute_pool_only(block: Block) -> &'static [Block] {
-    match block {
-        // Mid-grey stone
-        STONE_BRICKS => &[CRACKED_STONE_BRICKS, STONE],
-        COBBLESTONE => &[ANDESITE, STONE],
-        STONE => &[ANDESITE, COBBLESTONE],
-        ANDESITE => &[POLISHED_ANDESITE, STONE],
-        POLISHED_ANDESITE => &[ANDESITE],
-        CHISELED_STONE_BRICKS | CRACKED_STONE_BRICKS => &[STONE_BRICKS],
-        MOSSY_STONE_BRICKS => &[MOSSY_COBBLESTONE, STONE_BRICKS],
-        MOSSY_COBBLESTONE => &[MOSSY_STONE_BRICKS, COBBLESTONE],
-
-        // Warm reds: repointed and weathered brick
-        BRICK => &[POLISHED_GRANITE, POLISHED_GRANITE, GRANITE],
-        POLISHED_GRANITE => &[BRICK, GRANITE],
-        GRANITE => &[POLISHED_GRANITE],
-        TERRACOTTA => &[POLISHED_GRANITE],
-        ORANGE_TERRACOTTA => &[TERRACOTTA],
-
-        // Deepslate
-        DEEPSLATE_BRICKS => &[POLISHED_DEEPSLATE, COBBLED_DEEPSLATE],
-        POLISHED_DEEPSLATE => &[DEEPSLATE_BRICKS, COBBLED_DEEPSLATE],
-        COBBLED_DEEPSLATE => &[DEEPSLATE_BRICKS, POLISHED_DEEPSLATE, DEEPSLATE],
-        DEEPSLATE => &[COBBLED_DEEPSLATE, DEEPSLATE_BRICKS],
-
-        // Blackstone
-        POLISHED_BLACKSTONE_BRICKS => &[POLISHED_BLACKSTONE, BLACKSTONE],
-        POLISHED_BLACKSTONE => &[POLISHED_BLACKSTONE_BRICKS, BLACKSTONE],
-        BLACKSTONE => &[POLISHED_BLACKSTONE, POLISHED_BLACKSTONE_BRICKS],
-
-        // Brown family
-        BROWN_TERRACOTTA => &[BROWN_CONCRETE],
-        BROWN_CONCRETE => &[BROWN_TERRACOTTA],
-
-        // Off-white: quartz, and render touched up in a brighter white
-        QUARTZ_BLOCK => &[SMOOTH_QUARTZ],
-        QUARTZ_BRICKS | SMOOTH_QUARTZ => &[QUARTZ_BLOCK],
-        WHITE_CONCRETE => &[CALCITE],
-
-        // Sandstone: rough beside smooth
-        SANDSTONE => &[SMOOTH_SANDSTONE],
-        SMOOTH_SANDSTONE => &[SANDSTONE],
-
-        POLISHED_DIORITE => &[DIORITE],
-        DIORITE => &[POLISHED_DIORITE],
-
-        // Concrete beside its powder
-        GRAY_CONCRETE => &[GRAY_CONCRETE_POWDER],
-        LIGHT_GRAY_CONCRETE => &[LIGHT_GRAY_CONCRETE_POWDER],
-        LIGHT_GRAY_CONCRETE_POWDER => &[LIGHT_GRAY_CONCRETE],
-
-        // Weathered copper
-        WAXED_EXPOSED_COPPER => &[WAXED_EXPOSED_CHISELED_COPPER, WAXED_EXPOSED_CUT_COPPER],
-        WAXED_EXPOSED_CHISELED_COPPER => &[WAXED_EXPOSED_COPPER, WAXED_EXPOSED_CUT_COPPER],
-        WAXED_EXPOSED_CUT_COPPER => &[WAXED_EXPOSED_COPPER, WAXED_EXPOSED_CHISELED_COPPER],
-
-        _ => &[],
-    }
 }
 
 /// Weathers walls and boards up windows for damaged condition states.
@@ -9398,6 +10645,51 @@ fn curtain_frame_for(glass: Block) -> Block {
     }
 }
 
+/// What a building's own wall tags say of glass: `Some(true)` when one of
+/// them is glass, `Some(false)` when they name another material, `None`
+/// when none is mapped. A glass roof or a glass sibling says nothing about
+/// the colour of a stone facade.
+fn walls_mapped_glass(tags: &HashMap<String, String>) -> Option<bool> {
+    let mut materials = [
+        "building:material",
+        "building:facade:material",
+        "facade:material",
+    ]
+    .iter()
+    .filter_map(|key| tags.get(*key))
+    .map(|m| matches!(m.trim().to_ascii_lowercase().as_str(), "glass" | "mirror"))
+    .peekable();
+    materials.peek()?;
+    Some(materials.any(|glass| glass))
+}
+
+fn mapped_colour(tags: &HashMap<String, String>) -> Option<(u8, u8, u8)> {
+    tags.get("building:colour")
+        .or_else(|| tags.get("colour"))
+        .and_then(|c| color_text_to_rgb_tuple(c))
+}
+
+/// The tint of glass walls mapped with a colour.
+fn mapped_glass_tint(tags: &HashMap<String, String>) -> Option<Block> {
+    (walls_mapped_glass(tags) == Some(true))
+        .then(|| mapped_colour(tags).map(glass_for_colour))
+        .flatten()
+}
+
+/// The glass a glass roof takes over a glass curtain wall. The facade is
+/// three window rows to one wall row, so it takes the window glass, not the
+/// band's; but a tint mapped on the walls is the colour of the whole skin,
+/// its sloped faces too (Salesforce Tower: white glass up to the crown).
+fn curtain_roof_glass(tags: &HashMap<String, String>, wall: Block, window: Block) -> Option<Block> {
+    if !(is_glass_wall(wall) && is_glass_wall(window)) {
+        None
+    } else if mapped_glass_tint(tags) == Some(wall) {
+        Some(wall)
+    } else {
+        Some(window)
+    }
+}
+
 /// Wall and window glass of a building whose walls are tagged as glass: the
 /// tint follows a mapped `building:colour`, on the panes of a grid tower too.
 fn glass_palette(
@@ -9406,26 +10698,12 @@ fn glass_palette(
     wall_block: Block,
     window_block: Block,
 ) -> (Block, Block) {
-    // The element's own walls: a glass roof or a glass sibling says nothing
-    // about the colour of a stone facade.
-    let mut materials = [
-        "building:material",
-        "building:facade:material",
-        "facade:material",
-    ]
-    .iter()
-    .filter_map(|key| element.tags.get(*key))
-    .map(|m| matches!(m.trim().to_ascii_lowercase().as_str(), "glass" | "mirror"));
-    let first_material = materials.next();
-    let glass_tagged = first_material == Some(true) || materials.any(|glass| glass);
+    let walls_glass = walls_mapped_glass(&element.tags);
+    let glass_tagged = walls_glass == Some(true);
     // A mapped metal or stone part of a glass tower, such as a crown ring,
     // keeps the wall its tags gave it.
-    let other_material = first_material.is_some() && !glass_tagged;
-    let colour = element
-        .tags
-        .get("building:colour")
-        .or_else(|| element.tags.get("colour"))
-        .and_then(|c| color_text_to_rgb_tuple(c));
+    let other_material = walls_glass == Some(false);
+    let colour = mapped_colour(&element.tags);
     let colour_glass = colour.map(glass_for_colour);
     let tint = colour_glass.filter(|_| glass_tagged);
     // With no glass mapped, a warm colour (tan, buff, red) describes stone
@@ -9508,8 +10786,12 @@ fn shell_glass_for(
 
 /// Whether a glass-walled building is one open hall rather than glazed
 /// storeys: a pavilion, conservatory or station shed, a glass vault, or a
-/// glass building mapped as a single level. Mapped storeys keep their floors.
+/// glass building mapped as a single level. Mapped storeys keep their floors,
+/// and so does a tower's sloped glass face (`is_sloped_glass_facade`).
 fn is_glass_hall(tags: &HashMap<String, String>, building_type: &str) -> bool {
+    if is_sloped_glass_facade(tags) {
+        return false;
+    }
     let levels = tags
         .get("building:levels")
         .and_then(|l| l.trim().parse::<f64>().ok());
@@ -9526,6 +10808,42 @@ fn is_glass_hall(tags: &HashMap<String, String>, building_type: &str) -> bool {
             building_type,
             "pavilion" | "conservatory" | "train_station" | "hangar"
         )
+}
+
+/// Rise from which a part's glass roof is a facade, not a roof, in metres: a
+/// station vault or a glazed atrium stays well under it.
+const GLASS_FACADE_RISE_M: f64 = 20.0;
+
+/// Walls a tower's sloped face stands on, in metres: about a storey. A glass
+/// pyramid standing on the ground has none.
+const GLASS_FACADE_WALL_M: f64 = 3.0;
+
+/// Whether a part's glass roof is a tower's tapering face, mapped as a roof:
+/// One World Trade Center's corners are glass parts whose 362 m `roof:height`
+/// slopes from 55 m of wall up to the crown. Storeys stand behind such a
+/// face, so the part is no hall, and its roof is a skin over them, not a
+/// solid wedge of glass (`GlassSkin`). Only a skillion or pyramidal face:
+/// a dome or a vault is a hall's roof however tall.
+fn is_sloped_glass_facade(tags: &HashMap<String, String>) -> bool {
+    let metres = |key: &str| {
+        tags.get(key)
+            .and_then(|v| v.trim_end_matches('m').trim().parse::<f64>().ok())
+            .filter(|m| m.is_finite())
+    };
+    let Some(rise) = metres("roof:height") else {
+        return false;
+    };
+    let walls = metres("height").map(|h| h - rise - metres("min_height").unwrap_or(0.0));
+    tags.contains_key("building:part")
+        && tags.get("roof:material").map(String::as_str) == Some("glass")
+        && tags.get("roof:shape").is_some_and(|shape| {
+            matches!(
+                parse_roof_type(shape),
+                RoofType::Skillion | RoofType::Pyramidal
+            )
+        })
+        && rise >= GLASS_FACADE_RISE_M
+        && walls.is_some_and(|w| w >= GLASS_FACADE_WALL_M)
 }
 
 /// The street-level shopfront or lobby: display glass from the pavement up
@@ -9565,20 +10883,20 @@ fn shopfront_block(h: i32, config: &BuildingConfig, col: ColumnFacade) -> Block 
 fn band_block(config: &BuildingConfig, slot: BaySlot) -> Block {
     let window = slot.is_window();
     if config.window_archetype == WindowArchetype::Ribbon {
-        // The spandrel is the cladding itself, running unbroken past the
-        // mullions; the sill ledge on it carries the trim.
+        // The spandrel is the cladding itself, running unbroken past the mullions.
         return config.wall_block;
     }
-    // A punched masonry wall runs on between the storeys; the sill ledge
-    // under each window carries the trim.
+    // A tower's punched masonry wall runs on between the storeys.
     if !window || config.window_archetype == WindowArchetype::PairedPunched {
         config.wall_block
     } else if config.window_archetype.recessed_spandrels() {
         config.spandrel_block
-    } else if config.use_vertical_accent {
-        config.accent_block
-    } else {
+    } else if config.dressed && (slot.is_wide_window() || config.surrounds) {
         config.trim_block
+    } else if let Some(panel) = config.window_panel {
+        panel
+    } else {
+        config.wall_block
     }
 }
 
@@ -9588,6 +10906,13 @@ fn determine_wall_block_at_position_pristine(
     col: ColumnFacade,
 ) -> Block {
     let block = unzoned_wall_block(h, config, col);
+    if let Some((band, rows)) = config.top_band {
+        // Above the ground floor it runs over the top storey's glass, or it breaks at every window.
+        let over = block == config.wall_block || h > config.ground_floor_top();
+        if over && h > config.start_y_offset + config.building_height - rows {
+            return band;
+        }
+    }
     // A masonry tower's base and capital are stone where the shaft is wall.
     match config.zoning {
         Some(zoning) if block == config.wall_block && !col.party => {
@@ -9707,9 +11032,9 @@ fn unzoned_wall_block(h: i32, config: &BuildingConfig, col: ColumnFacade) -> Blo
         let role = config.floor_role(h);
 
         if role == FloorRole::Ground {
-            // A sill row at the pavement, then glass up to the first slab: the
-            // ground floor's windows are a row taller than the ones above.
-            if above_floor && slot.is_window() {
+            // A sill row at the pavement, then glass under a solid head: three
+            // rows on a town building, two on a house, whose wall is low.
+            if above_floor && slot.is_window() && h <= config.ground_window_top() {
                 return config.window_block;
             }
             if config.rustication
@@ -9728,6 +11053,8 @@ fn unzoned_wall_block(h: i32, config: &BuildingConfig, col: ColumnFacade) -> Blo
                 && h == config.start_y_offset + config.building_height - config.floor_cycle;
             return if top_band || config.use_accent_lines {
                 config.accent_block
+            } else if let Some(band) = config.floor_band {
+                band
             } else {
                 band_block(config, slot)
             };
@@ -9757,6 +11084,8 @@ fn unzoned_wall_block(h: i32, config: &BuildingConfig, col: ColumnFacade) -> Blo
             // The spandrel band under a ribbon or an art-deco window is two
             // rows deep.
             band_block(config, slot)
+        } else if slot.is_window() && !mullion {
+            config.window_panel.unwrap_or(config.wall_block)
         } else {
             config.wall_block
         }
@@ -9918,6 +11247,62 @@ fn compute_building_diagonality(nodes: &[ProcessedNode]) -> f64 {
     (polygon_area / bbox_area).min(1.0)
 }
 
+/// Whether a building's outline came from a cadastre, which surveys the walls
+/// rather than the roof seen from the air: the German ALKIS, Kataster and
+/// Hausumringe, the French cadastre, the Dutch BAG and Kadaster, the Austrian
+/// DKM, the Czech RUIAN, the Walloon PICC, the Flemish GRB and their kind. Its
+/// walls are on the outline already, and the eave hangs past it.
+fn outline_traces_walls(tags: &HashMap<String, String>) -> bool {
+    const SURVEYS: [&str; 10] = [
+        "cadastr",
+        "kadast",
+        "katast",
+        "catast",
+        "alkis",
+        "lantm",
+        "cuzk",
+        "ruian",
+        "hausumring",
+        "picc",
+    ];
+    const REGISTERS: [&str; 2] = ["bag", "dkm"];
+    ["ref:bag", "ref:ruian:building", "ref:bygningsnr"]
+        .iter()
+        .any(|k| tags.contains_key(*k))
+        || tags
+            .get("source:geometry:ref")
+            .is_some_and(|v| crate::osm_parser::grb_prefix(v).is_some())
+        || tags
+            .iter()
+            .filter(|(k, _)| k.as_str() == "source" || k.starts_with("source:"))
+            .any(|(_, v)| {
+                let v = v.to_lowercase();
+                SURVEYS.iter().any(|s| v.contains(s))
+                    || v.split(|c: char| !c.is_alphanumeric())
+                        .any(|word| REGISTERS.contains(&word))
+            })
+}
+
+/// Whether a roof of this type hangs an eave out past its walls: the gabled and
+/// hipped families and a mansard do. Off the grid only a roof in slabs does,
+/// one cell deep, and its walls stay on the outline.
+fn roof_has_eaves(roof_type: RoofType) -> bool {
+    matches!(
+        roof_type,
+        RoofType::Mansard
+            | RoofType::Gabled
+            | RoofType::Gambrel
+            | RoofType::HalfHipped
+            | RoofType::Round
+            | RoofType::Hipped
+    )
+}
+
+/// Whether an outline is turned far enough off the grid that its walls step every few blocks.
+fn outline_is_turned(nodes: &[ProcessedNode]) -> bool {
+    dominant_axis_angle(nodes).tan().abs() * 6.0 > 1.0
+}
+
 /// Length-weighted dominant edge angle in radians, folded to (-45, 45] deg.
 fn dominant_axis_angle(nodes: &[ProcessedNode]) -> f64 {
     let mut sum_c = 0.0f64;
@@ -9967,6 +11352,24 @@ impl TentFrame {
 
     fn v_axis(&self) -> (f64, f64) {
         (-self.angle.sin(), self.angle.cos())
+    }
+}
+
+/// Whether an outline is longer along its frame's u axis (x where it has no
+/// tent) than across it, as `ridge_frame` reads it: ties go along u.
+fn longer_along_u(nodes: &[ProcessedNode]) -> bool {
+    match tent_frame(nodes) {
+        Some(t) => t.u_max - t.u_min >= t.v_max - t.v_min,
+        None => {
+            let span = |f: fn(&ProcessedNode) -> i32| {
+                let (lo, hi) = nodes
+                    .iter()
+                    .map(f)
+                    .fold((i32::MAX, i32::MIN), |(lo, hi), v| (lo.min(v), hi.max(v)));
+                hi - lo
+            };
+            span(|n| n.x) >= span(|n| n.z)
+        }
     }
 }
 
@@ -10068,6 +11471,14 @@ fn ridge_frame(
         }
     };
     RidgeFrame { along_x, tent }
+}
+
+/// Whether a wall segment leaves the grid steeply enough to step every few blocks.
+#[inline]
+fn segment_is_stepped(x1: i32, z1: i32, x2: i32, z2: i32) -> bool {
+    let (dx, dz) = ((x2 - x1).abs(), (z2 - z1).abs());
+    let (short, long) = (dx.min(dz), dx.max(dz));
+    short > 0 && short * 6 > long
 }
 
 /// Whether a wall segment steps along X, matching bresenham_line's driving axis.
@@ -10236,6 +11647,8 @@ struct BalconySite<'a> {
     passages: &'a CoordinateBitmap,
     /// Every building's cells, this one's included.
     footprints: Option<&'a CoordinateBitmap>,
+    /// This one's eave strip, outside its walls but its own to build over.
+    eave_strip: Option<&'a FnvHashSet<(i32, i32)>>,
     wall: WallRuns,
     /// Cells a balcony stands on, by floor row.
     taken: FnvHashSet<(i32, i32, i32)>,
@@ -10260,9 +11673,21 @@ impl BalconySite<'_> {
                         let (ox, oz) = (x + normal.0 * d, z + normal.1 * d);
                         !self.taken.contains(&(ox, h, oz))
                             && !self.wall.contains_key(&(ox, oz))
-                            && self.footprints.is_none_or(|f| !f.contains(ox, oz))
+                            && self.footprints.is_none_or(|f| {
+                                !f.contains(ox, oz)
+                                    || self.eave_strip.is_some_and(|s| s.contains(&(ox, oz)))
+                            })
                     })
             })
+    }
+
+    /// Takes the cells a balcony before `cols` would stand on, without building it.
+    fn reserve(&mut self, cols: &[(i32, i32)], normal: (i32, i32), h: i32, depth: i32) {
+        for &(x, z) in cols {
+            for d in 1..=depth {
+                self.taken.insert((x + normal.0 * d, h, z + normal.1 * d));
+            }
+        }
     }
 
     /// Builds a balcony before the wall columns `cols`, in order along the wall,
@@ -10539,6 +11964,7 @@ fn generate_balconies(
     building_passages: &CoordinateBitmap,
     facade: &FacadePlan,
     footprints: Option<&CoordinateBitmap>,
+    stepped: Option<&SteppedOutline>,
 ) {
     // A tower only takes a band of them up its street front.
     let banded = matches!(
@@ -10559,22 +11985,27 @@ fn generate_balconies(
     // Never on the ground floor; elevated parts keep their base row.
     let first_h = config.start_y_offset + config.grammar_anchor() + config.floor_cycle;
     let columns = facade_columns(&element.nodes, config);
-    let mut wall = WallRuns::default();
-    for wc in columns.iter() {
-        let here = Some((wc.run, wc.normal));
-        wall.entry((wc.x, wc.z))
-            .and_modify(|w| {
-                if *w != here {
-                    *w = None;
-                }
-            })
-            .or_insert(here);
-    }
+    let wall_runs = |columns: &[WallColumn]| {
+        let mut wall = WallRuns::default();
+        for wc in columns {
+            let here = Some((wc.run, wc.normal));
+            wall.entry((wc.x, wc.z))
+                .and_modify(|w| {
+                    if *w != here {
+                        *w = None;
+                    }
+                })
+                .or_insert(here);
+        }
+        wall
+    };
+    let wall = wall_runs(&columns);
     let mut site = BalconySite {
         config,
         facade,
         passages: building_passages,
         footprints,
+        eave_strip: stepped.map(|s| s.strip),
         wall,
         taken: FnvHashSet::default(),
     };
@@ -10640,27 +12071,99 @@ fn generate_balconies(
         }
     }
 
-    for wc in columns.iter() {
-        let BaySlot::Window { k, width, bay } = wc.slot() else {
+    // One balcony per window, hung from its middle column, where the window
+    // asks for one. A stepped building asks the windows its walls had on the
+    // outline, so it keeps the balconies they carried, and hangs each on the
+    // window of the stepped wall that took that one's place.
+    let (plan_columns, plan_facade) = match stepped {
+        Some(s) => (
+            facade_columns(&s.way.nodes, config),
+            s.facade.unwrap_or(facade),
+        ),
+        None => (columns.clone(), facade),
+    };
+    // The balconies the outline's walls had room for, which the stepped ones keep.
+    let mut plan_site = stepped.map(|_| BalconySite {
+        config,
+        facade: plan_facade,
+        passages: building_passages,
+        footprints,
+        eave_strip: None,
+        wall: wall_runs(&plan_columns),
+        taken: FnvHashSet::default(),
+    });
+    let centres: FnvHashMap<(i32, i32), WallColumn> = if stepped.is_some() {
+        columns
+            .iter()
+            .filter(|wc| {
+                matches!(wc.slot(), BaySlot::Window { k, width, .. } if k == (width - 1) / 2)
+                    && !front_blocked(wc, config, building_passages, facade, None)
+            })
+            .map(|wc| ((wc.x, wc.z), *wc))
+            .collect()
+    } else {
+        FnvHashMap::default()
+    };
+    for pc in plan_columns.iter() {
+        let BaySlot::Window { k, width, bay } = pc.slot() else {
             continue;
         };
-        // One balcony per window, hung from its middle column.
         if config.balcony_band == BalconyBand::Filant
             || k != (width - 1) / 2
-            || front_blocked(wc, config, building_passages, facade, None)
+            || front_blocked(pc, config, building_passages, plan_facade, None)
         {
             continue;
         }
-        let (bx, bz) = (wc.x, wc.z);
-        let normal = wc.normal;
+        let normal = pc.normal;
         let (tan_x, tan_z) = (-normal.1, normal.0);
-        // Five columns of this wall run: the window's and its piers.
-        let span: Vec<(i32, i32)> = (-2i32..=2)
-            .map(|t| (bx + tan_x * t, bz + tan_z * t))
-            .collect();
-        let is_rear = facade
+        // The window this one is on the walls as built: itself, or on a
+        // stepped wall the one a block in, or a column or two along it.
+        let Some(wc) = (if stepped.is_none() {
+            Some(*pc)
+        } else {
+            [1, 0]
+                .into_iter()
+                .flat_map(|back| [0, 1, -1, 2, -2].map(|t| (back, t)))
+                .find_map(|(back, t)| {
+                    let cell = (
+                        pc.x - normal.0 * back + tan_x * t,
+                        pc.z - normal.1 * back + tan_z * t,
+                    );
+                    centres.get(&cell).filter(|wc| wc.normal == normal).copied()
+                })
+        }) else {
+            continue;
+        };
+        let (bx, bz) = (wc.x, wc.z);
+        // Five columns of this wall run: the window's and its piers. A
+        // stepped wall is two columns shorter than the outline's, so where
+        // that one would run into a corner or the balcony beside it, it
+        // slides along, narrows to four or three columns, or, by a corner,
+        // runs away from it from the window.
+        let span_at = |from: i32, to: i32| -> Vec<(i32, i32)> {
+            (from..=to)
+                .map(|t| (bx + tan_x * t, bz + tan_z * t))
+                .collect()
+        };
+        let spans: Vec<Vec<(i32, i32)>> = if stepped.is_some() {
+            vec![
+                span_at(-2, 2),
+                span_at(-3, 1),
+                span_at(-1, 3),
+                span_at(-2, 1),
+                span_at(-1, 2),
+                span_at(-1, 1),
+                span_at(-3, 0),
+                span_at(0, 3),
+                span_at(-2, 0),
+                span_at(0, 2),
+            ]
+        } else {
+            vec![span_at(-2, 2)]
+        };
+        let is_rear = plan_facade
             .segments
-            .get(wc.seg)
+            .get(pc.seg)
             .and_then(|s| s.as_ref())
             .is_some_and(|s| s.class == FacadeClass::Rear);
         // Banded balconies skip windows until five columns are clear.
@@ -10671,26 +12174,43 @@ fn generate_balconies(
             BalconyBand::EveryBay => Some(step),
             BalconyBand::Alternating => Some(2 * step),
         };
+        let plan_col = pc.facade(plan_facade);
         let col = wc.facade(facade);
         for h in first_h..top_h {
-            if config.floor_row(h) != 0 || !glazed_at(h + 1, config, col) {
+            if config.floor_row(h) != 0
+                || !glazed_at(h + 1, config, plan_col)
+                || !glazed_at(h + 1, config, col)
+            {
                 continue;
             }
             let wants = match band_step {
-                Some(step) => facade.is_street(bx, bz) && bay % step == 0,
+                Some(step) => plan_facade.is_street(pc.x, pc.z) && bay % step == 0,
+                // One roll per bay, not per storey: the odd balcony comes as
+                // a stack up the wall, where singles read as noise.
                 None => {
-                    let floor_idx = h / config.floor_cycle;
                     let roll = coord_rng(
-                        bx.wrapping_add(floor_idx * 3),
-                        bz.wrapping_add(floor_idx * 5),
+                        (pc.run as i32).wrapping_mul(4096).wrapping_add(bay),
+                        0,
                         element.id ^ 0xBA1C_0417_0000_0011,
                     )
                     .random_range(0u32..100);
-                    roll < if is_rear { 3 } else { 8 }
+                    roll < if is_rear { 5 } else { 14 }
                 }
             };
-            if wants && site.fits(&span, normal, h, depth) {
-                site.build(editor, &span, normal, h, seed(bx, bz, h));
+            if !wants {
+                continue;
+            }
+            if let Some(plan) = plan_site.as_mut() {
+                let outline_span: Vec<(i32, i32)> = (-2i32..=2)
+                    .map(|t| (pc.x + tan_x * t, pc.z + tan_z * t))
+                    .collect();
+                if !plan.fits(&outline_span, normal, h, depth) {
+                    continue;
+                }
+                plan.reserve(&outline_span, normal, h, depth);
+            }
+            if let Some(span) = spans.iter().find(|span| site.fits(span, normal, h, depth)) {
+                site.build(editor, span, normal, h, seed(bx, bz, h));
             }
         }
     }
@@ -10736,7 +12256,7 @@ fn generate_french_railings(
             let y = h + 1 + abs;
             if empty(editor, wc.x, y, wc.z) {
                 bars.insert((wc.x, y, wc.z), Some(wc.normal));
-            } else if empty(editor, wc.x + nx, y, wc.z + nz) {
+            } else if !wc.stepped && empty(editor, wc.x + nx, y, wc.z + nz) {
                 bars.insert((wc.x + nx, y, wc.z + nz), None);
             }
         }
@@ -10793,9 +12313,7 @@ fn upside_down_stair(stair_block: Block, facing: &str) -> BlockWithProperties {
     ))
 }
 
-/// Places accent-block columns at building polygon vertices (corner quoins).
-/// This frames the building visually, a very common architectural detail.
-/// Uses deterministic RNG for consistency across region boundaries.
+/// Quoins at the real corners of a dressed front, corner boards on a plain house.
 fn generate_corner_quoins(
     editor: &mut WorldEditor,
     element: &ProcessedWay,
@@ -10803,8 +12321,15 @@ fn generate_corner_quoins(
     building_passages: &CoordinateBitmap,
     facade: &FacadePlan,
 ) {
-    // Skip if wall and accent are the same block (nothing visible)
-    if config.wall_block == config.accent_block {
+    // Dressed fabric has stone quoins; a plain house corner boards in the
+    // tone of its trim.
+    let house = config.category == BuildingCategory::House;
+    let quoin_block = if config.dressed {
+        config.accent_block
+    } else {
+        config.trim_block
+    };
+    if config.wall_block == quoin_block || !(config.dressed || house) {
         return;
     }
 
@@ -10830,9 +12355,11 @@ fn generate_corner_quoins(
         config.era,
         ArchEra::TraditionalPreWar | ArchEra::HistoricOrnate
     ) {
-        0.5
+        0.65
+    } else if house {
+        0.55
     } else {
-        0.25
+        0.35
     };
     let roll_passed = element_rng(element.id.wrapping_add(3571)).random_bool(quoin_chance);
     if !roll_passed && guaranteed_corner.is_none() {
@@ -10841,27 +12368,41 @@ fn generate_corner_quoins(
 
     // Corners are where the wall turns: a mid-wall node shared with a
     // neighbour or carrying an entrance gets no column.
-    let vertices = ring_vertices(&element.nodes);
+    // Sine of the turn at `c`, and the lengths of the walls meeting there.
+    let turn = |p: (i32, i32), c: (i32, i32), q: (i32, i32)| {
+        let (ax, az) = ((c.0 - p.0) as f64, (c.1 - p.1) as f64);
+        let (bx, bz) = ((q.0 - c.0) as f64, (q.1 - c.1) as f64);
+        let (la, lb) = (ax.hypot(az), bx.hypot(bz));
+        ((ax * bz - az * bx).abs() / (la * lb).max(1e-9), la, lb)
+    };
+    // Nodes part way along a wall are dropped first, so a wall is measured
+    // from corner to corner.
+    let nodes = ring_vertices(&element.nodes);
+    let n = nodes.len();
+    let vertices: Vec<(i32, i32)> = (0..n)
+        .filter(|&i| n < 3 || turn(nodes[(i + n - 1) % n], nodes[i], nodes[(i + 1) % n]).0 > 0.2)
+        .map(|i| nodes[i])
+        .collect();
     let n = vertices.len();
-    let corners: Vec<(i32, i32)> = (0..n)
+    // A real corner: both walls a few blocks long and the turn sharp.
+    let mut corners: Vec<(i32, i32)> = (0..n)
         .filter(|&i| {
-            let p = vertices[(i + n - 1) % n];
-            let c = vertices[i];
-            let q = vertices[(i + 1) % n];
-            let cross =
-                (c.0 - p.0) as i64 * (q.1 - c.1) as i64 - (c.1 - p.1) as i64 * (q.0 - c.0) as i64;
-            n < 3 || cross != 0
+            let (sin, la, lb) = turn(
+                vertices[(i + n - 1) % n],
+                vertices[i],
+                vertices[(i + 1) % n],
+            );
+            la >= 5.0 && lb >= 5.0 && sin >= 0.6
         })
         .map(|i| vertices[i])
         .collect();
+    // The street corner is framed however short its walls are.
+    if let Some(v) = guaranteed_corner.filter(|v| !corners.contains(v)) {
+        corners.push(v);
+    }
 
-    let quoin_block = config.accent_block;
     let top_h = config.start_y_offset + config.building_height;
-    let passage_h = config.start_y_offset + BUILDING_PASSAGE_HEIGHT.min(config.building_height);
-
-    // Whitelist the whole substitute family, otherwise variety-substituted wall blocks break the columns.
-    let mut wall_family: Vec<Block> = vec![config.wall_block];
-    wall_family.extend_from_slice(substitute_pool_only(config.wall_block));
+    let passage_h = config.start_y_offset + config.passage_height.min(config.building_height);
 
     for &(cx, cz) in &corners {
         // Party-wall vertices sit against the neighbor and get no framing.
@@ -10887,7 +12428,7 @@ fn generate_corner_quoins(
                 cx,
                 h + config.abs_terrain_offset,
                 cz,
-                Some(&wall_family),
+                Some(&[config.wall_block]),
                 None,
             );
         }
@@ -10897,8 +12438,7 @@ fn generate_corner_quoins(
 /// Adds the wall depth features that suit their building: corner beams on
 /// industrial halls, buttresses on churches, corner piers on glass curtain
 /// walls and a slab ledge on every band of a banded tower. Facades of punched
-/// windows get their relief from the recessed glass, sills and cornices
-/// instead, never from blocks stood in front of the wall.
+/// windows get theirs from the recessed glass, sills, cornices and pilasters.
 ///
 /// All outward placements use an AIR whitelist to avoid overwriting
 /// neighbouring buildings or existing decorations.
@@ -10911,6 +12451,17 @@ fn generate_wall_depth_features(
     facade: &FacadePlan,
     part_probe: Option<(&CoordinateBitmap, &FnvHashSet<(i32, i32)>)>,
 ) {
+    if config.pilasters.is_some() && config.condition == BuildingCondition::Normal {
+        place_pilasters(
+            editor,
+            element,
+            config,
+            has_sloped_roof,
+            building_passages,
+            facade,
+            part_probe,
+        );
+    }
     let style = config.wall_depth_style;
     let banded_tower = style == WallDepthStyle::SkyscraperFins && config.use_horizontal_windows;
     if !matches!(
@@ -10950,7 +12501,8 @@ fn generate_wall_depth_features(
 
     for &wc in facade_columns(&element.nodes, config).iter() {
         let (bx, bz) = (wc.x, wc.z);
-        if front_blocked(&wc, config, building_passages, facade, part_probe)
+        if wc.stepped
+            || front_blocked(&wc, config, building_passages, facade, part_probe)
             || facade.is_door(bx, bz)
         {
             continue;
@@ -11024,11 +12576,9 @@ fn generate_wall_depth_features(
     }
 }
 
-/// Window dressing on punched facades, all of it sub-block: a light-stone
-/// sill under each window, a stair hood over it on ornate fabric, and the
-/// shutters or odd flower pot of a cottage frame style. Ribbon windows get a
-/// slab ledge along every storey instead. Tower shafts take their relief from
-/// their recessed spandrels and get none of it.
+/// Window dressing on punched facades: surrounds, sills under the windows of
+/// dressed fronts and houses, stair hoods, shutters and the odd flower pot.
+/// Towers and ribbons get none.
 fn generate_window_frames(
     editor: &mut WorldEditor,
     element: &ProcessedWay,
@@ -11037,28 +12587,30 @@ fn generate_window_frames(
     facade: &FacadePlan,
     part_probe: Option<(&CoordinateBitmap, &FnvHashSet<(i32, i32)>)>,
 ) {
+    let house = config.category == BuildingCategory::House;
     if !config.punched_windows()
         || config.condition != BuildingCondition::Normal
-        || config.detail == DetailTier::Minimal
+        || (config.detail == DetailTier::Minimal && !house)
     {
         return;
     }
-    let ribbon = config.window_archetype == WindowArchetype::Ribbon;
-    // A masonry tower keeps a stone sill under each of its windows.
-    if config.is_tall_building
-        && !ribbon
-        && config.window_archetype != WindowArchetype::PairedPunched
-    {
+    // A ribbon is a band of glass in a flush wall, and a tower's windows
+    // are too many to dress one by one.
+    if config.is_tall_building || config.window_archetype == WindowArchetype::Ribbon {
         return;
     }
     let top_h = config.start_y_offset + config.building_height;
+    // On a tall front a sill per window is a grid of dots; a coursed front's ledge runs through its sills.
+    let sills = (config.dressed || house)
+        && config.building_height <= 12 * config.floor_cycle + GROUND_FLOOR_BONUS;
+    // Brick and stone outside Europe often hood every window in trim stone.
+    let hooded_front = config.dressed
+        && config.region != BuildingRegion::Europe
+        && is_masonry_wall(config.wall_block)
+        && element_rng(config.style_seed ^ 0x400D_ED00_0000_0001).random_bool(0.35);
     let sill = make_top_slab(trim_slab(config.trim_block));
     let hood_stair = trim_stair(config.trim_block);
-    // Houses carry shutters; city walk-ups and stucco blocks rarely do.
-    let shutter = config
-        .window_frame
-        .and_then(WindowFrameStyle::shutter_block)
-        .filter(|_| config.category == BuildingCategory::House);
+    let shutter = config.shutters;
     let planters = config
         .window_frame
         .is_some_and(WindowFrameStyle::has_planters);
@@ -11088,7 +12640,8 @@ fn generate_window_frames(
         // Surrounds: the jambs on the piers either side of a window, flush
         // in the trim stone, and the head row over it; the band row under
         // it is trim already.
-        if config.surrounds {
+        // On a stepped wall a frame would run round every tread.
+        if config.surrounds && !wc.stepped {
             let head =
                 |c: ColumnFacade, h: i32| glazed_at(h - 1, config, c) && !glazed_at(h, config, c);
             let neighbours: Vec<ColumnFacade> = if slot.is_window() {
@@ -11121,15 +12674,23 @@ fn generate_window_frames(
             }
         }
 
+        // Nothing stands proud of a stepped wall.
+        let proud = !wc.stepped;
+
         // Stair hoods over the window heads of ornate fabric: every storey
         // in North America, the piano nobile alone in Europe.
-        if slot.is_window() {
+        if slot.is_window() && proud {
             for h in (config.ground_floor_top() + 2)..top_h {
                 let hooded = (config.window_archetype == WindowArchetype::Hooded
                     && (config.region != BuildingRegion::Europe
                         || h <= config.ground_floor_top() + 1 + config.floor_cycle))
-                    || config.nobile_storey(h - 1);
-                if hooded && glazed_at(h - 1, config, col) && !glazed_at(h, config, col) {
+                    || config.nobile_storey(h - 1)
+                    || (hooded_front && slot.is_wide_window());
+                if hooded
+                    && config.dressed
+                    && glazed_at(h - 1, config, col)
+                    && !glazed_at(h, config, col)
+                {
                     place(editor, &upside_down_stair(hood_stair, facing), h);
                 }
             }
@@ -11137,16 +12698,7 @@ fn generate_window_frames(
 
         // The bands between storeys.
         for h in (config.ground_floor_top() + 1)..top_h {
-            if config.floor_row(h) != 0 {
-                continue;
-            }
-            if ribbon {
-                if slot != BaySlot::End {
-                    place(editor, &sill, h);
-                }
-                continue;
-            }
-            if !slot.is_window() {
+            if config.floor_row(h) != 0 || !sills || !proud || !slot.is_wide_window() {
                 continue;
             }
             if glazed_at(h + 1, config, col) {
@@ -11172,8 +12724,9 @@ fn generate_window_frames(
             }
         }
         // Ground-floor windows sit on the plinth row.
-        if !ribbon
-            && slot.is_window()
+        if sills
+            && proud
+            && slot.is_wide_window()
             && !door_column
             && !config.shopfront_column(col)
             && glazed_at(config.start_y_offset + 2, config, col)
@@ -11186,7 +12739,8 @@ fn generate_window_frames(
         let Some(shutter_base) = shutter else {
             continue;
         };
-        if slot.is_window() {
+        // On a stepped wall they would stand a tread off their window.
+        if slot.is_window() || !proud {
             continue;
         }
         let shutter_block = make_open_trapdoor(shutter_base, facing);
@@ -11199,10 +12753,250 @@ fn generate_window_frames(
                 slot: window,
                 ..col
             };
-            for h in (config.start_y_offset + 2)..=top_h {
+            // A shopfront keeps its display glass and awning clear.
+            let from = if config.shopfront_column(col) {
+                config.lobby_top() + 1
+            } else {
+                config.start_y_offset + 2
+            };
+            for h in from..=top_h {
                 if glazed_at(h, config, beside) && !(door_column && config.entrance_row(h)) {
                     place(editor, &shutter_block, h);
                 }
+            }
+        }
+    }
+}
+
+/// Fire escape up the street front, two cells deep over two bays; returns whether it was built.
+fn generate_fire_escape(
+    editor: &mut WorldEditor,
+    element: &ProcessedWay,
+    config: &BuildingConfig,
+    building_passages: &CoordinateBitmap,
+    facade: &FacadePlan,
+    footprints: &CoordinateBitmap,
+    eave_strip: &FnvHashSet<(i32, i32)>,
+) -> bool {
+    if !config.fire_escape || !config.punched_windows() {
+        return false;
+    }
+    let columns = facade_columns(&element.nodes, config);
+    // Window bays of each straight street run, by position along it.
+    let mut runs: FnvHashMap<usize, Vec<WallColumn>> = FnvHashMap::default();
+    for wc in columns.iter() {
+        if facade.is_street(wc.x, wc.z) && !wc.stepped {
+            runs.entry(wc.run).or_default().push(*wc);
+        }
+    }
+    let bays_of = |cols: &[WallColumn]| {
+        let mut bays: Vec<i32> = cols
+            .iter()
+            .filter_map(|c| match c.slot() {
+                BaySlot::Window { bay, .. } => Some(bay),
+                _ => None,
+            })
+            .collect();
+        bays.sort_unstable();
+        bays.dedup();
+        bays
+    };
+    let Some((_, mut cols)) = runs
+        .into_iter()
+        .max_by_key(|(run, cols)| (bays_of(cols).len(), std::cmp::Reverse(*run)))
+    else {
+        return false;
+    };
+    cols.sort_by_key(|c| c.pos);
+    cols.dedup_by_key(|c| c.pos);
+    let bays = bays_of(&cols);
+    if bays.len() < 2 {
+        return false;
+    }
+    let pair = (bays[bays.len() / 2 - 1], bays[bays.len() / 2]);
+    let in_bay =
+        |c: &WallColumn, b: i32| matches!(c.slot(), BaySlot::Window { bay, .. } if bay == b);
+    let (Some(first), Some(last)) = (
+        cols.iter().position(|c| in_bay(c, pair.0)),
+        cols.iter().rposition(|c| in_bay(c, pair.1)),
+    ) else {
+        return false;
+    };
+    let span = &cols[first..=last];
+    // The ladder climbs the pier between the two windows.
+    let Some(ladder_at) = span.iter().position(|c| !c.slot().is_window()) else {
+        return false;
+    };
+    // The escape starts over the ground floor, so the door may stand under it.
+    if span
+        .iter()
+        .any(|c| front_blocked(c, config, building_passages, facade, None))
+    {
+        return false;
+    }
+    let abs = config.abs_terrain_offset;
+    let top_h = config.start_y_offset + config.building_height;
+    let decks: Vec<i32> = (config.ground_floor_top() + 1..top_h - 1)
+        .filter(|&h| config.floor_row(h) == 0)
+        .collect();
+    if decks.len() < 3 {
+        return false;
+    }
+    let cell = |c: &WallColumn, depth: i32| (c.x + depth * c.normal.0, c.z + depth * c.normal.1);
+    // A deck takes the place of the sills and hoods along the wall.
+    let free = [
+        AIR,
+        trim_slab(config.trim_block),
+        trim_stair(config.trim_block),
+    ];
+    let open = |editor: &WorldEditor, (x, z): (i32, i32), h: i32, allowed: &[Block]| {
+        (!footprints.contains(x, z) || eave_strip.contains(&(x, z)))
+            && editor
+                .get_block_absolute(x, h + abs, z)
+                .is_none_or(|b| allowed.contains(&b))
+    };
+    // Both rows of cells, from the lowest deck to the top railing.
+    let rows = decks[0]..=decks[decks.len() - 1] + 1;
+    if !span.iter().all(|c| {
+        rows.clone()
+            .all(|h| open(editor, cell(c, 1), h, &free) && open(editor, cell(c, 2), h, &[AIR]))
+    }) {
+        return false;
+    }
+    // The railing runs along the outer row and closes both ends.
+    let mut rails: Vec<(i32, i32)> = span.iter().map(|c| cell(c, 2)).collect();
+    rails.extend([cell(&span[0], 1), cell(&span[span.len() - 1], 1)]);
+    let joined: FnvHashSet<(i32, i32)> = rails
+        .iter()
+        .copied()
+        .chain(span.iter().map(|c| (c.x, c.z)))
+        .collect();
+    for (d, &h) in decks.iter().enumerate() {
+        for (i, c) in span.iter().enumerate() {
+            let facing = facing_for_normal(c.normal.0, c.normal.1);
+            let deck = make_closed_trapdoor(IRON_TRAPDOOR, facing, "top");
+            let (ix, iz) = cell(c, 1);
+            let (ox, oz) = cell(c, 2);
+            // The ladder comes up through every deck but the lowest.
+            if !(i == ladder_at && d > 0) {
+                editor.set_block_with_properties_absolute(
+                    deck.clone(),
+                    ix,
+                    h + abs,
+                    iz,
+                    Some(&free),
+                    None,
+                );
+            }
+            editor.set_block_with_properties_absolute(deck, ox, h + abs, oz, Some(&[AIR]), None);
+            if i == ladder_at && d + 1 < decks.len() {
+                let ladder = cached_prop_block(LADDER, &[("facing", facing)]);
+                for y in h + 1..=decks[d + 1] {
+                    editor.set_block_with_properties_absolute(
+                        ladder.clone(),
+                        ix,
+                        y + abs,
+                        iz,
+                        Some(&[AIR]),
+                        None,
+                    );
+                }
+            }
+        }
+        for &(x, z) in &rails {
+            let joins = |dx: i32, dz: i32| joined.contains(&(x + dx, z + dz));
+            let bar = crate::element_processing::connected_blocks::connected_fence(
+                IRON_BARS,
+                joins(0, -1),
+                joins(0, 1),
+                joins(1, 0),
+                joins(-1, 0),
+            );
+            editor.set_block_with_properties_absolute(bar, x, h + 1 + abs, z, Some(&[AIR]), None);
+        }
+    }
+    true
+}
+
+/// Timber frame in the reveals of wide windows: an open trapdoor against each jamb.
+fn generate_window_reveals(
+    editor: &mut WorldEditor,
+    element: &ProcessedWay,
+    config: &BuildingConfig,
+    building_passages: &CoordinateBitmap,
+    facade: &FacadePlan,
+    part_probe: Option<(&CoordinateBitmap, &FnvHashSet<(i32, i32)>)>,
+) {
+    // On a stepped wall, where shutters cannot hang, their wood frames the opening.
+    if config.window_reveal.is_none() && config.shutters.is_none() {
+        return;
+    }
+    if !config.punched_windows()
+        || config.condition != BuildingCondition::Normal
+        || (config.detail == DetailTier::Minimal && config.category != BuildingCategory::House)
+        || config.is_tall_building
+    {
+        return;
+    }
+    let columns = facade_columns(&element.nodes, config);
+    let cell_at: FnvHashMap<(usize, i32), (i32, i32)> = columns
+        .iter()
+        .map(|c| ((c.run, c.pos), (c.x, c.z)))
+        .collect();
+    let top_h = config.start_y_offset + config.building_height;
+    for wc in columns.iter() {
+        let BaySlot::Window { k, width, .. } = wc.slot() else {
+            continue;
+        };
+        if width < 2
+            || facade.is_door(wc.x, wc.z)
+            || front_blocked(wc, config, building_passages, facade, part_probe)
+        {
+            continue;
+        }
+        // Which way along the wall the run walks, read off a neighbour.
+        let along = (-wc.normal.1, wc.normal.0);
+        let step = |pos: i32, sign: i32| {
+            cell_at
+                .get(&(wc.run, pos))
+                .map(|&(x, z)| sign * ((x - wc.x) * along.0 + (z - wc.z) * along.1).signum())
+        };
+        let Some(forward) = step(wc.pos + 1, 1)
+            .or_else(|| step(wc.pos - 1, -1))
+            .filter(|&s| s != 0)
+        else {
+            continue;
+        };
+        let side = if k == 0 {
+            forward
+        } else if k == width - 1 {
+            -forward
+        } else {
+            continue;
+        };
+        let Some(frame) = config
+            .window_reveal
+            .or(config.shutters.filter(|_| wc.stepped))
+        else {
+            continue;
+        };
+        let block = make_open_trapdoor(frame, facing_for_normal(side * along.0, side * along.1));
+        let col = wc.facade(facade);
+        let from = if config.shopfront_column(col) {
+            config.lobby_top() + 1
+        } else {
+            config.start_y_offset + 1
+        };
+        for h in from..top_h {
+            if glazed_at(h, config, col) {
+                editor.set_block_with_properties_absolute(
+                    block.clone(),
+                    wc.x,
+                    h + config.abs_terrain_offset,
+                    wc.z,
+                    Some(&[AIR]),
+                    None,
+                );
             }
         }
     }
@@ -11267,8 +13061,12 @@ enum CurtainDraw {
 const CURTAIN_PERCENT: u32 = 32;
 /// Share of street-facing walk-up windows, in percent, with an air conditioner.
 const AIR_CONDITIONER_PERCENT: u32 = 10;
+/// The same where window units cool most flats.
+const HOT_AIR_CONDITIONER_PERCENT: u32 = 22;
+/// Upper windows of a block of flats with a condenser hung under them.
+const CONDENSER_PERCENT: u32 = 12;
 /// Share of upper-floor windows, in percent, with a window box.
-const WINDOW_BOX_PERCENT: u32 = 10;
+const WINDOW_BOX_PERCENT: u32 = 18;
 
 /// Curtain colour and hang of one window, if it has one.
 fn window_curtain(
@@ -11313,12 +13111,16 @@ fn has_air_conditioners(
     facade: &FacadePlan,
 ) -> bool {
     let storeys = (config.building_height - config.grammar_anchor()) / config.floor_cycle.max(1);
-    config.region == BuildingRegion::NorthAmerica
+    let walk_up = config.region == BuildingRegion::NorthAmerica
+        && matches!(config.era, ArchEra::Unknown | ArchEra::TraditionalPreWar)
+        && (4..=8).contains(&storeys);
+    let hot = config.hot_window_units
+        && config.era != ArchEra::Contemporary
+        && (2..=24).contains(&storeys);
+    (walk_up || hot)
         && config.recess_windows
         && config.detail != DetailTier::Minimal
         && facade.has_any_street
-        && matches!(config.era, ArchEra::Unknown | ArchEra::TraditionalPreWar)
-        && (4..=8).contains(&storeys)
         && matches!(
             config.category,
             BuildingCategory::Residential | BuildingCategory::Default
@@ -11337,6 +13139,113 @@ fn has_window_boxes(config: &BuildingConfig, tags: &HashMap<String, String>) -> 
         )
         && config.category != BuildingCategory::Hotel
         && is_dwelling(config, tags)
+}
+
+/// A slab over every window head of a plain front in the hot regions, shading it.
+fn generate_sunshades(
+    editor: &mut WorldEditor,
+    element: &ProcessedWay,
+    config: &BuildingConfig,
+    building_passages: &CoordinateBitmap,
+    facade: &FacadePlan,
+    part_probe: Option<(&CoordinateBitmap, &FnvHashSet<(i32, i32)>)>,
+) {
+    let Some(slab) = config.sunshade else {
+        return;
+    };
+    if !config.punched_windows()
+        || config.condition != BuildingCondition::Normal
+        || config.is_tall_building
+        || config.window_archetype == WindowArchetype::Ribbon
+    {
+        return;
+    }
+    let shade = rooftops::bottom_slab(slab);
+    let top_h = config.start_y_offset + config.building_height;
+    for wc in facade_columns(&element.nodes, config).iter() {
+        if wc.stepped
+            || !wc.slot().is_window()
+            || facade.is_door(wc.x, wc.z)
+            || front_blocked(wc, config, building_passages, facade, part_probe)
+        {
+            continue;
+        }
+        let col = wc.facade(facade);
+        let (lx, lz) = (wc.x + wc.normal.0, wc.z + wc.normal.1);
+        for h in (config.start_y_offset + 2)..=top_h {
+            let shop = h <= config.lobby_top() + 1 && config.shopfront_column(col);
+            if !shop && glazed_at(h - 1, config, col) && !glazed_at(h, config, col) {
+                editor.set_block_with_properties_absolute(
+                    shade.clone(),
+                    lx,
+                    h + config.abs_terrain_offset,
+                    lz,
+                    Some(&[AIR]),
+                    None,
+                );
+            }
+        }
+    }
+}
+
+/// A split unit's condenser hung on the wall under the odd window of a plain block of flats.
+fn generate_condensers(
+    editor: &mut WorldEditor,
+    element: &ProcessedWay,
+    config: &BuildingConfig,
+    building_passages: &CoordinateBitmap,
+    facade: &FacadePlan,
+    part_probe: Option<(&CoordinateBitmap, &FnvHashSet<(i32, i32)>)>,
+) {
+    let storeys = (config.building_height - config.grammar_anchor()) / config.floor_cycle.max(1);
+    if !config.split_units
+        || !config.punched_windows()
+        || config.condition != BuildingCondition::Normal
+        || config.detail == DetailTier::Minimal
+        || storeys > 16
+        || !matches!(
+            config.category,
+            BuildingCategory::Residential | BuildingCategory::Default
+        )
+        || !is_dwelling(config, &element.tags)
+    {
+        return;
+    }
+    let abs = config.abs_terrain_offset;
+    let gft = config.ground_floor_top();
+    let top_h = config.start_y_offset + config.building_height;
+    let empty = |editor: &WorldEditor, x: i32, h: i32, z: i32| {
+        editor
+            .get_block_absolute(x, h + abs, z)
+            .is_none_or(|b| b == AIR)
+    };
+    for wc in facade_columns(&element.nodes, config).iter() {
+        let BaySlot::Window { k, width, .. } = wc.slot() else {
+            continue;
+        };
+        if wc.stepped
+            || facade.is_door(wc.x, wc.z)
+            || front_blocked(wc, config, building_passages, facade, part_probe)
+        {
+            continue;
+        }
+        let col = wc.facade(facade);
+        let (lx, lz) = (wc.x + wc.normal.0, wc.z + wc.normal.1);
+        for h in (gft + 2)..top_h {
+            // Under the lowest glass row of an upper window.
+            if !glazed_at(h, config, col) || glazed_at(h - 1, config, col) {
+                continue;
+            }
+            let unit = window_rng(config, wc, storey_of(config, h), 0xC0DE_5E25_0000_0001)
+                .and_then(|mut rng| {
+                    (rng.random_range(0..100u32) < CONDENSER_PERCENT)
+                        .then(|| rng.random_range(0..width))
+                });
+            if unit == Some(k) && empty(editor, lx, h - 1, lz) && empty(editor, lx, h - 2, lz) {
+                editor.set_block_absolute(SMOOTH_STONE, lx, h - 1 + abs, lz, Some(&[AIR]), None);
+            }
+        }
+    }
 }
 
 /// Whether the window over the sill row `h` gets a window box.
@@ -11366,20 +13275,27 @@ fn generate_window_life(
     floor_cells: Option<&FnvHashSet<(i32, i32)>>,
     footprints: Option<&CoordinateBitmap>,
 ) {
+    // A tall block of flats in the hot cities keeps its window units, and only those.
+    let tall = config.is_tall_building;
     if config.condition != BuildingCondition::Normal
         || !config.punched_windows()
-        || config.is_tall_building
+        || (tall && !config.hot_window_units)
         || !is_dwelling(config, &element.tags)
     {
         return;
     }
     // Only in rooms the building has to itself: another part sharing the
     // footprint may build a wall through them after this one.
-    let curtains = config.recess_windows && floor_cells.is_some();
+    let curtains = !tall && config.recess_windows && floor_cells.is_some();
     let no_floor = FnvHashSet::default();
     let floor_cells = floor_cells.unwrap_or(&no_floor);
     let air_con = has_air_conditioners(config, &element.tags, facade);
-    let boxes = has_window_boxes(config, &element.tags);
+    let air_con_percent = if config.hot_window_units {
+        HOT_AIR_CONDITIONER_PERCENT
+    } else {
+        AIR_CONDITIONER_PERCENT
+    };
+    let boxes = !tall && has_window_boxes(config, &element.tags);
     if !(curtains || air_con || boxes) {
         return;
     }
@@ -11456,7 +13372,7 @@ fn generate_window_life(
             {
                 let unit =
                     window_rng(config, wc, storey, 0xA1C0_0D17_0000_0003).and_then(|mut rng| {
-                        (rng.random_range(0..100u32) < AIR_CONDITIONER_PERCENT)
+                        (rng.random_range(0..100u32) < air_con_percent)
                             .then(|| rng.random_range(0..width))
                     });
                 if unit == Some(k) {
@@ -11512,7 +13428,8 @@ fn generate_window_life(
 /// where the wall ends, under a slab cap on a flat roof or under the eave of a
 /// pitched one, a dentil row below it on ornate fabric, and a slab ledge over
 /// the base, which over a shopfront doubles as its cornice. All of it stands a
-/// block out from the wall, clear of the parapet on the wall itself.
+/// block out from the wall, clear of the parapet on the wall itself; a stepped
+/// wall takes a flush trim course instead.
 fn generate_facade_cornices(
     editor: &mut WorldEditor,
     element: &ProcessedWay,
@@ -11540,11 +13457,7 @@ fn generate_facade_cornices(
     // Pre-war masonry, and the rendered fabric of European towns, which is
     // corniced and coursed whatever its wall.
     let europe = config.region == BuildingRegion::Europe;
-    let masonry = matches!(
-        config.era,
-        ArchEra::TraditionalPreWar | ArchEra::HistoricOrnate
-    ) || (config.era == ArchEra::Unknown
-        && (europe || is_masonry_wall(config.wall_block)));
+    let masonry = config.dressed;
     let ornate =
         config.era == ArchEra::HistoricOrnate || config.category == BuildingCategory::Historic;
     let floors = config.building_height / config.floor_cycle;
@@ -11570,9 +13483,57 @@ fn generate_facade_cornices(
     let deep_cornice = config.zoning.is_some_and(|z| z.capital_from.is_some())
         && !has_sloped_roof
         && config.building_height >= 10 * config.floor_cycle;
+    // A bracket under the cornice at every pier of a North American front.
+    let bracketed = masonry
+        && !ornate
+        && !deep_cornice
+        && !has_sloped_roof
+        && floors >= 3
+        && config.region == BuildingRegion::NorthAmerica;
+    // A second course under the top storey of a taller European front.
+    let attic_course = (masonry
+        && europe
+        && floors >= 4
+        && config.zoning.is_none()
+        && element_rng(config.style_seed ^ 0xA771_C000_0000_0001).random_bool(0.5))
+    .then(|| {
+        (course_h + 2..top_h - 1)
+            .rev()
+            .find(|&h| config.floor_row(h) == 0)
+    })
+    .flatten();
 
     for &wc in facade_columns(&element.nodes, config).iter() {
         if front_blocked(&wc, config, building_passages, facade, part_probe) {
+            continue;
+        }
+        // A stepped wall keeps its cornice and courses flush, in trim stone.
+        if wc.stepped {
+            let mut flush = |h: i32| {
+                editor.set_block_absolute(
+                    config.trim_block,
+                    wc.x,
+                    h + config.abs_terrain_offset,
+                    wc.z,
+                    Some(&[config.wall_block]),
+                    None,
+                );
+            };
+            if masonry {
+                flush(top_h);
+            }
+            if config.zoning.is_none() && string_course && course_h < top_h - 1 {
+                flush(course_h);
+            }
+            if config.coursed {
+                for h in (course_h + 2)..(top_h - 1) {
+                    if config.floor_row(h) == 0 {
+                        flush(h);
+                    }
+                }
+            } else if let Some(h) = attic_course {
+                flush(h);
+            }
             continue;
         }
         let (lx, lz) = (wc.x + wc.normal.0, wc.z + wc.normal.1);
@@ -11606,7 +13567,18 @@ fn generate_facade_cornices(
             }
             if dentil {
                 place(ledge.clone(), top_h - 1);
+            } else if bracketed && !wc.slot().is_window() && wc.slot_at(-1).is_window() {
+                place(upside_down_stair(stair, facing), top_h - 1);
             }
+        }
+        if config.coursed {
+            for h in (course_h + 2)..(top_h - 1) {
+                if config.floor_row(h) == 0 {
+                    place(ledge.clone(), h);
+                }
+            }
+        } else if let Some(h) = attic_course {
+            place(ledge.clone(), h);
         }
         if let Some(zoning) = config.zoning {
             // The belt over the base stands out a block further on a corbel,
@@ -11671,7 +13643,8 @@ fn generate_storefront_awnings(
     let awning_y = config.ground_floor_top() - 1 + config.abs_terrain_offset;
 
     for &wc in facade_columns(&element.nodes, config).iter() {
-        if front_blocked(&wc, config, building_passages, facade, None)
+        if wc.stepped
+            || front_blocked(&wc, config, building_passages, facade, None)
             || !config.shopfront_column(wc.facade(facade))
             || !wc.shop_slot().is_window()
         {
@@ -11688,6 +13661,36 @@ fn generate_storefront_awnings(
     }
 }
 
+/// A convex corner a downpipe may stand at: the ring's corner, the pipe's
+/// cell, and the diagonal the corner faces out on.
+#[derive(Clone, Copy)]
+struct PipeCorner {
+    corner: (i32, i32),
+    pipe: (i32, i32),
+    diagonal: (i32, i32),
+}
+
+/// The outline of a building whose walls stepped in under the eave, for the
+/// details planned on the walls the outline would have had.
+struct SteppedOutline<'a> {
+    way: &'a ProcessedWay,
+    /// The facade plan laid on the outline, where the building has one.
+    facade: Option<&'a FacadePlan>,
+    /// The outline's cells outside the stepped walls.
+    strip: &'a FnvHashSet<(i32, i32)>,
+}
+
+impl SteppedOutline<'_> {
+    /// Whether the outline's edge leaving the corner `c` towards `towards`
+    /// stepped in: its line, a block or two along from the corner, is strip.
+    fn edge_stepped(&self, c: (i32, i32), towards: (i32, i32)) -> bool {
+        let step = ((towards.0 - c.0).signum(), (towards.1 - c.1).signum());
+        let len = (towards.0 - c.0).abs().max((towards.1 - c.1).abs());
+        let d = len.clamp(1, 2);
+        self.strip.contains(&(c.0 + step.0 * d, c.1 + step.1 * d))
+    }
+}
+
 /// Vertical drainpipe runs hugging two facade corners, a staple of hand-built city blocks.
 fn generate_corner_downpipes(
     editor: &mut WorldEditor,
@@ -11695,6 +13698,7 @@ fn generate_corner_downpipes(
     config: &BuildingConfig,
     building_passages: &CoordinateBitmap,
     facade: &FacadePlan,
+    stepped: Option<&SteppedOutline>,
 ) {
     if config.building_height < 10
         || config.condition != BuildingCondition::Normal
@@ -11716,17 +13720,24 @@ fn generate_corner_downpipes(
     if !rng.random_bool(0.35) {
         return;
     }
-    let outward = outward_side(&element.nodes);
+    // A stepped building takes the corners its walls had on the outline, a
+    // terraced row's pipes between its houses included, each pipe moved in
+    // with the walls that stepped.
+    let (ring, facade) = match stepped {
+        Some(s) => (s.way, s.facade.unwrap_or(facade)),
+        None => (element, facade),
+    };
+    let outward = outward_side(&ring.nodes);
 
     // Convex corners of two perpendicular walls, with the pipe cell on the
     // diagonal both walls' outward normals point to. Re-entrant corners
     // would put it indoors and mid-wall nodes are not corners at all.
-    let vertices = ring_vertices(&element.nodes);
+    let vertices = ring_vertices(&ring.nodes);
     let n = vertices.len();
     if n < 3 {
         return;
     }
-    let corners: Vec<((i32, i32), (i32, i32))> = (0..n)
+    let corners: Vec<PipeCorner> = (0..n)
         .filter_map(|i| {
             let p = vertices[(i + n - 1) % n];
             let c = vertices[i];
@@ -11734,10 +13745,29 @@ fn generate_corner_downpipes(
             if !corner_is_convex(p, c, q, outward) {
                 return None;
             }
+            if segment_is_stepped(p.0, p.1, c.0, c.1) || segment_is_stepped(c.0, c.1, q.0, q.1) {
+                return None;
+            }
             let (ax, az) = compute_outward_normal(p.0, p.1, c.0, c.1, outward);
             let (bx, bz) = compute_outward_normal(c.0, c.1, q.0, q.1, outward);
             let (dx, dz) = (ax + bx, az + bz);
-            (dx != 0 && dz != 0).then_some((c, (dx, dz)))
+            if dx == 0 || dz == 0 {
+                return None;
+            }
+            let (mut ox, mut oz) = (c.0 + dx, c.1 + dz);
+            if let Some(s) = stepped {
+                if s.edge_stepped(c, p) {
+                    (ox, oz) = (ox - ax, oz - az);
+                }
+                if s.edge_stepped(c, q) {
+                    (ox, oz) = (ox - bx, oz - bz);
+                }
+            }
+            Some(PipeCorner {
+                corner: c,
+                pipe: (ox, oz),
+                diagonal: (dx, dz),
+            })
         })
         .collect();
     if corners.is_empty() {
@@ -11747,19 +13777,25 @@ fn generate_corner_downpipes(
     let pipe = get_wall_piece_for_material(config.wall_block);
     let start_idx = rng.random_range(0..corners.len());
     for k in 0..2usize {
-        let ((px, pz), (dx, dz)) = corners[(start_idx + k * corners.len() / 2) % corners.len()];
+        let PipeCorner {
+            corner: (px, pz),
+            pipe: (ox, oz),
+            diagonal: (dx, dz),
+        } = corners[(start_idx + k * corners.len() / 2) % corners.len()];
         // A pipe off a photographed corner stands in front of the photograph;
         // one off a party-wall corner stands in front of the neighbour.
+        // The corner of the walls, a block or two in where they stepped.
+        let (wx, wz) = (ox - dx, oz - dz);
         if building_passages.contains(px, pz)
             || config.is_flat_column(px, pz)
+            || config.is_flat_column(wx, wz)
             || facade.is_party(px, pz)
         {
             continue;
         }
-        let (ox, oz) = (px + dx, pz + dz);
         // Follow the wall foundation down where the ground drops away.
         let descent = if config.is_ground_level {
-            feature_descent(editor, config, px, pz, ox, oz)
+            feature_descent(editor, config, wx, wz, ox, oz)
         } else {
             0
         };
@@ -11774,6 +13810,64 @@ fn generate_corner_downpipes(
                 Some(&[AIR]),
                 None,
             );
+        }
+    }
+}
+
+/// Pilasters on the piers of every second or third bay, from the ground-floor course to the cornice.
+fn place_pilasters(
+    editor: &mut WorldEditor,
+    element: &ProcessedWay,
+    config: &BuildingConfig,
+    has_sloped_roof: bool,
+    building_passages: &CoordinateBitmap,
+    facade: &FacadePlan,
+    part_probe: Option<(&CoordinateBitmap, &FnvHashSet<(i32, i32)>)>,
+) {
+    let Some((every, block)) = config.pilasters else {
+        return;
+    };
+    let abs = config.abs_terrain_offset;
+    let under = config.top_band.map_or(1, |(_, rows)| rows);
+    let top_h =
+        config.start_y_offset + config.building_height - if has_sloped_roof { 2 } else { under };
+    let from_h = config.lobby_top() + 2;
+    if top_h - from_h < 2 * config.floor_cycle {
+        return;
+    }
+    for wc in facade_columns(&element.nodes, config).iter() {
+        if wc.slot().is_window()
+            || wc.upper.len < 12
+            || facade.is_door(wc.x, wc.z)
+            || front_blocked(wc, config, building_passages, facade, part_probe)
+        {
+            continue;
+        }
+        // The pier between two windows, ahead of every so many bays.
+        let window_at = |dir: i32| {
+            (1..=3).find_map(|d| match wc.slot_at(dir * d) {
+                BaySlot::Window { bay, .. } => Some(bay),
+                _ => None,
+            })
+        };
+        let (Some(_), Some(next)) = (window_at(-1), window_at(1)) else {
+            continue;
+        };
+        // Counted from the nearer end, so the rhythm is the same both ways.
+        if next.min(wc.upper.count - next) % every != 0 {
+            continue;
+        }
+        let (x, z) = (wc.x + wc.normal.0, wc.z + wc.normal.1);
+        let free = (from_h..=top_h).all(|h| {
+            editor
+                .get_block_absolute(x, h + abs, z)
+                .is_none_or(|b| b == AIR)
+        });
+        if !free {
+            continue;
+        }
+        for h in from_h..=top_h {
+            editor.set_block_absolute(block, x, h + abs, z, Some(&[AIR]), None);
         }
     }
 }
@@ -12062,6 +14156,7 @@ fn generate_floors_and_ceilings(
     config: &BuildingConfig,
     generate_non_flat_roof: bool,
     building_passages: &CoordinateBitmap,
+    rail_cells: &CoordinateBitmap,
     open_hall: bool,
     furnished: bool,
     lid: &RoofMembrane,
@@ -12078,14 +14173,14 @@ fn generate_floors_and_ceilings(
     let hidden_lights =
         !furnished && !config.is_abandoned_building && !editor.format().is_sandbox();
 
-    let passage_height = BUILDING_PASSAGE_HEIGHT.min(config.building_height);
+    let passage_height = config.passage_height.min(config.building_height);
 
     for &(x, z) in cached_floor_area {
         let is_passage = building_passages.contains(x, z);
 
-        // Set ground floor - skip in passage zones (the road surface is placed
-        // by the highway processor instead).
-        if !is_passage {
+        // Set ground floor - skip in a road's passage (the road surface is placed
+        // by the highway processor instead); track is laid on the floor.
+        if !is_passage || rail_cells.contains(x, z) {
             editor.set_block_absolute(
                 config.floor_block,
                 x,
@@ -12150,8 +14245,9 @@ fn generate_floors_and_ceilings(
             );
         }
 
-        // Place passage ceiling lintel at the top of the archway
-        if is_passage && passage_height < config.building_height {
+        // Place passage ceiling lintel at the top of the archway; a hall over the
+        // tracks is open above them.
+        if is_passage && passage_height < config.building_height && !config.rail_hall {
             editor.set_block_absolute(
                 config.floor_block,
                 x,
@@ -12201,6 +14297,12 @@ fn calculate_floor_levels(
     }
 
     floor_levels
+}
+
+/// A mapped `roof:shape`, else the one the laser saw (see `survey::roofs`).
+fn read_roof_shape(tags: &HashMap<String, String>) -> Option<&String> {
+    tags.get("roof:shape")
+        .or_else(|| tags.get(crate::survey::roofs::SHAPE_HINT))
 }
 
 /// Calculates roof peak height for chimney placement
@@ -12297,6 +14399,10 @@ pub fn generate_buildings(
 
     // Tank-style structures route to their own cylindrical renderer.
     if crate::element_processing::man_made::is_tank_structure(element) {
+        if storeys_of_m(tank_height_m(&element.tags)) >= TALL_STOREYS {
+            let cells = flood_fill_cache.get_or_compute(element, args.timeout.as_ref());
+            mark_tall(editor, &cells);
+        }
         let processed_element = crate::osm_parser::ProcessedElement::Way(element.clone());
         crate::element_processing::man_made::generate_tank_structure(
             editor,
@@ -12340,7 +14446,12 @@ pub fn generate_buildings(
     let housing_group = element.tags.contains_key("building:part")
         && crate::osm_parser::residential_group_from_seed(group_seed);
     let group_seed = crate::osm_parser::seed_without_residential_mark(group_seed);
-    let floor_cycle = floor_cycle_for(building_type, &element.tags, housing_group);
+    let floor_cycle = floor_cycle_for(
+        building_type,
+        &element.tags,
+        housing_group,
+        element.tags.contains_key("building:levels"),
+    );
 
     // Architectural era, consumed by palettes, frames, depth styles and
     // weathering. A part without a date of its own takes its building's;
@@ -12361,8 +14472,9 @@ pub fn generate_buildings(
             .map(|h| (h * scale_factor) as i32)
             .unwrap_or(0)
     } else if min_level > 0 {
-        // Matches the levels height formula (cycle per level + 2) so a skybridge
-        // floor lines up with the level tops of the buildings it connects
+        // Matches the levels height formula of buildings of two storeys and
+        // more (cycle per level + 2), so a skybridge floor lines up with the
+        // level tops of the buildings it connects
         multiply_scale(min_level * floor_cycle + GROUND_FLOOR_BONUS, scale_factor)
     } else {
         0
@@ -12377,10 +14489,11 @@ pub fn generate_buildings(
         .as_ref()
         .clone();
 
+    // Courtyard cells the inner rings cut out of the outline.
+    let mut hole_points: FnvHashSet<(i32, i32)> = FnvHashSet::default();
     if let Some(holes) = hole_polygons {
         if !holes.is_empty() {
             let outer_area: FnvHashSet<(i32, i32)> = cached_floor_area.iter().copied().collect();
-            let mut hole_points: FnvHashSet<(i32, i32)> = FnvHashSet::default();
 
             for hole in holes {
                 if hole.way.nodes.len() < 3 {
@@ -12422,6 +14535,13 @@ pub fn generate_buildings(
     if cached_footprint_size == 0 {
         return None;
     }
+    // Where track runs through at ground level, the passage is as tall as a train.
+    let rail = ctx.rail_passages.through(&cached_floor_area);
+    let passage_height = if rail == RailThrough::None {
+        BUILDING_PASSAGE_HEIGHT
+    } else {
+        ctx.rail_passages.height
+    };
 
     // Calculate start Y offset
     let start_y_offset = calculate_start_y_offset(editor, element, args, min_level_offset);
@@ -12491,6 +14611,18 @@ pub fn generate_buildings(
                     cached_footprint_size,
                     group_seed,
                 );
+                let storeys = wall_storeys(
+                    element,
+                    building_type,
+                    relation_levels,
+                    cached_footprint_size,
+                    scale_factor,
+                    group_seed,
+                    (min_level_offset, height),
+                );
+                if storeys >= TALL_STOREYS {
+                    mark_tall(editor, &cached_floor_area);
+                }
                 crate::element_processing::parking_garage::generate_parking_garage(
                     editor,
                     &cached_floor_area,
@@ -12539,6 +14671,18 @@ pub fn generate_buildings(
                 cached_footprint_size,
                 group_seed,
             );
+            let storeys = wall_storeys(
+                element,
+                building_type,
+                relation_levels,
+                cached_footprint_size,
+                scale_factor,
+                group_seed,
+                (min_level_offset, height),
+            );
+            if storeys >= TALL_STOREYS {
+                mark_tall(editor, &cached_floor_area);
+            }
             crate::element_processing::parking_garage::generate_parking_garage(
                 editor,
                 &cached_floor_area,
@@ -12590,6 +14734,63 @@ pub fn generate_buildings(
             )
         };
 
+    // An untagged building of storeys rises towards taller tagged neighbours.
+    let blended_height = match ctx.neighbour_heights.get(&element.id) {
+        Some(neighbours_m)
+            if relation_levels.is_none()
+                && min_level == 0
+                // Nor one lifted off the ground by its `min_height`.
+                && min_level_offset == 0
+                && !has_mapped_height(&element.tags)
+                // Garages, kiosks, bungalows, conservatories and small boxes
+                // beside a house stay low.
+                && may_rise_to_neighbours(building_type, &element.tags)
+                && cached_footprint_size as f64 >= MIN_RISING_M2 * scale_factor * scale_factor
+                && matches!(
+                    infer_building_height(
+                        building_type,
+                        &element.tags,
+                        cached_footprint_size,
+                        scale_factor,
+                        group_seed,
+                    ),
+                    InferredHeight::Levels(_)
+                ) =>
+        {
+            rise_to_neighbours(building_height, neighbours_m, floor_cycle, scale_factor)
+        }
+        _ => None,
+    };
+    let building_height = blended_height.unwrap_or(building_height);
+    // Its storeys for the gardens, Tall or Dwelling: as tagged or inferred, or as many as
+    // its neighbours raised it to.
+    let storeys = raised_storeys(
+        wall_storeys(
+            element,
+            building_type,
+            relation_levels,
+            cached_footprint_size,
+            scale_factor,
+            group_seed,
+            (min_level_offset, building_height),
+        ),
+        blended_height,
+        floor_cycle,
+        scale_factor,
+    );
+    // A mobile home is drawn one storey, whatever height Overture guessed for it.
+    let mobile_home = super::mobile_homes::claims(&element.tags)
+        && min_level_offset == 0
+        && hole_points.is_empty();
+    let storeys = if mobile_home {
+        storeys.min(1.0)
+    } else {
+        storeys
+    };
+    if storeys >= TALL_STOREYS {
+        mark_tall(editor, &cached_floor_area);
+    }
+
     // A building going up is a frame of slabs and columns, not a finished shell.
     if BuildingCondition::from_tags(&element.tags) == BuildingCondition::Construction
         && min_level_offset == 0
@@ -12610,7 +14811,7 @@ pub fn generate_buildings(
             scale_factor,
             ctx.building_footprints,
             building_passages,
-            BUILDING_PASSAGE_HEIGHT,
+            passage_height,
         );
         return None;
     }
@@ -12629,6 +14830,36 @@ pub fn generate_buildings(
         region,
     );
     let preset = BuildingStylePreset::for_category(category);
+    let home = Home {
+        part_of_housing: housing_group,
+        footprint_m2: cached_footprint_size as f64 / (scale_factor * scale_factor),
+        on_residential_land: || {
+            editor.garden_land().is_some_and(|land| {
+                cached_floor_area
+                    .iter()
+                    .any(|&(x, z)| land.residential.contains(x, z))
+            })
+        },
+    };
+    // Marked once it is known to stay a building, not a town wall or gate.
+    let garden_grounds =
+        min_level_offset == 0 && has_garden_grounds(category, &element.tags, storeys, home);
+
+    if mobile_home
+        && super::mobile_homes::generate(
+            editor,
+            element,
+            &cached_floor_area,
+            start_y_offset + abs_terrain_offset,
+            args,
+            super::mobile_homes::Surroundings {
+                road_mask: ctx.road_mask,
+                footprints: ctx.building_footprints,
+            },
+        )
+    {
+        return None;
+    }
 
     // Street/neighbor classification: party walls, fronting streets, corner.
     // Sibling part cells: exempt from party-wall detection and kept clear of
@@ -12797,6 +15028,87 @@ pub fn generate_buildings(
         BuildingCondition::Disused | BuildingCondition::Normal => {}
     }
 
+    // A town wall or gate is solid masonry, with nothing of a house about it; a gate or
+    // tower the region gives a pitched roof stays a building under it.
+    let kind = fortifications::kind(&element.tags);
+    let pitched = style.generate_roof && style.roof_type != RoofType::Flat;
+    let is_wall = element.tags.get("building").map(String::as_str) == Some("wall");
+    let gate = kind == Some(fortifications::Kind::Gate);
+    let road_through = |(x, z): &(i32, i32)| gate && ctx.road_mask.contains(*x, *z);
+    if let Some(kind) = kind.filter(|_| is_wall || !pitched) {
+        let passages = cached_floor_area
+            .iter()
+            .copied()
+            .filter(|c| building_passages.contains(c.0, c.1) || road_through(c))
+            .collect();
+        // A tower or short stretch has a level top; a long wall follows the ground.
+        let (w, l) = (
+            bounds.max_x - bounds.min_x + 1,
+            bounds.max_z - bounds.min_z + 1,
+        );
+        let compact = w.max(l) <= 2 * w.min(l)
+            && cached_footprint_size as f64 >= COMPACT_FILL * f64::from(w * l);
+        let level = gate || compact || min_level_offset > 0;
+        fortifications::generate(
+            editor,
+            &fortifications::Mass {
+                cells: &cached_floor_area,
+                block: if is_glass_wall(wall_block) {
+                    STONE_BRICKS
+                } else {
+                    wall_block
+                },
+                height: effective_building_height,
+                base: level.then_some(start_y_offset + abs_terrain_offset),
+                raised: min_level_offset > 0,
+                crenellated: fortifications::crenellated(&element.tags, kind),
+                passages,
+                footings: FnvHashMap::default(),
+                abutting: &|x, z| ctx.building_footprints.contains(x, z),
+                scale: scale_factor,
+            },
+        );
+        return None;
+    }
+    if garden_grounds {
+        let house = mapped_as_house(&element.tags);
+        for &(x, z) in &cached_floor_area {
+            editor.mark_ground(crate::world_editor::GroundMark::Dwelling, x, z);
+            if house {
+                editor.mark_ground(crate::world_editor::GroundMark::House, x, z);
+            }
+        }
+    }
+    // A gate kept as a building still lets the road through.
+    let gate_passages = cached_floor_area
+        .iter()
+        .any(road_through)
+        .then(|| {
+            let (x0, z0, x1, z1) = cached_floor_area.iter().fold(
+                (i32::MAX, i32::MAX, i32::MIN, i32::MIN),
+                |(x0, z0, x1, z1), &(x, z)| (x0.min(x), z0.min(z), x1.max(x), z1.max(z)),
+            );
+            crate::coordinate_system::cartesian::XZBBox::rect_from_min_max(x0, z0, x1, z1).ok()
+        })
+        .flatten()
+        .map(|cells| {
+            let mut through = CoordinateBitmap::new(&cells);
+            for &(x, z) in &cached_floor_area {
+                if building_passages.contains(x, z) || road_through(&(x, z)) {
+                    through.set(x, z);
+                }
+            }
+            through
+        });
+    let building_passages = gate_passages.as_ref().unwrap_or(building_passages);
+
+    // Decided on the walls as mapped, before a roof's rise comes off them.
+    let low_pitch_roof = takes_low_pitch_roof(
+        category,
+        roof_ctx.materials,
+        effective_building_height,
+        floor_cycle,
+    );
     // OSM `height` is the top of the roof. A pitched roof the generator adds
     // takes its rise off the walls, so the building ends up as tall as mapped
     // instead of a roof taller.
@@ -12806,7 +15118,15 @@ pub fn generate_buildings(
         condition,
         effective_building_height,
         cached_footprint_size,
-        category == BuildingCategory::Religious,
+        if category == BuildingCategory::Religious {
+            RisePitch::Steep
+        } else if low_pitch_roof
+            || (outline_is_turned(&element.nodes) && style.roof_type != RoofType::Mansard)
+        {
+            RisePitch::Low
+        } else {
+            RisePitch::Standard
+        },
         scale_factor,
     );
     if let Some(rise) = roof_rise_hint {
@@ -12820,6 +15140,95 @@ pub fn generate_buildings(
             condition,
             BuildingCondition::Construction | BuildingCondition::Ruined
         );
+
+    // An outline traced from the air follows the roof edge. Where a pitched
+    // roof hangs an eave out past its walls, the free walls step in a block
+    // so the eave lands on the outline, not in the street. Party walls stay
+    // shared. The turn is the outline's, as the roof reads it.
+    let outline_turned = outline_is_turned(&element.nodes);
+    let inset = (has_sloped_roof
+        && roof_has_eaves(style.roof_type)
+        // A turned outline keeps its walls, its eave hanging a block past
+        // them: stepped in off the grid a mansard's deck came out as a ragged
+        // strip of membrane down the slates.
+        && !outline_turned
+        && min_level_offset == 0
+        && args.scale >= building_inset::MIN_INSET_SCALE
+        && !element.tags.contains_key("building:part")
+        && !outline_traces_walls(&element.tags)
+        // A photographed facade is fitted to the mapped wall line.
+        && !crate::mapillary::facades::has_building(element.id))
+    // A building against its neighbours steps as the plan made for them all.
+    .then(|| match ctx.inset_plan.get(&element.id) {
+        Some(Some(step)) => building_inset::inset_planned(&element.nodes, &cached_floor_area, step),
+        Some(None) => None,
+        None => building_inset::inset_outline(
+            &element.nodes,
+            &cached_floor_area,
+            ctx.building_footprints,
+        ),
+    })
+    .flatten();
+    // The stepped ring, the cells inside it, and the strip between it and the
+    // outline, which the eave covers.
+    let (inset_way, inset_fill, eave_strip) = match inset {
+        Some(i) => (
+            Some(ProcessedWay {
+                id: element.id,
+                nodes: i.nodes,
+                tags: element.tags.clone(),
+            }),
+            Some(i.fill),
+            i.strip,
+        ),
+        None => (None, None, FnvHashSet::default()),
+    };
+    // Walls of a stepped building that stayed on the outline, beside a
+    // neighbour: their eave hangs out past them as an unstepped one does.
+    let kept_walls: FnvHashSet<(i32, i32)> = match &inset_way {
+        Some(way) => {
+            let outline_ring: FnvHashSet<(i32, i32)> =
+                building_inset::ring_cells(&element.nodes).collect();
+            building_inset::ring_cells(&way.nodes)
+                .filter(|c| outline_ring.contains(c))
+                .collect()
+        }
+        None => FnvHashSet::default(),
+    };
+    // The strip is this building's own: its free sides have no neighbour
+    // within two blocks.
+    let mut own_fill = own_fill;
+    own_fill.extend(eave_strip.iter().copied());
+    let outline = element;
+    let (element, cached_floor_area, bounds) = match (&inset_way, inset_fill) {
+        (Some(way), Some(fill)) => (way, fill, BuildingBounds::from_nodes(&way.nodes)),
+        _ => (element, cached_floor_area, bounds),
+    };
+    // The floor inside the walls, which sets the glass back a block and hangs
+    // the curtains: inside the stepped walls where they stepped. The outline's
+    // fill would take the stepped wall line for floor and keep every window
+    // flush in it.
+    let stepped_floor: Option<FnvHashSet<(i32, i32)>> = inset_way
+        .is_some()
+        .then(|| cached_floor_area.iter().copied().collect());
+    let room_fill = stepped_floor.as_ref().unwrap_or(&own_fill);
+    // Curtains look for the building's own floor round the window; the strip
+    // before a stepped wall is its own too.
+    let window_floor: Option<FnvHashSet<(i32, i32)>> = stepped_floor
+        .as_ref()
+        .map(|f| f.union(&eave_strip).copied().collect());
+    let window_floor = window_floor.as_ref().unwrap_or(&own_fill);
+    // The walls, windows and doors are laid out on the stepped ring. The plan
+    // laid on the outline above chose the style that asked for the step, so
+    // it is drawn again here, where the first one was drawn at all. The
+    // outline's plan stays for the details planned on the outline.
+    let mut outline_facade: Option<FacadePlan> = None;
+    if inset_way.is_some() && cached_footprint_size >= MIN_FACADE_FOOTPRINT {
+        let mut own_cells = own_fill.clone();
+        own_cells.extend(group_other_cells.iter().copied());
+        let stepped = compute_stepped_facade_plan(element, ctx, args.scale, &own_cells, 1);
+        outline_facade = Some(std::mem::replace(&mut facade, stepped));
+    }
 
     // Window layout is picked before the config literal so the frame gate
     // below can see it (frames dress punched windows only).
@@ -12868,25 +15277,8 @@ pub fn generate_buildings(
             BuildingCategory::House | BuildingCategory::Residential | BuildingCategory::Historic
         )
         && element_rng(group_seed ^ 0xF10A_401E_0000_0002).random_bool(0.55);
-    // Window surrounds on historic European stucco and sandstone, which
-    // space their windows a column further apart so a strip of plain wall
-    // stays between two frames. Brick keeps its plain openings.
-    let surrounds = roof_ctx.region == BuildingRegion::Europe
-        && has_windows
-        && !matches!(
-            wall_block,
-            BRICK
-                | TERRACOTTA
-                | RED_TERRACOTTA
-                | ORANGE_TERRACOTTA
-                | BROWN_TERRACOTTA
-                | NETHER_BRICK
-                | RED_NETHER_BRICKS
-                | MUD_BRICKS
-                | GRANITE
-                | POLISHED_GRANITE
-                | BROWN_CONCRETE
-        )
+    // Window surrounds in trim stone; brick takes stone dressings less often.
+    let surrounds = has_windows
         && condition == BuildingCondition::Normal
         && detail >= DetailTier::Standard
         && !is_tall_building
@@ -12895,6 +15287,20 @@ pub fn generate_buildings(
             WindowArchetype::Spaced | WindowArchetype::Portrait | WindowArchetype::Hooded
         )
         && {
+            let brick = matches!(
+                wall_block,
+                BRICK
+                    | TERRACOTTA
+                    | RED_TERRACOTTA
+                    | ORANGE_TERRACOTTA
+                    | BROWN_TERRACOTTA
+                    | NETHER_BRICK
+                    | RED_NETHER_BRICKS
+                    | MUD_BRICKS
+                    | GRANITE
+                    | POLISHED_GRANITE
+                    | BROWN_CONCRETE
+            );
             let chance = match (era, category) {
                 (ArchEra::HistoricOrnate, _) | (_, BuildingCategory::Historic) => 1.0,
                 (ArchEra::TraditionalPreWar, _) => 0.6,
@@ -12905,9 +15311,9 @@ pub fn generate_buildings(
                     | BuildingCategory::Commercial
                     | BuildingCategory::Hotel
                     | BuildingCategory::Office,
-                ) => 0.35,
+                ) => 0.5,
                 _ => 0.0,
-            };
+            } * if brick { 0.6 } else { 1.0 };
             chance > 0.0 && element_rng(group_seed ^ 0xFA5C_4E40_0000_0001).random_bool(chance)
         };
     let piano_nobile = has_windows
@@ -12950,6 +15356,69 @@ pub fn generate_buildings(
         group_seed,
     );
 
+    let dressed = dressed_fabric(
+        category,
+        era,
+        roof_ctx,
+        wall_block,
+        effective_building_height / floor_cycle,
+    );
+    let surrounds = surrounds && dressed;
+    let trim_block = trim_block_for_wall(wall_block, group_seed);
+    let top_band = (!dressed
+        && style.roof_type == RoofType::Flat
+        && min_level_offset == 0
+        && condition == BuildingCondition::Normal
+        && !element.tags.contains_key("building:part"))
+    .then(|| {
+        top_band_for(
+            category,
+            wall_block,
+            effective_building_height,
+            floor_cycle,
+            cached_footprint_size,
+            group_seed,
+        )
+    })
+    .flatten();
+    // A banded top is the front's one accent.
+    let modern_accent = if top_band.is_some() {
+        None
+    } else {
+        modern_accent_for(
+            category,
+            dressed,
+            window_archetype,
+            wall_block,
+            effective_building_height / floor_cycle,
+            is_tall_building,
+            group_seed,
+        )
+    };
+    let window_frame = (has_windows
+        && condition == BuildingCondition::Normal
+        && !is_tall_building
+        && !matches!(
+            window_archetype,
+            WindowArchetype::Ribbon | WindowArchetype::Piers | WindowArchetype::Strips
+        ))
+    .then(|| pick_window_frame(category, era, detail, wall_block, group_seed))
+    .flatten();
+    let shutters = shutters_for(
+        category,
+        dressed,
+        roof_ctx,
+        effective_building_height / floor_cycle,
+        window_frame,
+        group_seed,
+    );
+    let window_reveal = window_reveal_for(category, dressed, roof_ctx, shutters, group_seed);
+    let (hot_window_units, split_units) =
+        air_conditioning_for(roof_ctx, climate, dressed, group_seed);
+    let sunshade = sunshade_for(
+        category, dressed, roof_ctx, wall_block, trim_block, group_seed,
+    );
+
     // Create config struct for cleaner function calls
     let config = BuildingConfig {
         is_ground_level: min_level_offset == 0,
@@ -12961,12 +15430,17 @@ pub fn generate_buildings(
         wall_block,
         floor_block: style.floor_block,
         window_block,
-        accent_block: style.accent_block,
+        // Dressed fabric has one trim stone: bands, quoins and roof line
+        // take the stone of its lintels and cornice.
+        accent_block: if dressed && !masonry_tower {
+            trim_block
+        } else {
+            style.accent_block
+        },
         roof_block: style.roof_block,
         use_horizontal_windows: style.use_horizontal_windows,
         use_accent_roof_line: style.use_accent_roof_line,
         use_accent_lines: style.use_accent_lines && !masonry_tower,
-        use_vertical_accent: style.use_vertical_accent,
         is_abandoned_building,
         has_windows,
         has_garage_door,
@@ -13004,6 +15478,7 @@ pub fn generate_buildings(
             bays.pier += i32::from(surrounds);
             bays
         },
+        eave_outline: inset_way.is_some().then(|| outline.nodes.as_slice().into()),
         spandrel_block: if window_archetype == WindowArchetype::DecoPiers {
             deco_spandrel_for_wall(wall_block, group_seed)
         } else {
@@ -13068,7 +15543,68 @@ pub fn generate_buildings(
         } else {
             GroundFloor::Plain
         },
-        trim_block: trim_block_for_wall(wall_block, group_seed),
+        trim_block,
+        dressed,
+        low_pitch_roof,
+        window_reveal,
+        window_pane: window_pane_for(
+            category,
+            dressed,
+            window_archetype,
+            window_block,
+            window_reveal.is_some() || is_tall_building,
+            group_seed,
+        ),
+        shutters,
+        sunshade,
+        hot_window_units,
+        split_units,
+        // Surrounds and shutters dress the piers themselves.
+        pilasters: if surrounds || shutters.is_some() {
+            None
+        } else {
+            pilasters_for(
+                category,
+                era,
+                dressed,
+                window_archetype,
+                wall_block,
+                trim_block,
+                effective_building_height / floor_cycle,
+                is_tall_building,
+                group_seed,
+            )
+        },
+        coursed: dressed
+            && roof_ctx.region == BuildingRegion::Europe
+            && effective_building_height >= 4 * floor_cycle
+            && !is_tall_building
+            && element_rng(group_seed ^ 0xC0A5_ED00_0000_0001).random_bool(
+                if roof_ctx.materials == MaterialRegion::France || era == ArchEra::HistoricOrnate {
+                    0.5
+                } else {
+                    0.15
+                },
+            ),
+        // A North American brick walk-up of four to eight storeys.
+        fire_escape: roof_ctx.region == BuildingRegion::NorthAmerica
+            && dressed
+            && min_level_offset == 0
+            && condition == BuildingCondition::Normal
+            && (4..=8).contains(&(effective_building_height / floor_cycle))
+            && matches!(
+                category,
+                BuildingCategory::Residential | BuildingCategory::Default
+            )
+            && is_masonry_wall(wall_block)
+            && facade.has_any_street
+            && !element.tags.contains_key("building:part")
+            // Hytale has no trapdoor for its decks.
+            && !args.hytale
+            && element_rng(group_seed ^ 0xF12E_E5CA_0000_0001).random_bool(0.4),
+        window_panel: modern_accent.filter(|a| a.1).map(|a| a.0),
+        floor_band: modern_accent.filter(|a| !a.1).map(|a| a.0),
+        top_band,
         surrounds,
         shop_frame: {
             let options = shop_frame_options(roof_ctx.region);
@@ -13077,20 +15613,32 @@ pub fn generate_buildings(
         recess_windows: has_windows && !args.interior,
         shell_glass: shell_glass_for(element, category, building_type, wall_block, args.interior),
         region: roof_ctx.region,
-        window_frame: (has_windows
-            && condition == BuildingCondition::Normal
-            && !is_tall_building
-            && !matches!(
-                window_archetype,
-                WindowArchetype::Ribbon | WindowArchetype::Piers | WindowArchetype::Strips
-            ))
-        .then(|| pick_window_frame(category, era, detail, wall_block, group_seed))
-        .flatten(),
+        window_frame,
         facade_shell: photo_shell_columns(element),
         // Filled in below, once the podium massing has settled the wall height
         // `building_facades::collect` will be given.
         preset_shell: Arc::default(),
+        passage_height,
+        rail_hall: min_level_offset == 0
+            && rail == RailThrough::Into
+            && (rail_hall_type(building_type)
+                || effective_building_height <= 2 * floor_cycle + GROUND_FLOOR_BONUS),
     };
+    // Over water a building stands on its plinth down to the bed, a houseboat on its hull;
+    // a boathouse keeps the water it shelters.
+    if config.is_ground_level && building_type != "boathouse" {
+        let base = if element.tags.get("building").map(String::as_str) == Some("houseboat") {
+            DARK_OAK_PLANKS
+        } else {
+            base_course_for_wall(config.wall_block)
+        };
+        for &(x, z) in &cached_floor_area {
+            if editor.is_mapped_water(x, z) {
+                editor.register_support_column(x, z, base);
+            }
+        }
+    }
+
     // A department store's sales floors want wall, not daylight.
     let config = match closed_retail_bays(element, &config, cached_footprint_size, scale_factor) {
         Some(bays) => BuildingConfig { bays, ..config },
@@ -13295,7 +15843,7 @@ pub fn generate_buildings(
         has_sloped_roof,
         effective_passages,
         &facade,
-        Some(&own_fill),
+        Some(room_fill),
     );
 
     // A courtyard ring's normals point into the building, so its glass
@@ -13326,6 +15874,23 @@ pub fn generate_buildings(
     for plan in &entrance_plans {
         render_entrance(editor, plan, &config, args);
     }
+    // A mapped entrance node sets a door of its own where it was mapped,
+    // which the stepped wall no longer overwrites: the building's door
+    // stands a block in, on the wall. An entrance came before the building
+    // and its door is taken away; a door node comes after and sets none.
+    for node in &outline.nodes {
+        if eave_strip.contains(&(node.x, node.z))
+            && (node.tags.contains_key("door") || node.tags.contains_key("entrance"))
+        {
+            for (y, door) in [(1, DARK_OAK_DOOR_LOWER), (2, DARK_OAK_DOOR_UPPER)] {
+                editor.set_block(AIR, node.x, y, node.z, Some(&[door]), None);
+            }
+            editor.step_door_in(node.x, node.z);
+        }
+    }
+    for (x, z) in generate_loading_doors(editor, element, &config, effective_passages, &facade) {
+        facade.mark_door_column(x, z);
+    }
 
     // Facade relief: window dressing, balconies, wall depth features and
     // cornices. building:part sub-sections get them too, with a footprint
@@ -13342,6 +15907,14 @@ pub fn generate_buildings(
         FnvHashSet::default()
     };
     let part_probe = is_part.then_some((ctx.building_footprints, &part_own_cells));
+    // A stepped building plans its balconies and downpipes on its outline,
+    // where the walls on the outline would have carried them, and hangs them
+    // on the stepped walls.
+    let stepped_outline = inset_way.as_ref().map(|_| SteppedOutline {
+        way: outline,
+        facade: outline_facade.as_ref(),
+        strip: &eave_strip,
+    });
     generate_window_frames(
         editor,
         element,
@@ -13350,7 +15923,17 @@ pub fn generate_buildings(
         &facade,
         part_probe,
     );
-    if !is_part {
+    let fire_escape = !is_part
+        && generate_fire_escape(
+            editor,
+            element,
+            &config,
+            effective_passages,
+            &facade,
+            ctx.building_footprints,
+            &eave_strip,
+        );
+    if !is_part && !fire_escape {
         generate_balconies(
             editor,
             element,
@@ -13358,6 +15941,7 @@ pub fn generate_buildings(
             effective_passages,
             &facade,
             Some(ctx.building_footprints),
+            stepped_outline.as_ref(),
         );
     }
     generate_window_life(
@@ -13367,8 +15951,32 @@ pub fn generate_buildings(
         effective_passages,
         &facade,
         part_probe,
-        (!is_part && group_other_cells.is_empty()).then_some(&own_fill),
+        (!is_part && group_other_cells.is_empty()).then_some(window_floor),
         Some(ctx.building_footprints),
+    );
+    generate_window_reveals(
+        editor,
+        element,
+        &config,
+        effective_passages,
+        &facade,
+        part_probe,
+    );
+    generate_sunshades(
+        editor,
+        element,
+        &config,
+        effective_passages,
+        &facade,
+        part_probe,
+    );
+    generate_condensers(
+        editor,
+        element,
+        &config,
+        effective_passages,
+        &facade,
+        part_probe,
     );
     generate_wall_depth_features(
         editor,
@@ -13393,7 +16001,14 @@ pub fn generate_buildings(
     // Add corner quoins (accent-block columns at building corners)
     if !is_part {
         generate_corner_quoins(editor, element, &config, effective_passages, &facade);
-        generate_corner_downpipes(editor, element, &config, effective_passages, &facade);
+        generate_corner_downpipes(
+            editor,
+            element,
+            &config,
+            effective_passages,
+            &facade,
+            stepped_outline.as_ref(),
+        );
         generate_storefront_awnings(editor, element, &config, effective_passages, &facade);
     }
 
@@ -13415,7 +16030,9 @@ pub fn generate_buildings(
             &config,
             style.generate_roof,
             effective_passages,
+            &ctx.rail_passages.cells,
             open_hall
+                || config.rail_hall
                 || config.shell_glass == ShellGlass::Hall
                 || config.category == BuildingCategory::Greenhouse,
             interior_plan.is_some(),
@@ -13427,8 +16044,8 @@ pub fn generate_buildings(
         // This creates the left/right corridor walls inside the archway.
         // Only applies to ground-level buildings (elevated building:parts are
         // above the passage and should not get corridor walls).
-        if !effective_passages.is_empty() {
-            let passage_height = BUILDING_PASSAGE_HEIGHT.min(config.building_height);
+        if !effective_passages.is_empty() && !config.rail_hall {
+            let passage_height = config.passage_height.min(config.building_height);
             let abs = config.abs_terrain_offset;
             for &(x, z) in &cached_floor_area {
                 if effective_passages.contains(x, z) {
@@ -13450,7 +16067,7 @@ pub fn generate_buildings(
 
         // Generate interior features
         if let Some(plan) = &interior_plan {
-            let floor_levels = if open_hall {
+            let floor_levels = if open_hall || config.rail_hall {
                 vec![start_y_offset]
             } else {
                 storey_levels
@@ -13485,6 +16102,7 @@ pub fn generate_buildings(
                     plan,
                     abandoned: is_abandoned_building,
                     passages: effective_passages,
+                    passage_height: config.passage_height,
                     entrances: &entrances,
                     bounds: ((bounds.min_x, bounds.min_z), (bounds.max_x, bounds.max_z)),
                     claims: ctx.interior_uses.claims(element.id),
@@ -13524,15 +16142,21 @@ pub fn generate_buildings(
     );
     if style.generate_roof && !skip_roof {
         // Terraced fabric prefers its ridge parallel to the fronting street.
+        // Its front is the outline's: stepped walls choose none of their own.
+        let front_plan = outline_facade.as_ref().unwrap_or(&facade);
         let preferred_ridge_along_x =
             if matches!(building_type, "terrace" | "semidetached_house") || roof_ctx.attached {
-                facade
+                front_plan
                     .front_segment
-                    .and_then(|i| facade.segments[i].as_ref())
+                    .and_then(|i| front_plan.segments[i].as_ref())
                     .map(|seg| seg.normal.0 == 0)
             } else {
                 None
-            };
+            }
+            // Else the ridge runs along the outline's longer side: a half
+            // that kept its width but stepped its front and back must not
+            // turn its ridge across its twin's.
+            .or_else(|| inset_way.is_some().then(|| longer_along_u(&outline.nodes)));
         let covered_by_sibling_part = roof_ctx.enclosed
             || (is_part
                 && cached_floor_area
@@ -13565,10 +16189,23 @@ pub fn generate_buildings(
                 for dx in -2..=2 {
                     for dz in -2..=2 {
                         let c = (x + dx, z + dz);
-                        if !roof_cells.contains(&c)
-                            && (ctx.building_footprints.contains(c.0, c.1)
-                                || group_other_cells.contains(&c))
-                        {
+                        if roof_cells.contains(&c) {
+                            continue;
+                        }
+                        // Stepped walls keep their eave on the outline: in its
+                        // own strip, never past it. A wall that stayed on the
+                        // line hangs its eave out a block, over a gap to a
+                        // neighbour a cell away as well, which closes it.
+                        let foreign = if inset_way.is_none() || hole_points.contains(&c) {
+                            ctx.building_footprints.contains(c.0, c.1)
+                        } else {
+                            let beside_kept = (-1..=1).any(|ox| {
+                                (-1..=1).any(|oz| kept_walls.contains(&(c.0 + ox, c.1 + oz)))
+                            });
+                            !eave_strip.contains(&c)
+                                && !(beside_kept && !ctx.building_footprints.contains(c.0, c.1))
+                        };
+                        if foreign || group_other_cells.contains(&c) {
                             blocked.insert(c);
                         }
                     }
@@ -13597,6 +16234,7 @@ pub fn generate_buildings(
             roof_ctx.region,
             &hole_rings,
             eave_blocked,
+            outline_turned,
         );
 
         // Tower ring above the podium roof; full height so top-floor
@@ -13796,7 +16434,8 @@ fn generate_parapet(
         if party && neighbour_reaches_roof(editor, &dist, x, z, surface_y) {
             continue;
         }
-        editor.set_block_absolute(config.wall_block, x, course_y, z, Some(&[AIR]), None);
+        let course = config.top_band.map_or(config.wall_block, |(band, _)| band);
+        editor.set_block_absolute(course, x, course_y, z, Some(&[AIR]), None);
         if party {
             continue;
         }
@@ -13983,6 +16622,7 @@ fn generate_building_roof(
     region: BuildingRegion,
     holes: &[&[ProcessedNode]],
     eave_blocked: FnvHashSet<(i32, i32)>,
+    outline_turned: bool,
 ) {
     // Dormers by region and kind: most pre-war European town roofs and
     // nearly every mansard carry a row, American roofs far fewer (Cape Cods).
@@ -14026,10 +16666,7 @@ fn generate_building_roof(
     let modeled_part_roof = element.tags.contains_key("building:part")
         && (element.tags.contains_key("roof:colour") || element.tags.contains_key("roof:material"));
 
-    // A glass curtain wall is three window rows to one wall row, so a glass
-    // roof continuing it takes the window glass, not the band's.
-    let curtain_glass = (is_glass_wall(config.wall_block) && is_glass_wall(config.window_block))
-        .then_some(config.window_block);
+    let curtain_glass = curtain_roof_glass(&element.tags, config.wall_block, config.window_block);
 
     let trim = RoofTrim {
         gable_block: (!is_glass_wall(config.wall_block)).then_some(config.wall_block),
@@ -14046,9 +16683,17 @@ fn generate_building_roof(
         steep_cap: region == BuildingRegion::Europe,
         short_eave: region == BuildingRegion::Europe && town_block,
         blocked: eave_blocked,
-        tone_patches: config.condition == BuildingCondition::Normal
-            && !element.tags.contains_key("roof:colour")
-            && !element.tags.contains_key("roof:material"),
+        // A mansard keeps its eaves and dormers, as no slab roof can stand in for it.
+        turned: outline_turned && style.roof_type != RoofType::Mansard,
+        low_pitch: config.low_pitch_roof && !steep_gable,
+        // Not with interiors, whose glass is there to be seen through: a
+        // backing would close the view out of the storeys behind it.
+        glass_skin: (config.glass_backed() && is_sloped_glass_facade(&element.tags)).then(|| {
+            GlassSkin {
+                floor_cycle: config.floor_cycle.max(1),
+                floor_row_y: config.start_y_offset + config.grammar_anchor(),
+            }
+        }),
     };
 
     // Generate the roof using the pre-determined roof type from style
@@ -14362,7 +17007,6 @@ fn generate_inset_tiers(
 ) -> Option<i32> {
     let mut current_base = base_rel;
     let mut placed = false;
-    let mut variety = WallVariety::new(config);
     // A finned curtain sets its glass a ring in, so the backing goes a ring
     // further.
     let fins = config.finned_curtain();
@@ -14407,7 +17051,6 @@ fn generate_inset_tiers(
                         config,
                         col,
                         photo,
-                        &mut variety,
                     );
                     let band =
                         block == config.accent_block && config.floor_row(current_base + h) == 0;
@@ -14593,7 +17236,6 @@ fn generate_crown_screen(
         ..config.clone()
     };
     let columns = facade_columns(&element.nodes, config);
-    let mut variety = WallVariety::new(config);
     let deck = config.start_y_offset + config.building_height + 1;
     let top = full.start_y_offset + full.building_height;
     let abs = config.abs_terrain_offset;
@@ -14610,8 +17252,7 @@ fn generate_crown_screen(
         // so the louvres sit a block behind the piers.
         let louvre = make_open_trapdoor(IRON_TRAPDOOR, facing_for_normal(wc.normal.0, wc.normal.1));
         for h in deck + 1..=top {
-            let block =
-                determine_wall_block_at_position(wc.x, h, wc.z, &full, col, flat, &mut variety);
+            let block = determine_wall_block_at_position(wc.x, h, wc.z, &full, col, flat);
             let glazed = !flat && (block == config.window_block || block == GLASS);
             if glazed && !curtain && wc.normal != (0, 0) {
                 editor.set_block_with_properties_absolute(
@@ -14685,6 +17326,258 @@ fn generate_setback_crown(
     }
 
     true
+}
+
+/// Storeys from which a building counts as tall: five and more. Near one open ground stays
+/// paved, and none is a house with a garden.
+const TALL_STOREYS: f64 = 4.5;
+
+/// Storeys of wall `m` metres make: three-metre storeys over the ground floor's extra two.
+fn storeys_of_m(m: f64) -> f64 {
+    ((m - f64::from(GROUND_FLOOR_BONUS)) / 3.0).max(0.0)
+}
+
+/// Storeys of wall a building stands, from its tags as the generator reads them rather
+/// than its height in blocks, which the scale rounds: a mapped `height` less the roof over
+/// it, else `building:levels` or its relation's, else the storeys the generator infers.
+/// A part raised off the ground counts up to its top, from `raised` (its lift and wall
+/// height in blocks).
+fn wall_storeys(
+    element: &ProcessedWay,
+    building_type: &str,
+    relation_levels: Option<i32>,
+    footprint_cells: usize,
+    scale_factor: f64,
+    group_seed: u64,
+    raised: (i32, i32),
+) -> f64 {
+    if raised.0 > 0 {
+        return storeys_of_m(f64::from(raised.0 + raised.1) / scale_factor);
+    }
+    if let Some(height) = parse_building_height_tag(&element.tags) {
+        return storeys_of_m(height - mapped_roof_rise_m(element, height, scale_factor));
+    }
+    let levels = element
+        .tags
+        .get("building:levels")
+        .and_then(|l| l.trim().parse::<f64>().ok())
+        .filter(|l| l.is_finite() && *l >= 1.0)
+        .or(relation_levels.map(f64::from));
+    if let Some(levels) = levels {
+        return levels;
+    }
+    match infer_building_height(
+        building_type,
+        &element.tags,
+        footprint_cells,
+        scale_factor,
+        group_seed,
+    ) {
+        InferredHeight::Levels(levels) => levels,
+        InferredHeight::HallBlocks(blocks) => storeys_of_m(f64::from(blocks)),
+    }
+}
+
+/// The roof under a mapped `height`, in metres: none on a flat roof, a mapped
+/// `roof:height`, else the low pitch over the shorter half-span the generator draws.
+fn mapped_roof_rise_m(element: &ProcessedWay, height: f64, scale_factor: f64) -> f64 {
+    let tags = &element.tags;
+    if read_roof_shape(tags).map(|s| s.trim()) == Some("flat") {
+        return 0.0;
+    }
+    let tagged = tags
+        .get("roof:height")
+        .and_then(|v| v.trim_end_matches('m').trim().parse::<f64>().ok())
+        .filter(|m| m.is_finite() && *m > 0.0);
+    if let Some(rise) = tagged {
+        return rise.min(height - height.min(3.0));
+    }
+    let nodes = &element.nodes;
+    let mut diameter: f64 = 1.0;
+    for (i, a) in nodes.iter().enumerate() {
+        for b in &nodes[i + 1..] {
+            diameter = diameter.max(f64::from(a.x - b.x).hypot(f64::from(a.z - b.z)));
+        }
+    }
+    let area = nodes
+        .windows(2)
+        .map(|w| f64::from(w[0].x) * f64::from(w[1].z) - f64::from(w[1].x) * f64::from(w[0].z))
+        .sum::<f64>()
+        .abs()
+        / 2.0;
+    let short_half_m = area / diameter / 2.0 / scale_factor;
+    (short_half_m * 0.85).min(9.0).min(height * 0.375)
+}
+
+/// A tank's height in metres: its tag, else what its renderer stands it at untagged. A
+/// storage tank is sized by its footprint and counts as low.
+fn tank_height_m(tags: &HashMap<String, String>) -> f64 {
+    if let Some(h) = parse_building_height_tag(tags) {
+        return h;
+    }
+    let kind = |k: &str| tags.get(k).map(String::as_str);
+    match kind("man_made").or(kind("building")) {
+        Some("water_tower") => 20.0,
+        Some("silo") => 25.0,
+        _ => 0.0,
+    }
+}
+
+/// Storeys of wall a building stands for its grounds: `tagged` as `wall_storeys` reads
+/// them, or the storeys `rise_to_neighbours` raised it to, `blended` blocks at `floor_cycle`,
+/// when that is more. A house raised to five storeys in a row of five is a tall building,
+/// and no house with a garden.
+fn raised_storeys(tagged: f64, blended: Option<i32>, floor_cycle: i32, scale_factor: f64) -> f64 {
+    match blended {
+        Some(height) => tagged.max(
+            ((f64::from(height) / scale_factor - f64::from(GROUND_FLOOR_BONUS))
+                / f64::from(floor_cycle.max(1)))
+            .round(),
+        ),
+        None => tagged,
+    }
+}
+
+/// Marks a footprint as a tall building's, near which open ground stays paved.
+fn mark_tall(editor: &mut WorldEditor, cells: &[(i32, i32)]) {
+    for &(x, z) in cells {
+        editor.mark_ground(crate::world_editor::GroundMark::Tall, x, z);
+    }
+}
+
+/// `building` values that are no home whatever their size: stations, sheds of trades,
+/// halls, civic buildings, and the structures of utilities.
+const NOT_HOMES: &[&str] = &[
+    "train_station",
+    "transportation",
+    "service",
+    "sports_hall",
+    "sports_centre",
+    "stadium",
+    "grandstand",
+    "pavilion",
+    "riding_hall",
+    "toilets",
+    "parking",
+    "power",
+    "substation",
+    "fire_station",
+    "police",
+    "military",
+    "boathouse",
+    "houseboat",
+    "gatehouse",
+    "roof",
+    "container",
+    "construction",
+    "bridge",
+    "water_tower",
+    "silo",
+    "storage_tank",
+    "museum",
+    "townhall",
+    "library",
+    "community_centre",
+    "monastery",
+];
+
+/// Whether a building is mapped as a house: its type a house, bungalow or farmhouse,
+/// or its `building:use` residential. Its garden reaches into school and hospital
+/// grounds, where other buildings' do not.
+fn mapped_as_house(tags: &HashMap<String, String>) -> bool {
+    matches!(
+        tags.get("building").map(String::as_str),
+        Some("house" | "detached" | "semidetached_house" | "terrace" | "bungalow" | "farm")
+    ) || matches!(
+        tags.get("building:use").map(String::as_str),
+        Some("residential" | "apartments" | "house")
+    )
+}
+
+/// Largest a plain building stands, in m², to count as a house off residential land.
+const HOUSE_FOOTPRINT_M2: f64 = 250.0;
+
+/// What a building's surroundings say about it being a home.
+struct Home<F: FnOnce() -> bool> {
+    /// A part of a building of a housing type (`residential_group_from_seed`).
+    part_of_housing: bool,
+    /// Footprint in m².
+    footprint_m2: f64,
+    /// Whether the footprint reaches residential land; asked only of plain buildings.
+    on_residential_land: F,
+}
+
+/// Whether a building is someone's home, whose grounds are a garden: a house or block of
+/// flats, a farmhouse (not its barns), a listed house, or a plain building with no other
+/// use mapped on it that stands on residential land or is the size of a house. A part is
+/// one where its building is housing or it is mapped as a home itself. A footprint only
+/// Overture knows is one where Overture calls it a house or flats, or a plain one of a
+/// house's size on residential land: its classes are coarse, a barn comes as a farm. Nothing
+/// with a shop, office, restaurant or other use mapped on it is.
+fn is_home(
+    category: BuildingCategory,
+    tags: &HashMap<String, String>,
+    home: Home<impl FnOnce() -> bool>,
+) -> bool {
+    let building = tags
+        .get("building")
+        .or_else(|| tags.get("building:part"))
+        .map_or("yes", String::as_str);
+    let mapped_home = matches!(
+        BuildingCategory::from_building_type(building),
+        BuildingCategory::House | BuildingCategory::Residential
+    );
+    let other_use = [
+        "shop",
+        "office",
+        "craft",
+        "amenity",
+        "leisure",
+        "industrial",
+        "railway",
+    ]
+    .iter()
+    .any(|k| tags.contains_key(*k))
+        || tags
+            .get("tourism")
+            .is_some_and(|t| !matches!(t.as_str(), "guest_house" | "chalet" | "apartment"))
+        || tags
+            .get("building:use")
+            .is_some_and(|u| !matches!(u.as_str(), "residential" | "apartments" | "house"));
+    if other_use {
+        return false;
+    }
+    if !tags.contains_key("building") && tags.contains_key("building:part") {
+        return home.part_of_housing || mapped_home;
+    }
+    if tags.get("source").map(String::as_str) == Some("overture_maps") {
+        return mapped_home
+            || (building == "yes"
+                && home.footprint_m2 <= HOUSE_FOOTPRINT_M2
+                && (home.on_residential_land)());
+    }
+    match category {
+        BuildingCategory::House | BuildingCategory::Residential => true,
+        BuildingCategory::Farm => building == "farm",
+        BuildingCategory::Historic => building == "farm" || mapped_home,
+        BuildingCategory::Default => {
+            !NOT_HOMES.contains(&building)
+                && (home.footprint_m2 <= HOUSE_FOOTPRINT_M2
+                    || tags.contains_key("building:use")
+                    || (home.on_residential_land)())
+        }
+        _ => false,
+    }
+}
+
+/// A home of at most four storeys and about 800 m², whose grounds are a garden.
+fn has_garden_grounds(
+    category: BuildingCategory,
+    tags: &HashMap<String, String>,
+    storeys: f64,
+    home: Home<impl FnOnce() -> bool>,
+) -> bool {
+    storeys < TALL_STOREYS && home.footprint_m2 <= 800.0 && is_home(category, tags, home)
 }
 
 fn multiply_scale(value: i32, scale_factor: f64) -> i32 {
@@ -14941,9 +17834,24 @@ struct RoofTrim {
     short_eave: bool,
     /// Cells of neighbouring buildings no eave or trim may reach.
     blocked: FnvHashSet<(i32, i32)>,
-    /// Small patches of a same-tone sibling covering on the slopes, as
-    /// replaced tiles weather apart. Off where the roof is mapped.
-    tone_patches: bool,
+    /// Outline turned off the grid: laid 1:2 in slabs over a one-cell eave.
+    turned: bool,
+    /// A low 1:2 pitch in slabs whatever the span.
+    low_pitch: bool,
+    /// A sloped glass facade (`is_sloped_glass_facade`): a skillion or
+    /// pyramidal roof is built as a skin of glass on a backing, on the walls'
+    /// storeys.
+    glass_skin: Option<GlassSkin>,
+}
+
+/// The storeys a sloped glass facade's backing marks: a spandrel on every
+/// floor row, as on the walls beneath it, so the floor lines step in with
+/// the taper.
+#[derive(Clone, Copy, Debug)]
+struct GlassSkin {
+    floor_cycle: i32,
+    /// A floor row, relative to the terrain like the roof heights.
+    floor_row_y: i32,
 }
 
 impl RoofConfig {
@@ -15311,6 +18219,10 @@ fn place_roof_blocks_with_stairs(
     stair_direction_fn: impl Fn(i32, i32, i32) -> BlockWithProperties,
     footprint: Option<&FnvHashSet<(i32, i32)>>,
 ) {
+    if let Some(skin) = config.trim.glass_skin {
+        place_glass_skin(editor, floor_area, roof_heights, config, skin);
+        return;
+    }
     // Use empty blacklist to allow overwriting wall/ceiling blocks
     let replace_any: &[Block] = &[];
 
@@ -15357,6 +18269,80 @@ fn place_roof_blocks_with_stairs(
                     Some(replace_any),
                 );
             }
+        }
+    }
+}
+
+/// A sloped glass facade over `floor_area`: glass where a cell faces the
+/// open air, the curtain wall's backing in the cell behind it (a spandrel on
+/// the floor rows), and nothing further in. Filled solid, a face hundreds of
+/// blocks tall turns into a block of clear glass the inner parts show through.
+///
+/// A cell faces the air from just above its lowest neighbour's roof (or from
+/// the roof's base, beside a cell outside the area) up to its own; the cells
+/// below that, down to where its neighbours' glass starts and at least one,
+/// stand behind glass.
+fn place_glass_skin(
+    editor: &mut WorldEditor,
+    floor_area: &[(i32, i32)],
+    roof_heights: &FnvHashMap<(i32, i32), i32>,
+    config: &RoofConfig,
+    skin: GlassSkin,
+) {
+    let replace_any: &[Block] = &[];
+    let base = config.base_height;
+    let glass_from = |x: i32, z: i32| -> i32 {
+        let top = roof_heights[&(x, z)];
+        ROOF_SIDES
+            .iter()
+            .map(|&(dx, dz)| roof_heights.get(&(x + dx, z + dz)).map_or(base, |&h| h + 1))
+            .min()
+            .unwrap_or(base)
+            .clamp(base, top)
+    };
+    let starts: FnvHashMap<(i32, i32), i32> = floor_area
+        .iter()
+        .map(|&(x, z)| ((x, z), glass_from(x, z)))
+        .collect();
+    let backing = glass_backing(config.roof_block);
+    for &(x, z) in floor_area {
+        let top = roof_heights[&(x, z)];
+        let glass = starts[&(x, z)];
+        // Behind the glass of the neighbours its own glass stands above, and
+        // at least a block under its own: a cell no lower than its neighbours
+        // shows a single block of glass, with the open inside right under it.
+        let behind = ROOF_SIDES
+            .iter()
+            .filter_map(|&(dx, dz)| starts.get(&(x + dx, z + dz)).copied())
+            .min()
+            .unwrap_or(glass)
+            .min(glass - 1)
+            .max(base);
+        for y in behind..glass {
+            let row = (y - skin.floor_row_y).rem_euclid(skin.floor_cycle);
+            let block = if row == 0 {
+                backing.spandrel
+            } else {
+                backing.panel
+            };
+            editor.set_block_absolute(
+                block,
+                x,
+                y + config.abs_terrain_offset,
+                z,
+                None,
+                Some(replace_any),
+            );
+        }
+        for y in glass..=top {
+            editor.set_block_absolute(
+                config.roof_block,
+                x,
+                y + config.abs_terrain_offset,
+                z,
+                None,
+                Some(replace_any),
+            );
         }
     }
 }
@@ -15565,67 +18551,6 @@ fn capped_flat_tops(levels: &RoofLevels) -> FnvHashSet<(i32, i32)> {
     decks
 }
 
-/// A covering of nearly the same tone as a roof's, in the same shapes: its
-/// full block, stair and slab.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct RoofTone {
-    full: Block,
-    stairs: Block,
-    slab: Option<Block>,
-}
-
-/// The same-tone sibling of a pitched covering, for the odd patch of
-/// replaced tiles. Only coverings whose sibling has a matching stair, and a
-/// slab wherever the covering has one; sheet metal is laid in whole runs.
-fn roof_tone_sibling(roof: Block) -> Option<RoofTone> {
-    let tone = match roof {
-        // Brick-stair clay tile next to the smooth pink of polished granite.
-        RED_TERRACOTTA | BRICK => RoofTone {
-            full: roof,
-            stairs: POLISHED_GRANITE_STAIRS,
-            slab: Some(POLISHED_GRANITE_SLAB),
-        },
-        TERRACOTTA => RoofTone {
-            full: TERRACOTTA,
-            stairs: POLISHED_GRANITE_STAIRS,
-            slab: Some(POLISHED_GRANITE_SLAB),
-        },
-        COBBLED_DEEPSLATE => RoofTone {
-            full: POLISHED_DEEPSLATE,
-            stairs: POLISHED_DEEPSLATE_STAIRS,
-            slab: Some(POLISHED_DEEPSLATE_SLAB),
-        },
-        DEEPSLATE_TILES => RoofTone {
-            full: DEEPSLATE_BRICKS,
-            stairs: DEEPSLATE_BRICK_STAIRS,
-            slab: Some(DEEPSLATE_TILE_SLAB),
-        },
-        POLISHED_BLACKSTONE_BRICKS => RoofTone {
-            full: BLACKSTONE,
-            stairs: BLACKSTONE_STAIRS,
-            slab: Some(BLACKSTONE_SLAB),
-        },
-        _ => return None,
-    };
-    let own_slab = roof_slab_for_stair(get_stair_block_for_material(roof));
-    (own_slab.is_none() || tone.slab.is_some()).then_some(tone)
-}
-
-/// Share of roof patches, in percent, laid in the sibling covering.
-const ROOF_TONE_PERCENT: u32 = 8;
-
-/// The tone patch roof cell `(x, z)` lies in: two by two cells, every other
-/// row of patches offset by a cell so they do not line up.
-fn roof_tone_patch_of(x: i32, z: i32) -> (i32, i32) {
-    let row = z.div_euclid(2);
-    ((x + row.rem_euclid(2)).div_euclid(2), row)
-}
-
-/// Whether tone patch `(px, row)` is laid in the sibling covering.
-fn roof_tone_patch((px, row): (i32, i32), seed: u64) -> bool {
-    coord_rng(px, row, seed ^ 0x7111_E5A1_0000_0005).random_range(0..100u32) < ROOF_TONE_PERCENT
-}
-
 /// Roof levels for the dozens of neighbour lookups each cell makes: a grid on
 /// the roof's bounding box, or the map itself where that box is mostly empty.
 enum LevelGrid<'a> {
@@ -15715,18 +18640,21 @@ fn place_roof_surface(
     };
     let abs = config.abs_terrain_offset;
     let replace_any: &[Block] = &[];
-    let gable_fill = config.trim.gable_block.unwrap_or(config.roof_block);
-    let sibling = config
-        .trim
-        .tone_patches
-        .then(|| roof_tone_sibling(config.roof_block))
-        .flatten();
+    // Full blocks between slabs are cut from the same stone as the slabs.
+    let slab_full = if mode == PitchMode::Slabs && slab.is_some() {
+        full_block_like_its_stairs(config.roof_block)
+    } else {
+        config.roof_block
+    };
+    let gable_fill = config.trim.gable_block.unwrap_or(slab_full);
     let mut tops = FnvHashMap::with_capacity_and_hasher(floor_area.len(), Default::default());
     // Patches span several cells, so each seeds its stream once.
-    let mut tone_patches: FnvHashMap<(i32, i32), bool> = FnvHashMap::default();
     let mut sheet_patches: FnvHashMap<(i32, i32), bool> = FnvHashMap::default();
     for &(x, z) in floor_area {
-        let l = levels[&(x, z)];
+        // Crash reports show a cell without a level; a cell left bare beats losing the run.
+        let Some(&l) = levels.get(&(x, z)) else {
+            continue;
+        };
         let y = l.div_euclid(2);
         let mut sheet = false;
         let cap = if l.rem_euclid(2) == 0 {
@@ -15755,7 +18683,14 @@ fn place_roof_surface(
                     RoofCap::Full
                 }
             } else if let Some((facing, shape)) = stair_for_high_quarters(high) {
-                RoofCap::Stair(facing, shape)
+                // On a turned roof a stair at every step of a contour combs the slope.
+                match shape {
+                    _ if !config.trim.turned => RoofCap::Stair(facing, shape),
+                    _ if mode == PitchMode::Slabs => RoofCap::Slab { top: true },
+                    StairShape::Straight => RoofCap::Stair(facing, shape),
+                    StairShape::InnerLeft | StairShape::InnerRight => RoofCap::Full,
+                    _ => RoofCap::Slab { top: false },
+                }
             } else if high.iter().all(|&h| !h) {
                 RoofCap::Slab { top: false }
             } else {
@@ -15766,20 +18701,6 @@ fn place_roof_surface(
             (RoofCap::Slab { .. }, None) => RoofCap::Full,
             _ => cap,
         };
-        // A slab cap only stands where the covering has a slab, and the
-        // sibling has one wherever it does.
-        let cover = sibling
-            .filter(|_| {
-                let patch = roof_tone_patch_of(x, z);
-                *tone_patches
-                    .entry(patch)
-                    .or_insert_with(|| roof_tone_patch(patch, config.element_id_for_decor))
-            })
-            .unwrap_or(RoofTone {
-                full: config.roof_block,
-                stairs: stair_mat,
-                slab,
-            });
         let block = match cap {
             RoofCap::Full if sheet => {
                 // Low-frequency patches, as a patched membrane weathers.
@@ -15793,12 +18714,10 @@ fn place_roof_surface(
                     SMOOTH_STONE
                 })
             }
-            RoofCap::Full => BlockWithProperties::simple(cover.full),
-            RoofCap::Stair(facing, shape) => {
-                create_stair_with_properties(cover.stairs, facing, shape)
-            }
+            RoofCap::Full => BlockWithProperties::simple(slab_full),
+            RoofCap::Stair(facing, shape) => create_stair_with_properties(stair_mat, facing, shape),
             RoofCap::Slab { top } => {
-                let s = cover.slab.unwrap_or(cover.full);
+                let s = slab.unwrap_or(slab_full);
                 if top {
                     make_top_slab(s)
                 } else {
@@ -15811,7 +18730,7 @@ fn place_roof_surface(
         let gable = ROOF_SIDES
             .iter()
             .any(|&(dx, dz)| off(dx, dz) && outside(x + dx, z + dz).is_some());
-        let fill = if gable { gable_fill } else { config.roof_block };
+        let fill = if gable { gable_fill } else { slab_full };
         let rule = (overwrite_inner || edge).then_some(replace_any);
         for yy in config.base_height..y {
             editor.set_block_absolute(fill, x, yy + abs, z, None, rule);
@@ -15839,7 +18758,9 @@ fn place_rake_trim(
     let mut trims: Vec<((i32, i32), (i32, i32))> = Vec::new();
     let mut seen: FnvHashSet<(i32, i32)> = FnvHashSet::default();
     for &(x, z) in floor_area {
-        let (y, cap) = tops[&(x, z)];
+        let Some(&(y, cap)) = tops.get(&(x, z)) else {
+            continue;
+        };
         let block = match (cap, slab) {
             (RoofCap::Stair(facing, _), _) => {
                 create_stair_with_properties(stair_mat, facing, StairShape::Straight)
@@ -15871,7 +18792,7 @@ fn place_rake_trim(
     trims
 }
 
-/// Eave overhang two cells deep (one with `short_eave`), stepping down with
+/// Eave overhang two cells deep (one with `short_eave` or off the grid), stepping down with
 /// the slope, off every side of a roof cell that drops to an eave (`seeds`:
 /// the cell and a bit per `ROOF_SIDES` entry), with outer corners where two
 /// such sides meet and inner corners where two eaves meet in a valley. Cells in `covered` (the
@@ -15894,6 +18815,8 @@ fn place_roof_eaves(
     };
     let abs = config.abs_terrain_offset;
     let open = |c: &(i32, i32)| !covered.contains(c) && !config.trim.blocked.contains(c);
+    // Off the grid a second ring would comb every step of the walls.
+    let short_eave = config.trim.short_eave || config.trim.turned;
 
     // Ring cells keep the sides they hang off: two in a valley.
     let mut inner: FnvHashMap<(i32, i32), u8> = FnvHashMap::default();
@@ -15912,7 +18835,7 @@ fn place_roof_eaves(
             }
             *inner.entry(n1).or_default() |= 1 << i;
             let n2 = (x + 2 * dx, z + 2 * dz);
-            if open(&n2) && !config.trim.short_eave {
+            if open(&n2) && !short_eave {
                 *outer.entry(n2).or_default() |= 1 << i;
             }
         }
@@ -15929,7 +18852,7 @@ fn place_roof_eaves(
                 continue;
             }
             corner_inner.entry((x + dx, z + dz)).or_insert(q);
-            if config.trim.short_eave {
+            if short_eave {
                 continue;
             }
             if open(&(x + 2 * dx, z + 2 * dz)) {
@@ -16658,7 +19581,11 @@ fn generate_gabled_roof(
     // Too wide for 1:1 under the cap: 1:2 in slabs rather than a mesa.
     let shallow = match stated_pitch {
         Some(cap) => (cap as f64) < 0.75 * max_reach.max(1) as f64,
-        None => max_reach > wall_cap + 1 && !config.trim.steep_cap,
+        None => {
+            config.trim.turned
+                || config.trim.low_pitch
+                || (max_reach > wall_cap + 1 && !config.trim.steep_cap)
+        }
     };
     let mode = if shallow && slab_fits {
         PitchMode::Slabs
@@ -16672,7 +19599,11 @@ fn generate_gabled_roof(
         && !config.trim.steep_cap
         && max_reach - wall_cap >= 4;
 
-    let eave = config.base_height + 1;
+    // A turned roof in slabs hangs a one-block eave past its walls; one left
+    // in stairs (no slab for its cover, or a steep or round profile) has none
+    // to carry and sits straight on the wall.
+    let overhang = !config.trim.turned || mode == PitchMode::Slabs;
+    let eave = config.base_height + i32::from(overhang);
     let level_of = |s: &SlopeSample| -> i32 {
         let e = s.dist_to_edge.min(s.scan_perp_min);
         if profile == GableProfile::Round {
@@ -16794,8 +19725,9 @@ fn generate_gabled_roof(
 
     let tops = place_roof_surface(editor, floor_area, &levels, config, mode, &outside, false);
 
-    // Rake trim past the gable ends; a half-hipped end has none.
-    let trims = if profile == GableProfile::HalfHipped {
+    // Rake trim past the gable ends; a half-hipped end has none, and a
+    // turned roof ends flush.
+    let trims = if profile == GableProfile::HalfHipped || config.trim.turned {
         Vec::new()
     } else {
         place_rake_trim(editor, floor_area, &tops, config, &outside)
@@ -16805,6 +19737,7 @@ fn generate_gabled_roof(
     // on the slope, a vault has no slope to sit on, and a 1:2 slope is too
     // low for one.
     let dormers_fit = mode == PitchMode::Stairs
+        && !config.trim.turned
         && profile != GableProfile::Round
         && tent.is_none_or(|t| t.angle.to_degrees().abs() <= 12.0)
         && wings.is_none_or(|f| f.angle == 0.0);
@@ -16882,7 +19815,9 @@ fn generate_gabled_roof(
         )
         .filter(|&(_, sides)| sides != 0)
         .collect();
-    place_roof_eaves(editor, &seeds, &covered, config, mode);
+    if overhang {
+        place_roof_eaves(editor, &seeds, &covered, config, mode);
+    }
     heights
 }
 
@@ -16987,6 +19922,33 @@ fn hip_edge_distances(
     dist
 }
 
+/// Straight-line distance from each cell to the outline: a turned hip roof's run up from its eave.
+fn eave_distances(floor_area: &[(i32, i32)]) -> FnvHashMap<(i32, i32), i32> {
+    let Some(&(x0, z0)) = floor_area.first() else {
+        return FnvHashMap::default();
+    };
+    let (min_x, max_x, min_z, max_z) = floor_area
+        .iter()
+        .fold((x0, x0, z0, z0), |(a, b, c, d), &(x, z)| {
+            (a.min(x), b.max(x), c.min(z), d.max(z))
+        });
+    // The bounding box with a ring of cells off the footprint around it.
+    let (w, h) = ((max_x - min_x + 3) as usize, (max_z - min_z + 3) as usize);
+    let at = |x: i32, z: i32| (z - min_z + 1) as usize * w + (x - min_x + 1) as usize;
+    let mut off = vec![true; w * h];
+    for &(x, z) in floor_area {
+        off[at(x, z)] = false;
+    }
+    let squared = crate::mapillary::register::edt_rect(&off, w, h);
+    floor_area
+        .iter()
+        .map(|&(x, z)| {
+            let d = (squared[at(x, z)].sqrt() - 1.0).round().max(0.0) as i32;
+            ((x, z), d)
+        })
+        .collect()
+}
+
 fn generate_hipped_roof_inner(
     editor: &mut WorldEditor,
     floor_area: &[(i32, i32)],
@@ -17001,7 +19963,12 @@ fn generate_hipped_roof_inner(
             .min(config.max_rise.unwrap_or(i32::MAX))
     });
 
-    let dist = hip_edge_distances(floor_area, &footprint);
+    let turned = config.trim.turned;
+    let dist = if turned {
+        eave_distances(floor_area)
+    } else {
+        hip_edge_distances(floor_area, &footprint)
+    };
     // Perpendicular-to-ridge scans for dormer placement (ridge = longer axis),
     // and the narrowest local half-span, which caps a mansard's narrow wings.
     let ridge_runs_along_x = config.width() >= config.length();
@@ -17026,7 +19993,9 @@ fn generate_hipped_roof_inner(
     let slab_fits = mansard_steep_h.is_none() && roof_slab_for_stair(stair_mat).is_some();
     let shallow = match config.peak_cap {
         Some(cap) => (cap as f64) < 0.75 * max_dist.max(1) as f64,
-        None => max_dist > wall_cap + 1 && !config.trim.steep_cap,
+        None => {
+            turned || config.trim.low_pitch || (max_dist > wall_cap + 1 && !config.trim.steep_cap)
+        }
     };
     let mode = if shallow && slab_fits {
         PitchMode::Slabs
@@ -17040,7 +20009,10 @@ fn generate_hipped_roof_inner(
         && !config.trim.steep_cap
         && max_dist - wall_cap >= 4;
 
-    let lift = if with_overhang { 1 } else { 0 };
+    // A turned roof hangs its eave out only in slabs; with no overhang to
+    // carry, the roof sits straight on the wall.
+    let overhang = with_overhang && (!turned || mode == PitchMode::Slabs);
+    let lift = i32::from(overhang);
     let eave = config.base_height + lift;
     let mut levels: RoofLevels =
         FnvHashMap::with_capacity_and_hasher(floor_area.len(), Default::default());
@@ -17090,13 +20062,13 @@ fn generate_hipped_roof_inner(
         true,
     );
 
-    if with_overhang {
+    if overhang {
         let seeds = all_side_eave_seeds(floor_area, &footprint);
         place_roof_eaves(editor, &seeds, &footprint, config, mode);
     }
 
     let mut heights: RoofSurface = tops.iter().map(|(&c, &(y, _))| (c, y)).collect();
-    if mode == PitchMode::Stairs {
+    if mode == PitchMode::Stairs && !turned {
         let parallel_to_ridge = if ridge_runs_along_x { (1, 0) } else { (0, 1) };
         let mansard_band = mansard_steep_h.map(|sh| config.base_height + (sh + 1) / 2 + lift);
         let dormers = place_dormer_windows(
@@ -17874,12 +20846,16 @@ fn generate_roof(
 
     // OSM roof:material / roof:colour override the preset.
     let mut roof_rng = element_rng(style_seed ^ 0xF00F_C010_BA5E_F00D);
-    let osm_roof_block = tagged_roof_block(
-        &element.tags,
-        roof_type != RoofType::Flat,
-        roof_block_override,
-        &mut roof_rng,
-    );
+    let osm_roof_block = if gilded_dome(&element.tags, roof_type) {
+        Some(GOLD_BLOCK)
+    } else {
+        tagged_roof_block(
+            &element.tags,
+            roof_type != RoofType::Flat,
+            roof_block_override,
+            &mut roof_rng,
+        )
+    };
 
     if let Some(block) = osm_roof_block {
         // A glass roof over a glass wall carries the curtain wall on: a
@@ -17906,11 +20882,19 @@ fn generate_roof(
     // A mapped roof surface keeps its mapped material on the flat top too.
     if osm_roof_block.is_some() {
         config.trim.sheet_top = false;
-        config.trim.tone_patches = false;
     }
 
     let roof_orientation = element.tags.get("roof:orientation").map(|s| s.as_str());
-    let roof_direction = element.tags.get("roof:direction").map(|s| s.as_str());
+    // The ridge the laser saw, where none is mapped.
+    let roof_direction = element
+        .tags
+        .get("roof:direction")
+        .or_else(|| {
+            (roof_orientation.is_none() && !element.tags.contains_key("roof:shape"))
+                .then(|| element.tags.get(crate::survey::roofs::DIRECTION_HINT))
+                .flatten()
+        })
+        .map(|s| s.as_str());
     let ridge = ridge_frame(
         &element.nodes,
         config.width(),
@@ -17956,6 +20940,17 @@ fn generate_roof(
                 config.base_height,
                 abs_terrain_offset,
             );
+        }
+
+        // A turned outline that is no rectangle has no one ridge to follow.
+        RoofType::Gabled
+            if config.trim.turned
+                && ridge.tent.is_none()
+                && wings.is_none()
+                && !steep_gable
+                && !element.tags.contains_key("roof:shape") =>
+        {
+            surface = generate_hipped_roof(editor, roof_area, &config);
         }
 
         RoofType::Gabled => {
@@ -18780,18 +21775,47 @@ mod height_tests {
     #[test]
     fn levels_only_parts_of_housing_take_housing_storeys() {
         let part = way_with_tags(&[("building:part", "yes"), ("building:levels", "10")]);
-        let cycle = floor_cycle_for("yes", &part.tags, true);
+        let cycle = floor_cycle_for(
+            "yes",
+            &part.tags,
+            true,
+            part.tags.contains_key("building:levels"),
+        );
         assert_eq!(cycle, 3);
         let (h, _) = calculate_building_height(&part, "yes", 0, 1.0, None, cycle, 400, 1);
         assert_eq!(h, 32);
-        assert_eq!(floor_cycle_for("yes", &part.tags, false), 4);
-        assert_eq!(floor_cycle_for("apartments", &part.tags, false), 4);
+        assert_eq!(
+            floor_cycle_for(
+                "yes",
+                &part.tags,
+                false,
+                part.tags.contains_key("building:levels")
+            ),
+            4
+        );
+        assert_eq!(
+            floor_cycle_for(
+                "apartments",
+                &part.tags,
+                false,
+                part.tags.contains_key("building:levels")
+            ),
+            4
+        );
         let measured = way_with_tags(&[
             ("building:part", "yes"),
             ("building:min_level", "10"),
             ("height", "38"),
         ]);
-        assert_eq!(floor_cycle_for("yes", &measured.tags, true), 3);
+        assert_eq!(
+            floor_cycle_for(
+                "yes",
+                &measured.tags,
+                true,
+                measured.tags.contains_key("building:levels")
+            ),
+            3
+        );
     }
 
     #[test]
@@ -18799,6 +21823,426 @@ mod height_tests {
         let way = way_with_tags(&[]);
         let (h, _) = calculate_building_height(&way, "yes", 0, 1.0, Some(5), 3, 100, 1);
         assert_eq!(h, 17); // 5 levels * 3 + 2
+    }
+
+    // Only the main buildings of a street rise towards taller neighbours: a
+    // bungalow beside flats (Munich, Ostermayrstrasse) kept one storey, and a
+    // kiosk, conservatory or garage stays as low as it is.
+    #[test]
+    fn only_main_buildings_rise_to_their_neighbours() {
+        let tags = |pairs: &[(&str, &str)]| -> HashMap<String, String> {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        };
+        for kind in [
+            "yes",
+            "house",
+            "terrace",
+            "apartments",
+            "commercial",
+            "hotel",
+        ] {
+            assert!(
+                may_rise_to_neighbours(kind, &tags(&[("building", kind)])),
+                "{kind}"
+            );
+        }
+        for kind in [
+            "bungalow",
+            "kiosk",
+            "conservatory",
+            "garage",
+            "carport",
+            "shed",
+            "service",
+            "toilets",
+            "outbuilding",
+            "allotment_house",
+            "boathouse",
+            "ruins",
+            "construction",
+            "bridge",
+        ] {
+            assert!(
+                !may_rise_to_neighbours(kind, &tags(&[("building", kind)])),
+                "{kind}"
+            );
+        }
+        let site = tags(&[("building", "yes"), ("construction:building", "house")]);
+        assert!(!may_rise_to_neighbours("yes", &site));
+        let ruin = tags(&[("building", "house"), ("ruins", "yes")]);
+        assert!(!may_rise_to_neighbours("house", &ruin));
+    }
+
+    // A garage, carport or shed of one storey stands three blocks high, as an
+    // untagged one does, not a storey and a raised ground floor that put a
+    // carport level with the eaves of the house beside it (Erding). Two
+    // storeys, a mapped height and other buildings keep the storey rule.
+    #[test]
+    fn one_storey_garages_and_carports_stay_low() {
+        let height = |kind: &str, tags: &[(&str, &str)]| {
+            calculate_building_height(&way_with_tags(tags), kind, 0, 1.0, None, 4, 100, 1).0
+        };
+        for kind in ["garage", "garages", "carport", "shed"] {
+            let one = [("building", kind), ("building:levels", "1")];
+            assert_eq!(height(kind, &one), 3, "{kind}");
+            let untagged = [("building", kind)];
+            assert_eq!(height(kind, &untagged), 3, "{kind}");
+        }
+        let two = [("building", "garages"), ("building:levels", "2")];
+        assert_eq!(height("garages", &two), 10);
+        let measured = [("building", "carport"), ("height", "4.5")];
+        assert_eq!(height("carport", &measured), 4);
+        let shop = [("building", "retail"), ("building:levels", "1")];
+        assert_eq!(height("retail", &shop), 6);
+        // Elsewhere their walls are estimated the same way.
+        let walls = |tags: &[(&str, &str)]| {
+            mapped_walls_m(&way_with_tags(tags).tags, HeightHint::default()).map(|(m, _)| m)
+        };
+        assert_eq!(
+            walls(&[("building", "carport"), ("building:levels", "1")]),
+            Some(3.0)
+        );
+    }
+
+    // An untagged building takes note of the tagged ones it shares a wall
+    // with (two nodes or more), not of those it merely touches at a corner.
+    #[test]
+    fn untagged_buildings_know_their_tagged_neighbours() {
+        use crate::osm_parser::{ProcessedElement, ProcessedNode};
+        let way = |id: u64, nodes: &[u64], tags: &[(&str, &str)]| {
+            let mut w = way_with_tags(tags);
+            w.id = id;
+            w.nodes = nodes
+                .iter()
+                .map(|&n| ProcessedNode {
+                    id: n,
+                    tags: HashMap::new(),
+                    x: n as i32,
+                    z: 0,
+                })
+                .collect();
+            ProcessedElement::Way(w)
+        };
+        let elements = vec![
+            way(1, &[1, 2, 3, 4, 1], &[("building", "yes")]),
+            way(
+                2,
+                &[2, 3, 5, 6, 2],
+                &[("building", "yes"), ("building:levels", "5")],
+            ),
+            way(
+                3,
+                &[4, 7, 8, 9, 4],
+                &[("building", "yes"), ("building:levels", "9")],
+            ),
+            way(4, &[10, 11, 12, 10], &[("building", "yes")]),
+        ];
+        let heights = tagged_neighbour_heights(&elements, 1.0);
+        assert_eq!(heights.get(&1).map(Vec::as_slice), Some(&[17.0][..]));
+        assert_eq!(heights.len(), 1);
+    }
+
+    /// Building ways `id` around the square from (`x`, 0) to (`x` + 10, 10),
+    /// whose nodes are numbered by corner so squares side by side share a wall.
+    fn square_way(id: u64, x: i32, tags: &[(&str, &str)]) -> crate::osm_parser::ProcessedElement {
+        use crate::osm_parser::{ProcessedElement, ProcessedNode};
+        let corner = |cx: i32, z: i32| ProcessedNode {
+            id: (cx as u64) * 100 + z as u64,
+            tags: HashMap::new(),
+            x: cx,
+            z,
+        };
+        let mut w = way_with_tags(tags);
+        w.id = id;
+        w.nodes = vec![
+            corner(x, 0),
+            corner(x + 10, 0),
+            corner(x + 10, 10),
+            corner(x, 10),
+            corner(x, 0),
+        ];
+        ProcessedElement::Way(w)
+    }
+
+    // A church, a tower or a structure stands out of the row, and an annex
+    // against it gains nothing from it.
+    #[test]
+    fn an_annex_does_not_rise_to_its_church() {
+        let annex = square_way(1, 0, &[("building", "yes")]);
+        let church = square_way(2, 10, &[("building", "church"), ("height", "60")]);
+        let heights = tagged_neighbour_heights(&[annex.clone(), church], 1.0);
+        assert!(heights.is_empty());
+        let chimney = square_way(
+            2,
+            10,
+            &[
+                ("building", "yes"),
+                ("man_made", "chimney"),
+                ("height", "40"),
+            ],
+        );
+        assert!(tagged_neighbour_heights(&[annex, chimney], 1.0).is_empty());
+    }
+
+    // Walls are matched to walls: a gabled neighbour's `height` is its ridge,
+    // so the pitch under it comes off, and one raised off the ground is no
+    // wall to rise to.
+    #[test]
+    fn neighbours_count_their_walls_not_their_roofs() {
+        let infill = square_way(1, 10, &[("building", "yes")]);
+        let gabled = |id, x| {
+            square_way(
+                id,
+                x,
+                &[
+                    ("building", "house"),
+                    ("height", "14"),
+                    ("roof:shape", "gabled"),
+                ],
+            )
+        };
+        let heights = tagged_neighbour_heights(&[gabled(2, 0), infill.clone(), gabled(3, 20)], 1.0);
+        let walls = heights.get(&1).expect("two neighbours");
+        assert_eq!(walls.len(), 2);
+        // A 10 m span: a pitch of 0.85 of its 3.5 m half-span comes off.
+        assert!(
+            walls.iter().all(|&m| (10.5..11.5).contains(&m)),
+            "{walls:?}"
+        );
+        let flat = square_way(
+            2,
+            0,
+            &[
+                ("building", "yes"),
+                ("height", "14"),
+                ("roof:shape", "flat"),
+            ],
+        );
+        let heights = tagged_neighbour_heights(&[flat, infill.clone()], 1.0);
+        assert_eq!(heights.get(&1).map(Vec::as_slice), Some(&[14.0][..]));
+        let mapped_roof = square_way(
+            2,
+            0,
+            &[
+                ("building", "yes"),
+                ("building:levels", "3"),
+                ("roof:height", "4"),
+            ],
+        );
+        let heights = tagged_neighbour_heights(&[mapped_roof, infill.clone()], 1.0);
+        assert_eq!(heights.get(&1).map(Vec::as_slice), Some(&[11.0][..]));
+        let raised = square_way(
+            2,
+            0,
+            &[("building", "yes"), ("height", "14"), ("min_height", "8")],
+        );
+        assert!(tagged_neighbour_heights(&[raised, infill], 1.0).is_empty());
+    }
+
+    // Only a main building of the street, standing on the ground, looks to its
+    // neighbours: a bungalow, a kiosk or a bridge lifted on its `min_height`
+    // between two houses keeps its own height.
+    /// Closed rings through numbered nodes, for buildings sharing some.
+    fn ring_way(
+        id: u64,
+        ring: &[(u64, i32, i32)],
+        tags: &[(&str, &str)],
+    ) -> crate::osm_parser::ProcessedElement {
+        let mut nodes: Vec<ProcessedNode> = ring
+            .iter()
+            .map(|&(id, x, z)| ProcessedNode {
+                id,
+                tags: HashMap::new(),
+                x,
+                z,
+            })
+            .collect();
+        nodes.push(nodes[0].clone());
+        crate::osm_parser::ProcessedElement::Way(ProcessedWay {
+            id,
+            nodes,
+            tags: tags
+                .iter()
+                .map(|&(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        })
+    }
+
+    fn plan_for(elements: &[crate::osm_parser::ProcessedElement]) -> InsetPlan {
+        let bbox = crate::coordinate_system::cartesian::XZBBox::rect_from_xz_lengths(100.0, 100.0)
+            .unwrap();
+        let cache = FloodFillCache::precompute(elements, None);
+        let footprints = cache.collect_building_footprints(elements, &bbox);
+        plan_attached_steps(elements, &cache, &footprints, 1.0)
+    }
+
+    // A pair of semis steps its front on both halves or on neither: a shed two
+    // blocks before the west half keeps its front on the line, and the east
+    // half's front, which runs on from it, stays there too.
+    #[test]
+    fn attached_halves_step_their_fronts_together() {
+        let house = [("building", "house")];
+        let west = ring_way(
+            1,
+            &[(1, 10, 10), (2, 20, 10), (3, 20, 22), (4, 10, 22)],
+            &house,
+        );
+        let east = ring_way(
+            2,
+            &[(2, 20, 10), (5, 30, 10), (6, 30, 22), (3, 20, 22)],
+            &house,
+        );
+        let shed = ring_way(
+            3,
+            &[(7, 12, 24), (8, 16, 24), (9, 16, 28), (10, 12, 28)],
+            &[("building", "shed")],
+        );
+        let plan = plan_for(&[west.clone(), east.clone(), shed]);
+        // Edges: north, east, south, west.
+        assert_eq!(plan[&1], Some(vec![true, false, false, true]));
+        assert_eq!(plan[&2], Some(vec![true, true, false, false]));
+        // Without the shed both fronts step.
+        let plan = plan_for(&[west, east]);
+        assert_eq!(plan[&1], Some(vec![true, false, true, true]));
+        assert_eq!(plan[&2], Some(vec![true, true, true, false]));
+    }
+
+    // A garage mapped flush with its house keeps its walls, and so does the
+    // house front it runs on from: the garage no longer stands a block proud.
+    #[test]
+    fn a_house_front_running_on_into_its_garage_stays_on_the_line() {
+        let house = ring_way(
+            1,
+            &[
+                (1, 10, 10),
+                (2, 20, 10),
+                (3, 20, 14),
+                (4, 20, 22),
+                (5, 10, 22),
+            ],
+            &[("building", "house")],
+        );
+        let garage = ring_way(
+            2,
+            &[(3, 20, 14), (6, 26, 14), (7, 26, 22), (4, 20, 22)],
+            &[("building", "garage")],
+        );
+        let plan = plan_for(&[house, garage]);
+        assert_eq!(plan[&2], None);
+        let house = plan[&1].as_ref().expect("the house steps elsewhere");
+        // North and west step; the front, south, stays with the garage's.
+        assert!(house[0] && house[4], "{house:?}");
+        assert!(!house[3], "{house:?}");
+    }
+
+    #[test]
+    fn low_kinds_and_lifted_buildings_take_no_neighbour_heights() {
+        let flats = square_way(
+            2,
+            0,
+            &[("building", "apartments"), ("building:levels", "5")],
+        );
+        for tags in [
+            &[("building", "bungalow")][..],
+            &[("building", "kiosk")][..],
+            &[("building", "bridge"), ("min_height", "5")][..],
+            &[("building", "yes"), ("min_height", "5")][..],
+            &[("building", "yes"), ("building:min_level", "1")][..],
+        ] {
+            let low = square_way(1, 10, tags);
+            assert!(
+                tagged_neighbour_heights(&[flats.clone(), low], 1.0).is_empty(),
+                "{tags:?}"
+            );
+        }
+        let house = square_way(1, 10, &[("building", "house")]);
+        assert!(tagged_neighbour_heights(&[flats, house], 1.0).contains_key(&1));
+    }
+
+    // A building multipolygon's outer ring is a neighbour like a way.
+    #[test]
+    fn building_multipolygons_count_as_neighbours() {
+        use crate::osm_parser::{
+            ProcessedElement, ProcessedMember, ProcessedMemberRole, ProcessedRelation,
+        };
+        let ProcessedElement::Way(ring) = square_way(9, 0, &[]) else {
+            unreachable!()
+        };
+        let relation = ProcessedElement::Relation(ProcessedRelation {
+            id: 2,
+            tags: [("building", "yes"), ("building:levels", "4")]
+                .iter()
+                .map(|&(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            members: vec![ProcessedMember {
+                role: ProcessedMemberRole::Outer,
+                way: std::sync::Arc::new(ring),
+            }],
+        });
+        let infill = square_way(1, 10, &[("building", "yes")]);
+        let heights = tagged_neighbour_heights(&[relation, infill.clone()], 1.0);
+        assert_eq!(heights.get(&1).map(Vec::as_slice), Some(&[14.0][..]));
+        // A piece of an outer ring split over several ways has no area to
+        // take a roof's pitch off its `height` by, and is left out.
+        let ProcessedElement::Way(mut piece) = square_way(9, 0, &[]) else {
+            unreachable!()
+        };
+        piece.nodes.truncate(4);
+        let relation = ProcessedElement::Relation(ProcessedRelation {
+            id: 2,
+            tags: [("building", "yes"), ("height", "14")]
+                .iter()
+                .map(|&(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            members: vec![ProcessedMember {
+                role: ProcessedMemberRole::Outer,
+                way: std::sync::Arc::new(piece),
+            }],
+        });
+        assert!(tagged_neighbour_heights(&[relation, infill], 1.0).is_empty());
+    }
+
+    // Beside lower neighbours an untagged house keeps its storeys; beside
+    // taller ones it rises halfway to them, in whole storeys, two at most and
+    // never to a tall building.
+    #[test]
+    fn untagged_buildings_only_rise_towards_their_neighbours() {
+        // Two guessed storeys against a garage of 4.3 m.
+        assert_eq!(rise_to_neighbours(10, &[4.3], 4, 1.0), None);
+        // Against five storeys of 17 m: halfway is 13.5, three storeys.
+        assert_eq!(rise_to_neighbours(10, &[17.0], 4, 1.0), Some(14));
+        // Halfway to a slightly taller neighbour is not a storey more.
+        assert_eq!(rise_to_neighbours(10, &[12.0], 4, 1.0), None);
+        assert_eq!(rise_to_neighbours(20, &[17.0], 4, 2.0), Some(28));
+        // A single neighbour over twice as tall stands out of the row.
+        assert_eq!(rise_to_neighbours(10, &[60.0], 4, 1.0), None);
+        assert_eq!(rise_to_neighbours(10, &[21.0], 4, 1.0), None);
+        // Its median counts, the tower beside the row left out.
+        assert_eq!(rise_to_neighbours(10, &[17.0, 60.0], 4, 1.0), Some(14));
+        // Two storeys more at most: halfway to 28 m from three storeys is five.
+        assert_eq!(rise_to_neighbours(14, &[28.0], 4, 1.0), Some(22));
+        assert_eq!(rise_to_neighbours(10, &[20.0], 3, 1.0), Some(14));
+        // Never past seven storeys, which would make it tall.
+        let risen = rise_to_neighbours(26, &[50.0], 4, 1.0).unwrap();
+        assert_eq!(risen, 30);
+        assert!((f64::from(risen) - 2.0) / 4.0 <= 7.0);
+        assert_eq!(rise_to_neighbours(30, &[56.0], 4, 1.0), None);
+    }
+
+    // The laser writes a home's storeys as building:levels, so a two-storey
+    // home measured so shows its two storeys, as it does on main.
+    #[test]
+    fn a_measured_two_storey_home_shows_two_storeys() {
+        for kind in ["house", "yes", "detached", "terrace", "apartments"] {
+            let way = way_with_tags(&[("building", kind), ("building:levels", "2")]);
+            let cycle = floor_cycle_for(kind, &way.tags, false, true);
+            let (h, _) = calculate_building_height(&way, kind, 0, 1.0, None, cycle, 100, 1);
+            assert_eq!((h - GROUND_FLOOR_BONUS) / cycle, 2, "{kind}");
+            assert_eq!(h, 8, "{kind}");
+        }
     }
 
     // height spans walls plus roof; roof:height comes off the wall span
@@ -18889,7 +22333,12 @@ mod height_tests {
                 .or_else(|| way.tags.get("building:part"))
                 .map(String::as_str)
                 .unwrap_or("yes");
-            let cycle = floor_cycle_for(btype, &way.tags, false);
+            let cycle = floor_cycle_for(
+                btype,
+                &way.tags,
+                false,
+                way.tags.contains_key("building:levels"),
+            );
             let (mut h, tall) = calculate_building_height(&way, btype, 0, 1.0, None, cycle, 100, 1);
             // The generator builds the walls again on the commercial rhythm.
             if takes_commercial_rhythm(tall, btype, cycle, &way.tags) {
@@ -19091,10 +22540,256 @@ mod style_tests {
     use super::*;
 
     #[test]
+    fn only_low_small_homes_have_garden_grounds() {
+        use BuildingCategory::*;
+        let tags = |pairs: &[(&str, &str)]| -> HashMap<String, String> {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        };
+        let home_on = |footprint_m2: f64, residential: bool, part_of_housing: bool| Home {
+            part_of_housing,
+            footprint_m2,
+            on_residential_land: move || residential,
+        };
+        let home = |category, pairs: &[(&str, &str)]| {
+            has_garden_grounds(category, &tags(pairs), 3.0, home_on(200.0, false, false))
+        };
+        for (category, building) in [
+            (House, "house"),
+            (Residential, "apartments"),
+            (Farm, "farm"),
+            (Default, "yes"),
+            (Default, "static_caravan"),
+            (Historic, "house"),
+            (Historic, "farm"),
+        ] {
+            assert!(home(category, &[("building", building)]), "{building}");
+        }
+        // Barns, garages, shops, halls and civic buildings mark no garden, nor does a
+        // house or plain building with a shop, a restaurant or an office use in it.
+        for (category, building) in [
+            (Farm, "barn"),
+            (Commercial, "retail"),
+            (Office, "office"),
+            (Industrial, "industrial"),
+            (School, "school"),
+            (Religious, "church"),
+            (Garage, "garage"),
+            (Shed, "shed"),
+            (Default, "train_station"),
+            (Default, "service"),
+            (Default, "sports_hall"),
+            (Default, "museum"),
+            (Default, "townhall"),
+            (Default, "library"),
+            (Default, "community_centre"),
+            (Default, "monastery"),
+            (Default, "houseboat"),
+            (Historic, "castle"),
+            (Historic, "yes"),
+        ] {
+            assert!(!home(category, &[("building", building)]), "{building}");
+        }
+        assert!(!home(Default, &[("building", "yes"), ("shop", "bakery")]));
+        assert!(!home(Default, &[("building", "yes"), ("amenity", "pub")]));
+        assert!(!home(
+            House,
+            &[("building", "terrace"), ("amenity", "restaurant")]
+        ));
+        assert!(!home(
+            Default,
+            &[("building", "yes"), ("building:use", "commercial")]
+        ));
+        assert!(home(
+            Default,
+            &[("building", "yes"), ("building:use", "residential")]
+        ));
+        assert!(home(
+            Default,
+            &[("building", "yes"), ("tourism", "guest_house")]
+        ));
+        // A plain building larger than a house is a home on residential land only.
+        let plain = tags(&[("building", "yes")]);
+        assert!(!has_garden_grounds(
+            Default,
+            &plain,
+            3.0,
+            home_on(400.0, false, false)
+        ));
+        assert!(has_garden_grounds(
+            Default,
+            &plain,
+            3.0,
+            home_on(400.0, true, false)
+        ));
+        // A part counts with its building: a part of a school is none, a part of flats or
+        // a part mapped as a house is.
+        let part = tags(&[("building:part", "yes")]);
+        assert!(!has_garden_grounds(
+            Default,
+            &part,
+            3.0,
+            home_on(100.0, true, false)
+        ));
+        assert!(has_garden_grounds(
+            Default,
+            &part,
+            3.0,
+            home_on(100.0, false, true)
+        ));
+        let house_part = tags(&[("building:part", "house")]);
+        assert!(has_garden_grounds(
+            House,
+            &house_part,
+            3.0,
+            home_on(100.0, false, false)
+        ));
+        // A footprint only Overture knows is a home where Overture calls it one, or a plain
+        // one of a house's size on residential land; never a barn it calls a farm.
+        let overture = |b: &str| tags(&[("building", b), ("source", "overture_maps")]);
+        assert!(!has_garden_grounds(
+            Default,
+            &overture("yes"),
+            2.0,
+            home_on(100.0, false, false)
+        ));
+        assert!(!has_garden_grounds(
+            Default,
+            &overture("yes"),
+            2.0,
+            home_on(300.0, true, false)
+        ));
+        assert!(has_garden_grounds(
+            House,
+            &overture("house"),
+            2.0,
+            home_on(100.0, true, false)
+        ));
+        assert!(has_garden_grounds(
+            Default,
+            &overture("yes"),
+            2.0,
+            home_on(100.0, true, false)
+        ));
+        assert!(!has_garden_grounds(
+            Farm,
+            &overture("farm"),
+            2.0,
+            home_on(100.0, true, false)
+        ));
+        // Five storeys or a block of flats' footprint is no house with a garden.
+        let house = tags(&[("building", "house")]);
+        assert!(!has_garden_grounds(
+            Residential,
+            &house,
+            5.0,
+            home_on(300.0, true, false)
+        ));
+        assert!(!has_garden_grounds(
+            Residential,
+            &house,
+            4.0,
+            home_on(2000.0, true, false)
+        ));
+        assert!(has_garden_grounds(
+            House,
+            &house,
+            4.0,
+            home_on(760.0, false, false)
+        ));
+        assert!(!has_garden_grounds(
+            House,
+            &house,
+            4.0,
+            home_on(840.0, false, false)
+        ));
+    }
+
+    /// A house its neighbours raise to five storeys counts as tall, and no home with a
+    /// garden; raised to four it still is one.
+    #[test]
+    fn storeys_raised_by_the_neighbours_count_for_the_grounds() {
+        for scale in [1.0, 2.0] {
+            let height = |storeys: i32| ((storeys * 4 + GROUND_FLOOR_BONUS) as f64 * scale) as i32;
+            assert!(raised_storeys(3.0, Some(height(5)), 4, scale) >= TALL_STOREYS);
+            assert!(raised_storeys(3.0, Some(height(4)), 4, scale) < TALL_STOREYS);
+            assert_eq!(raised_storeys(3.0, None, 4, scale), 3.0);
+            // A tagged height above the blend keeps its own count.
+            assert_eq!(raised_storeys(6.0, Some(height(4)), 4, scale), 6.0);
+        }
+    }
+
+    /// Storeys come from the tags at any scale, so a five-storey block is tall at half
+    /// scale too, and a mapped height has its roof taken off before it is counted.
+    #[test]
+    fn storeys_are_counted_from_the_tags() {
+        let way = |pairs: &[(&str, &str)], side: i32| {
+            let node = |id: u64, x: i32, z: i32| crate::osm_parser::ProcessedNode {
+                id,
+                tags: HashMap::new(),
+                x,
+                z,
+            };
+            ProcessedWay {
+                id: 1,
+                nodes: vec![
+                    node(1, 0, 0),
+                    node(2, side, 0),
+                    node(3, side, side),
+                    node(4, 0, side),
+                    node(1, 0, 0),
+                ],
+                tags: pairs
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            }
+        };
+        let storeys = |w: &ProcessedWay, scale: f64| {
+            wall_storeys(w, "apartments", None, 400, scale, 7, (0, 3))
+        };
+        let five = way(&[("building", "apartments"), ("building:levels", "5")], 20);
+        let four = way(&[("building", "apartments"), ("building:levels", "4")], 20);
+        for scale in [0.3, 0.5, 1.0, 2.0] {
+            assert!(storeys(&five, scale) >= TALL_STOREYS, "{scale}");
+            assert!(storeys(&four, scale) < TALL_STOREYS, "{scale}");
+        }
+        // 15 m to the ridge of a gabled house 10 m across is about 12 m of wall.
+        let gabled = way(&[("building", "house"), ("height", "15")], 10);
+        assert!(storeys(&gabled, 1.0) < TALL_STOREYS);
+        let flat = way(
+            &[
+                ("building", "house"),
+                ("height", "17"),
+                ("roof:shape", "flat"),
+            ],
+            10,
+        );
+        assert!(storeys(&flat, 1.0) >= TALL_STOREYS);
+        let tagged_roof = way(
+            &[
+                ("building", "house"),
+                ("height", "17"),
+                ("roof:shape", "gabled"),
+                ("roof:height", "5"),
+            ],
+            30,
+        );
+        assert!(storeys(&tagged_roof, 1.0) < TALL_STOREYS);
+        // A water tower or silo is tall, a storage tank only when its height says so.
+        let tank = |pairs: &[(&str, &str)]| storeys_of_m(tank_height_m(&way(pairs, 6).tags));
+        assert!(tank(&[("man_made", "water_tower")]) >= TALL_STOREYS);
+        assert!(tank(&[("man_made", "storage_tank")]) < TALL_STOREYS);
+        assert!(tank(&[("man_made", "storage_tank"), ("height", "20")]) >= TALL_STOREYS);
+    }
+
+    #[test]
     fn archetype_truth_table() {
         use WindowArchetype::*;
         // Row 0 is the band between storeys, never glass.
-        for archetype in [Sash, Portrait, Spaced, Wide, Ribbon, Hooded, Piers, Strips] {
+        for archetype in [Portrait, Spaced, Wide, Ribbon, Hooded, Piers, Strips] {
             assert!(!archetype_allows_window(archetype, 0, 4));
             assert!(archetype_allows_window(archetype, 2, 4));
         }
@@ -19150,6 +22845,337 @@ mod style_tests {
     }
 
     #[test]
+    fn no_front_takes_a_window_one_block_wide() {
+        use BuildingCategory::*;
+        for category in [
+            House,
+            Residential,
+            Default,
+            Commercial,
+            Office,
+            Hotel,
+            School,
+            Hospital,
+            Historic,
+            Farm,
+            Industrial,
+            TallBuilding,
+        ] {
+            for region in [
+                BuildingRegion::Europe,
+                BuildingRegion::NorthAmerica,
+                BuildingRegion::Other,
+            ] {
+                for era in [
+                    ArchEra::Unknown,
+                    ArchEra::TraditionalPreWar,
+                    ArchEra::Contemporary,
+                ] {
+                    for seed in 0..40u64 {
+                        let picked = pick_window_archetype(
+                            category,
+                            era,
+                            region,
+                            WHITE_CONCRETE,
+                            PeriodCues::default(),
+                            seed,
+                        );
+                        assert!(
+                            picked.rhythm().window >= 2,
+                            "{category:?} {region:?} {era:?} picked {picked:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn churches_keep_their_lancets() {
+        let picked = pick_window_archetype(
+            BuildingCategory::Religious,
+            ArchEra::Unknown,
+            BuildingRegion::Europe,
+            STONE_BRICKS,
+            PeriodCues::default(),
+            1,
+        );
+        assert_eq!(picked.rhythm().window, 1);
+    }
+
+    #[test]
+    fn air_conditioners_hang_where_they_are_the_habit() {
+        let ctx = |region, materials| RoofContext {
+            region,
+            materials,
+            ..RoofContext::default()
+        };
+        let hong_kong = ctx(BuildingRegion::Other, MaterialRegion::EastAsia);
+        let moscow = ctx(BuildingRegion::Europe, MaterialRegion::EastEurope);
+        let mexico = ctx(BuildingRegion::Other, MaterialRegion::LatinAmerica);
+        let berlin = ctx(BuildingRegion::Europe, MaterialRegion::Central);
+        let (mut window, mut split) = (0, 0);
+        for seed in 0..60u64 {
+            let (w, s) = air_conditioning_for(hong_kong, Climate::Temperate, false, seed);
+            assert!(!(w && s), "seed {seed}: both kinds on one building");
+            (window, split) = (window + i32::from(w), split + i32::from(s));
+            assert_eq!(
+                air_conditioning_for(moscow, Climate::Temperate, false, seed),
+                (false, true)
+            );
+            // Dressed old fabric keeps its front clear of condensers.
+            assert_eq!(
+                air_conditioning_for(moscow, Climate::Temperate, true, seed),
+                (false, false)
+            );
+            assert_eq!(
+                air_conditioning_for(berlin, Climate::Temperate, false, seed),
+                (false, false)
+            );
+            // Highland Mexico City is mild; the hot coast is not.
+            assert_eq!(
+                air_conditioning_for(mexico, Climate::Temperate, false, seed),
+                (false, false)
+            );
+            assert_ne!(
+                air_conditioning_for(mexico, Climate::TropicalSavanna, false, seed),
+                (false, false)
+            );
+        }
+        assert!(window > 20 && split > 10, "{window} window, {split} split");
+    }
+
+    #[test]
+    fn hot_regions_shade_their_plain_windows() {
+        use BuildingCategory::*;
+        let ctx = |region, materials| RoofContext {
+            region,
+            materials,
+            ..RoofContext::default()
+        };
+        let india = ctx(BuildingRegion::Other, MaterialRegion::SouthAsia);
+        let berlin = ctx(BuildingRegion::Europe, MaterialRegion::Central);
+        let mut shaded = 0;
+        for seed in 0..60u64 {
+            let shade = sunshade_for(
+                Residential,
+                false,
+                india,
+                WHITE_CONCRETE,
+                SMOOTH_STONE,
+                seed,
+            );
+            shaded += i32::from(shade.is_some());
+            assert!(shade.is_none_or(|b| b.name().ends_with("_slab")));
+            // Dressed fabric keeps its hoods; Europe has no sunshades.
+            assert_eq!(
+                sunshade_for(Residential, true, india, BRICK, SMOOTH_STONE, seed),
+                None
+            );
+            assert_eq!(
+                sunshade_for(
+                    Residential,
+                    false,
+                    berlin,
+                    WHITE_CONCRETE,
+                    SMOOTH_STONE,
+                    seed
+                ),
+                None
+            );
+        }
+        assert!(
+            (30..58).contains(&shaded),
+            "{shaded} of 60 Indian fronts shaded"
+        );
+    }
+
+    #[test]
+    fn frames_shutters_and_panels_follow_the_fabric() {
+        use BuildingCategory::*;
+        let ctx = |region, materials| RoofContext {
+            region,
+            materials,
+            ..RoofContext::default()
+        };
+        let paris = ctx(BuildingRegion::Europe, MaterialRegion::France);
+        let helsinki = ctx(BuildingRegion::Europe, MaterialRegion::Nordic);
+        let nyc = ctx(BuildingRegion::NorthAmerica, MaterialRegion::NorthAmerica);
+        let (mut shuttered, mut framed, mut accented, mut piered) = (0, 0, 0, 0);
+        for seed in 0..60u64 {
+            // Shutters: dressed stucco fabric of France, never the Nordic or a plain front.
+            let shutters = shutters_for(Residential, true, paris, 4, None, seed);
+            shuttered += i32::from(shutters.is_some());
+            assert_eq!(
+                shutters_for(Residential, true, helsinki, 4, None, seed),
+                None
+            );
+            assert_eq!(shutters_for(Residential, false, paris, 4, None, seed), None);
+            // A front frames its windows or hangs shutters, not both.
+            let reveal = window_reveal_for(Residential, true, paris, shutters, seed);
+            assert_eq!(reveal.is_some(), shutters.is_none(), "seed {seed}");
+            // A plain block of flats has neither; a timber house mostly frames.
+            assert_eq!(window_reveal_for(Residential, false, nyc, None, seed), None);
+            framed += i32::from(window_reveal_for(House, false, nyc, None, seed).is_some());
+            // A plain modern front takes panels or bands in a tone off its wall.
+            let portrait = WindowArchetype::Portrait;
+            let accent = modern_accent_for(Office, false, portrait, WHITE_CONCRETE, 4, false, seed);
+            accented += i32::from(accent.is_some());
+            assert!(accent.is_none_or(|(tone, _)| tone != WHITE_CONCRETE));
+            assert_eq!(
+                modern_accent_for(Office, true, portrait, WHITE_CONCRETE, 4, false, seed),
+                None
+            );
+            // A tall one takes panels, never a band at every storey.
+            let tall = modern_accent_for(
+                TallBuilding,
+                false,
+                portrait,
+                WHITE_CONCRETE,
+                12,
+                true,
+                seed,
+            );
+            assert!(tall.is_none_or(|(_, panels)| panels));
+            // Pilasters: every second or third bay, never on a tower.
+            let piers = pilasters_for(
+                Office,
+                ArchEra::Unknown,
+                true,
+                portrait,
+                BRICK,
+                SMOOTH_STONE,
+                4,
+                false,
+                seed,
+            );
+            piered += i32::from(piers.is_some());
+            assert!(piers.is_none_or(|(every, block)| (2..=3).contains(&every) && block == BRICK));
+            assert_eq!(
+                pilasters_for(
+                    Office,
+                    ArchEra::Unknown,
+                    true,
+                    portrait,
+                    BRICK,
+                    SMOOTH_STONE,
+                    12,
+                    true,
+                    seed
+                ),
+                None
+            );
+        }
+        assert!((15..45).contains(&shuttered), "{shuttered}/60 shuttered");
+        assert!(framed >= 36, "{framed}/60 timber houses framed");
+        assert!(accented >= 40, "{accented}/60 plain offices accented");
+        assert!(
+            (30..60).contains(&piered),
+            "{piered}/60 offices with pilasters"
+        );
+    }
+
+    #[test]
+    fn stepped_segments_are_the_ones_off_the_grid() {
+        assert!(!segment_is_stepped(0, 0, 20, 0));
+        assert!(!segment_is_stepped(0, 0, 0, -20));
+        // One jog in ten blocks leaves treads long enough to dress.
+        assert!(!segment_is_stepped(0, 0, 20, 2));
+        assert!(segment_is_stepped(0, 0, 20, 5));
+        assert!(segment_is_stepped(3, 3, 12, -6));
+    }
+
+    #[test]
+    fn only_traditional_fabric_is_dressed() {
+        use BuildingCategory::*;
+        let ctx = |region, materials, attached| RoofContext {
+            region,
+            materials,
+            attached,
+            ..RoofContext::default()
+        };
+        let munich = ctx(BuildingRegion::Europe, MaterialRegion::Central, true);
+        let helsinki = ctx(BuildingRegion::Europe, MaterialRegion::Nordic, false);
+        let nyc = ctx(
+            BuildingRegion::NorthAmerica,
+            MaterialRegion::NorthAmerica,
+            true,
+        );
+        let suburb = ctx(
+            BuildingRegion::NorthAmerica,
+            MaterialRegion::NorthAmerica,
+            false,
+        );
+        let pre_war = ArchEra::TraditionalPreWar;
+        // A dated building follows its era wherever it stands.
+        assert!(dressed_fabric(
+            Residential,
+            pre_war,
+            helsinki,
+            WHITE_CONCRETE,
+            2
+        ));
+        assert!(!dressed_fabric(
+            Residential,
+            ArchEra::Contemporary,
+            munich,
+            BRICK,
+            5
+        ));
+        // Undated: the town fabric of Europe, but not bare concrete or a Nordic house.
+        assert!(dressed_fabric(
+            Default,
+            ArchEra::Unknown,
+            munich,
+            WHITE_CONCRETE,
+            4
+        ));
+        assert!(!dressed_fabric(
+            Default,
+            ArchEra::Unknown,
+            munich,
+            LIGHT_GRAY_CONCRETE,
+            4
+        ));
+        assert!(!dressed_fabric(
+            House,
+            ArchEra::Unknown,
+            helsinki,
+            WHITE_CONCRETE,
+            1
+        ));
+        // Elsewhere brick rows and walk-ups, not a rendered house.
+        assert!(dressed_fabric(Residential, ArchEra::Unknown, nyc, BRICK, 4));
+        assert!(!dressed_fabric(
+            House,
+            ArchEra::Unknown,
+            suburb,
+            WHITE_CONCRETE,
+            2
+        ));
+        // A hall is never dressed.
+        assert!(!dressed_fabric(Industrial, pre_war, munich, BRICK, 2));
+    }
+
+    #[test]
+    fn eave_distances_run_straight_from_the_walls() {
+        let field = |cells: Vec<(i32, i32)>| eave_distances(&cells);
+        let rect = field((0..9).flat_map(|x| (0..7).map(move |z| (x, z))).collect());
+        assert_eq!((rect[&(0, 3)], rect[&(4, 0)]), (0, 0));
+        assert_eq!((rect[&(1, 1)], rect[&(4, 3)]), (1, 3));
+        // On a diamond the rings follow the slanted walls.
+        let diamond = field(
+            (-8..=8)
+                .flat_map(|x| (-8..=8).map(move |z| (x, z)))
+                .filter(|&(x, z): &(i32, i32)| x.abs() + z.abs() <= 8)
+                .collect(),
+        );
+        assert_eq!(diamond[&(8, 0)], 0);
+        assert_eq!(diamond[&(0, 0)], 5);
+        assert_eq!(diamond[&(2, 2)], diamond[&(4, 0)]);
+    }
+
+    #[test]
     fn houses_vary_archetypes_across_seeds() {
         let mut seen = std::collections::HashSet::new();
         for seed in 0..60u64 {
@@ -19159,13 +23185,13 @@ mod style_tests {
                     BuildingCategory::House,
                     ArchEra::Unknown,
                     BuildingRegion::NorthAmerica,
-                    BRICK,
+                    WHITE_CONCRETE,
                     PeriodCues::default(),
                     seed
                 )
             ));
         }
-        assert!(seen.len() >= 3, "expected variety, got {seen:?}");
+        assert!(seen.len() >= 2, "expected variety, got {seen:?}");
     }
 
     #[test]
@@ -19174,7 +23200,7 @@ mod style_tests {
         let pick = |category, era, region, wall, seed| {
             pick_window_archetype(category, era, region, wall, PeriodCues::default(), seed)
         };
-        let (mut hooded, mut sashes, mut spaced) = (0, 0, 0);
+        let (mut hooded, mut paired, mut stucco) = (0, 0, 0);
         for seed in 0..60u64 {
             let ornate = pick(
                 BuildingCategory::House,
@@ -19189,24 +23215,25 @@ mod style_tests {
                 "ornate era picked {ornate:?}"
             );
             hooded += i32::from(ornate == Hooded);
-            // Walk-up tenements in New York, period-three stucco in Munich.
-            sashes += i32::from(
+            // Walk-ups in New York and stucco in Munich: two-wide windows
+            // between real piers, the single sash now and then.
+            paired += i32::from(
                 pick(
                     BuildingCategory::Residential,
                     ArchEra::Unknown,
                     BuildingRegion::NorthAmerica,
                     BRICK,
                     seed,
-                ) == Sash,
+                ) == Portrait,
             );
-            spaced += i32::from(
+            stucco += i32::from(
                 pick(
                     BuildingCategory::Residential,
                     ArchEra::Unknown,
                     BuildingRegion::Europe,
                     WHITE_CONCRETE,
                     seed,
-                ) == Spaced,
+                ) == Portrait,
             );
             // A brick tower punches its windows or runs piers up the
             // shaft, never bands them.
@@ -19229,22 +23256,19 @@ mod style_tests {
                 GRAY_CONCRETE,
                 seed,
             );
-            assert!(
-                !matches!(panel, Sash | Spaced | Hooded),
-                "panel picked {panel:?}"
-            );
+            assert!(!matches!(panel, Spaced | Hooded), "panel picked {panel:?}");
         }
         assert!(
             hooded >= 8,
             "ornate era should hood windows, got {hooded}/60"
         );
         assert!(
-            sashes >= 12,
-            "tenements should favour sashes, got {sashes}/60"
+            paired >= 36,
+            "walk-ups should favour two-wide windows, got {paired}/60"
         );
         assert!(
-            spaced >= 20,
-            "stucco should favour spaced sashes, got {spaced}/60"
+            (30..60).contains(&stucco),
+            "stucco should favour two-wide windows and keep some sashes, got {stucco}/60"
         );
     }
 
@@ -19623,7 +23647,7 @@ mod style_tests {
     #[test]
     fn bay_layouts_are_symmetric_and_never_touch_a_corner() {
         use WindowArchetype::*;
-        let rhythms = [Sash, Portrait, Spaced, Wide, Ribbon, Piers, Strips]
+        let rhythms = [Portrait, Spaced, Wide, Ribbon, Piers, Strips]
             .map(WindowArchetype::rhythm)
             .into_iter()
             .chain([SHOP_RHYTHM]);
@@ -19692,6 +23716,113 @@ mod style_tests {
         let corner = columns.iter().find(|c| (c.x, c.z) == (20, 0)).unwrap();
         assert_eq!(corner.slot(), BaySlot::End);
         assert!(corner.corner());
+    }
+
+    // A cadastre surveys the walls, so its outlines keep them; one traced
+    // from the air steps them in under the eave.
+    #[test]
+    fn cadastre_outlines_keep_their_walls() {
+        use crate::element_processing::building_test_support::tag_map;
+        let src = |pairs: &[(&str, &str)]| outline_traces_walls(&tag_map(pairs));
+        assert!(src(&[(
+            "source",
+            "cadastre-dgi-fr source : Cadastre. Mise à jour : 2015"
+        )]));
+        assert!(src(&[("source", "ALKIS Bayern")]));
+        assert!(src(&[(
+            "source:geometry",
+            "Bayerische Vermessungsverwaltung, Kataster"
+        )]));
+        assert!(src(&[("source", "BAG")]));
+        assert!(src(&[
+            ("building", "house"),
+            ("ref:bag", "363100012345678")
+        ]));
+        assert!(src(&[("source", "3dshapes;BAG")]));
+        assert!(src(&[("source:outline", "basemap.at;DKM")]));
+        // Prague, Berlin, Liege and Ghent, as their outlines are tagged.
+        assert!(src(&[("source", "cuzk:ruian")]));
+        assert!(src(&[("source", "cuzk:km")]));
+        assert!(src(&[("building", "yes"), ("ref:ruian:building", "")]));
+        assert!(src(&[("source", "Geoportal Berlin / Hausumringe")]));
+        assert!(src(&[(
+            "source",
+            "20cm-near PICC http://geoportail.wallonie.be "
+        )]));
+        assert!(src(&[("source:geometry:ref", "Gbg/")]));
+        assert!(src(&[("building", "house"), ("ref:bygningsnr", "")]));
+        assert!(!src(&[("source", "Bing")]));
+        assert!(!src(&[("source", "survey")]));
+        assert!(!src(&[("source", "esri/World_Imagery; bagnoli survey")]));
+        assert!(!src(&[("building", "house")]));
+    }
+
+    #[test]
+    fn a_stepped_wall_keeps_the_windows_of_its_outline() {
+        let ring = |points: &[(i32, i32)]| -> Vec<ProcessedNode> {
+            let mut nodes: Vec<ProcessedNode> = points
+                .iter()
+                .enumerate()
+                .map(|(i, &(x, z))| ProcessedNode {
+                    id: i as u64 + 1,
+                    tags: HashMap::new(),
+                    x,
+                    z,
+                })
+                .collect();
+            nodes.push(nodes[0].clone());
+            nodes
+        };
+        // A house stepped in a block on every side, under its eave.
+        let outline = ring(&[(0, 0), (14, 0), (14, 10), (0, 10)]);
+        let stepped = ring(&[(1, 1), (13, 1), (13, 9), (1, 9)]);
+        let mut config = test_config(10, false, false);
+        let on_line = facade_columns(&outline, &config);
+        let own = facade_columns(&stepped, &config);
+        config.eave_outline = Some(outline.as_slice().into());
+        let columns = facade_columns(&stepped, &config);
+        let glazed = |cols: &[WallColumn], normal: (i32, i32)| -> Vec<i32> {
+            let mut along: Vec<i32> = cols
+                .iter()
+                .filter(|c| c.normal == normal && c.slot().is_window())
+                .map(|c| if normal.0 == 0 { c.x } else { c.z })
+                .collect();
+            along.sort_unstable();
+            along.dedup();
+            along
+        };
+        for normal in [(0, -1), (1, 0), (0, 1), (-1, 0)] {
+            let want = glazed(&on_line, normal);
+            assert!(!want.is_empty(), "no window facing {normal:?}");
+            assert_eq!(glazed(&columns, normal), want, "facing {normal:?}");
+        }
+        // Laid out on its own, the shorter front fits a window fewer.
+        assert!(glazed(&own, (0, -1)).len() < glazed(&on_line, (0, -1)).len());
+        // Every stepped run still ends on a pier.
+        assert!(columns
+            .iter()
+            .filter(|c| c.pos == 0 || c.pos == c.upper.len - 1)
+            .all(|c| c.slot() == BaySlot::End));
+
+        // A gable too short to keep its corner piers keeps its two windows
+        // on a narrower pier between them, where alone it fits one.
+        let outline = ring(&[(0, 0), (14, 0), (14, 8), (0, 8)]);
+        let stepped = ring(&[(1, 1), (13, 1), (13, 7), (1, 7)]);
+        config.eave_outline = None;
+        let own = facade_columns(&stepped, &config);
+        config.eave_outline = Some(outline.as_slice().into());
+        let columns = facade_columns(&stepped, &config);
+        let gable = |cols: &[WallColumn]| {
+            cols.iter().find(|c| c.normal == (1, 0)).map(|c| {
+                (
+                    c.upper.count,
+                    c.upper.slot(0),
+                    c.upper.slot(c.upper.len - 1),
+                )
+            })
+        };
+        assert_eq!(gable(&own).map(|g| g.0), Some(1));
+        assert_eq!(gable(&columns), Some((2, BaySlot::End, BaySlot::End)));
     }
 
     #[test]
@@ -19781,7 +23912,15 @@ mod style_tests {
 
         let mut java = test_editor(&xz);
         generate_floors_and_ceilings(
-            &mut java, &cells, &config, false, &passages, false, false, &lid,
+            &mut java,
+            &cells,
+            &config,
+            false,
+            &passages,
+            &CoordinateBitmap::new_empty(),
+            false,
+            false,
+            &lid,
         );
         assert!(count(&java, LIGHT) > 0);
         assert_eq!(count(&java, GLOWSTONE), 0);
@@ -19802,6 +23941,7 @@ mod style_tests {
             &config,
             false,
             &passages,
+            &CoordinateBitmap::new_empty(),
             false,
             false,
             &lid,
@@ -19826,7 +23966,6 @@ mod style_tests {
             use_horizontal_windows: false,
             use_accent_roof_line: false,
             use_accent_lines: false,
-            use_vertical_accent: false,
             is_abandoned_building: false,
             has_windows: true,
             has_garage_door: false,
@@ -19845,6 +23984,7 @@ mod style_tests {
             window_phase: 0,
             window_archetype: WindowArchetype::Portrait,
             bays: WindowArchetype::Portrait.rhythm(),
+            eave_outline: None,
             spandrel_block: SMOOTH_STONE,
             zoning: None,
             balcony_band: BalconyBand::Scattered,
@@ -19854,6 +23994,20 @@ mod style_tests {
             base_course_block: None,
             ground: GroundFloor::Plain,
             trim_block: SMOOTH_STONE,
+            dressed: true,
+            low_pitch_roof: false,
+            window_reveal: None,
+            window_pane: None,
+            top_band: None,
+            shutters: None,
+            sunshade: None,
+            hot_window_units: false,
+            split_units: false,
+            window_panel: None,
+            floor_band: None,
+            pilasters: None,
+            coursed: false,
+            fire_escape: false,
             surrounds: false,
             shop_frame: BLACK_CONCRETE,
             recess_windows: true,
@@ -19862,6 +24016,8 @@ mod style_tests {
             window_frame: None,
             facade_shell: Arc::default(),
             preset_shell: Arc::default(),
+            passage_height: BUILDING_PASSAGE_HEIGHT,
+            rail_hall: false,
         }
     }
 
@@ -19880,6 +24036,7 @@ mod style_tests {
             facade,
             passages,
             footprints: Some(footprints),
+            eave_strip: None,
             wall,
             taken: FnvHashSet::default(),
         }
@@ -20160,6 +24317,34 @@ mod style_tests {
         );
     }
 
+    /// The glass roof of a curtain wall carries the wall's mapped tint up its
+    /// sloped faces; with no tint mapped it keeps the window glass.
+    #[test]
+    fn a_tinted_curtain_wall_keeps_its_tint_on_the_roof() {
+        let tags = |pairs: &[(&str, &str)]| -> HashMap<String, String> {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        };
+        let white = tags(&[
+            ("building:part", "yes"),
+            ("building:material", "glass"),
+            ("building:colour", "#FFFFFF"),
+        ]);
+        let tint = mapped_glass_tint(&white).unwrap();
+        assert_eq!(
+            curtain_roof_glass(&white, tint, BLACK_STAINED_GLASS),
+            Some(tint)
+        );
+        let plain = tags(&[("building:part", "yes"), ("building:material", "glass")]);
+        assert_eq!(
+            curtain_roof_glass(&plain, GRAY_STAINED_GLASS, BLACK_STAINED_GLASS),
+            Some(BLACK_STAINED_GLASS)
+        );
+        assert_eq!(curtain_roof_glass(&white, BRICK, BLACK_STAINED_GLASS), None);
+    }
+
     /// Offices, shops and towers stand on concrete floors, which their glass
     /// shows; houses and flats keep their timber.
     #[test]
@@ -20211,6 +24396,55 @@ mod style_tests {
             &tags(&[("roof:material", "glass"), ("roof:shape", "flat")]),
             "yes"
         ));
+        // One World Trade Center's corners: glass parts whose 362 m roof is the
+        // tower's tapering face, with storeys behind it.
+        let corner = [
+            ("building:part", "yes"),
+            ("building:material", "glass"),
+            ("roof:material", "glass"),
+            ("roof:shape", "skillion"),
+            ("roof:height", "362"),
+            ("height", "417"),
+        ];
+        assert!(is_sloped_glass_facade(&tags(&corner)));
+        assert!(!is_glass_hall(&tags(&corner), "yes"));
+        // A glass vault on a part, a few metres high, stays a hall.
+        let vault = [
+            ("building:part", "yes"),
+            ("roof:material", "glass"),
+            ("roof:shape", "round"),
+            ("roof:height", "6"),
+        ];
+        assert!(!is_sloped_glass_facade(&tags(&vault)));
+        assert!(is_glass_hall(&tags(&vault), "yes"));
+        // So does a whole building's: only a part is a tower's face.
+        let mut whole = corner.to_vec();
+        whole.retain(|&(k, _)| k != "building:part");
+        assert!(!is_sloped_glass_facade(&tags(&whole)));
+        // A tall glass dome or vault is a hall's roof, whatever its rise.
+        let dome = [
+            ("building:part", "yes"),
+            ("roof:material", "glass"),
+            ("roof:shape", "dome"),
+            ("roof:height", "24"),
+            ("height", "40"),
+        ];
+        assert!(!is_sloped_glass_facade(&tags(&dome)));
+        assert!(is_glass_hall(&tags(&dome), "yes"));
+        // A glass pyramid on the ground has no walls for storeys to stand in.
+        let pyramid = [
+            ("building:part", "yes"),
+            ("roof:material", "glass"),
+            ("roof:shape", "pyramidal"),
+            ("roof:height", "21.6"),
+            ("height", "21.6"),
+        ];
+        assert!(!is_sloped_glass_facade(&tags(&pyramid)));
+        assert!(is_glass_hall(&tags(&pyramid), "yes"));
+        // On a raised part, the walls are what is left above min_height.
+        let mut raised = corner.to_vec();
+        raised.push(("min_height", "414"));
+        assert!(!is_sloped_glass_facade(&tags(&raised)));
     }
 
     /// A glass curtain wall hangs on fins: the glass stands back a block and
@@ -20883,6 +25117,21 @@ mod style_tests {
             ]);
         }
         blocks.extend(ROOF_SHADES.iter().map(|&(b, _)| b));
+        // Window reveals and shutters.
+        blocks.extend_from_slice(&[
+            DARK_OAK_TRAPDOOR,
+            SPRUCE_TRAPDOOR,
+            BIRCH_TRAPDOOR,
+            WARPED_TRAPDOOR,
+        ]);
+        // Fire escapes.
+        blocks.extend_from_slice(&[IRON_TRAPDOOR, IRON_BARS, LADDER]);
+        // Top bands, window panels and storey bands.
+        blocks.extend_from_slice(&[GRAY_CONCRETE, GRAY_TERRACOTTA, CYAN_TERRACOTTA]);
+        // The full blocks laid among roof slabs.
+        for pool in ROOF_POOLS.iter() {
+            blocks.extend(pool.iter().map(|&(b, _)| full_block_like_its_stairs(b)));
+        }
         // Window life: curtains, air conditioners, window boxes.
         blocks.extend_from_slice(&[
             WHITE_WOOL,
@@ -20891,14 +25140,6 @@ mod style_tests {
             AZALEA_LEAVES,
             FLOWERING_AZALEA_LEAVES,
         ]);
-        for pool in ROOF_POOLS.iter() {
-            for &(b, _) in pool.iter() {
-                if let Some(tone) = roof_tone_sibling(b) {
-                    blocks.extend([tone.full, tone.stairs]);
-                    blocks.extend(tone.slab);
-                }
-            }
-        }
         for style in [
             DoorStyle::Oak,
             DoorStyle::Spruce,
@@ -20950,10 +25191,6 @@ mod style_tests {
         }
         for frame in SHOP_FRAME_OPTIONS {
             blocks.push(trim_slab(frame));
-        }
-        let base: Vec<Block> = blocks.clone();
-        for b in base {
-            blocks.extend_from_slice(substitute_pool_only(b));
         }
         for b in blocks {
             if b == STONE {
@@ -21648,6 +25885,65 @@ mod style_tests {
         }
     }
 
+    // About half the pitched roofs of Bavaria are red tile; none of the halls
+    // of an industrial estate are, while its shops keep the town's tile.
+    #[test]
+    fn central_roofs_are_mostly_red_and_halls_never() {
+        let red = |b: Block| matches!(b, TILE_RED | TILE_BRICK | TILE_ORANGE | TILE_DARK);
+        let ctx = |district, attached| RoofContext {
+            materials: MaterialRegion::Central,
+            district,
+            attached,
+            ..RoofContext::default()
+        };
+        let mut reds = 0;
+        for seed in 0..2000u64 {
+            let roof = pitched_roof_block(
+                BuildingCategory::Residential,
+                ArchEra::Unknown,
+                RoofType::Gabled,
+                WHITE_CONCRETE,
+                ctx(seed / 10, false),
+                seed,
+            );
+            reds += usize::from(red(roof));
+        }
+        // Red takes about four in five draws here, as the town's tile; the
+        // halls, civic and modern roofs that draw elsewhere bring the share in
+        // a town down.
+        assert!((1450..=1800).contains(&reds), "{reds} of 2000 red");
+        for category in [BuildingCategory::Industrial, BuildingCategory::Warehouse] {
+            for seed in 0..200u64 {
+                let roof = pitched_roof_block(
+                    category,
+                    ArchEra::Unknown,
+                    RoofType::Gabled,
+                    WHITE_CONCRETE,
+                    ctx(seed, false),
+                    seed,
+                );
+                assert!(!red(roof), "{category:?}: {}", roof.name());
+            }
+        }
+        // A shop keeps the town's tile, in a row or standing free (a kiosk,
+        // a market stall).
+        for attached in [true, false] {
+            let shops = (0..200u64)
+                .filter(|&seed| {
+                    red(pitched_roof_block(
+                        BuildingCategory::Commercial,
+                        ArchEra::Unknown,
+                        RoofType::Gabled,
+                        WHITE_CONCRETE,
+                        ctx(seed, attached),
+                        seed,
+                    ))
+                })
+                .count();
+            assert!(shops > 50, "{shops} red shops, attached {attached}");
+        }
+    }
+
     #[test]
     fn european_pitched_roofs_are_tile_or_slate_and_follow_the_district() {
         let ctx = |district| RoofContext {
@@ -21764,6 +26060,17 @@ mod style_tests {
             );
             assert!(SPIRE_ROOFS.iter().any(|&(b, _)| b == roof));
         }
+    }
+
+    #[test]
+    fn domes_mapped_in_gold_are_gilded() {
+        let tags = |colour: &str| HashMap::from([("roof:colour".to_string(), colour.to_string())]);
+        // The Dome of the Rock and a Kremlin cathedral's onions.
+        assert!(gilded_dome(&tags("#FFD700"), RoofType::Dome));
+        assert!(gilded_dome(&tags("gold"), RoofType::Onion));
+        assert!(!gilded_dome(&tags("#FFD700"), RoofType::Gabled));
+        assert!(!gilded_dome(&tags("yellow"), RoofType::Dome));
+        assert!(!gilded_dome(&tags("#707090"), RoofType::Dome));
     }
 
     #[test]
@@ -22079,7 +26386,7 @@ mod style_tests {
             &[("building", "retail"), ("shop", "department_store")],
         );
         let bays = closed_retail_bays(&store, &config, 2400, 1.0).expect("closed bays");
-        assert!(bays.pier >= 4 * bays.window);
+        assert_eq!((bays.window, bays.pier), (2, 4));
         let office = rect_way(2, 0, 0, 60, 40, &[("building", "office")]);
         assert_eq!(closed_retail_bays(&office, &config, 2400, 1.0), None);
         assert_eq!(closed_retail_bays(&store, &config, 600, 1.0), None);
@@ -22090,22 +26397,6 @@ mod style_tests {
         assert_eq!(closed_retail_bays(&store, &glass, 2400, 1.0), None);
         let low = test_config(2 + 2 * 4, false, false);
         assert_eq!(closed_retail_bays(&store, &low, 2400, 1.0), None);
-    }
-
-    #[test]
-    fn wall_variety_stays_within_the_tone() {
-        assert_eq!(substitute_pool_only(GRAY_CONCRETE), &[GRAY_CONCRETE_POWDER]);
-        for b in substitute_pool_only(BRICK) {
-            assert!(matches!(*b, POLISHED_GRANITE | GRANITE));
-        }
-        for b in [
-            WHITE_TERRACOTTA,
-            MUSHROOM_STEM,
-            OAK_PLANKS,
-            LIGHT_GRAY_TERRACOTTA,
-        ] {
-            assert!(substitute_pool_only(b).is_empty(), "{}", b.name());
-        }
     }
 
     #[test]
@@ -22175,6 +26466,27 @@ mod style_tests {
             ..walk_up.clone()
         };
         assert!(!has_air_conditioners(&furnished, &tags, &street));
+        // Flats of three storeys and up in the hot cities, short of the contemporary block.
+        let hot = BuildingConfig {
+            region: BuildingRegion::Other,
+            hot_window_units: true,
+            building_height: 2 + 3 * 4,
+            era: ArchEra::PostWarPanel,
+            ..walk_up.clone()
+        };
+        assert!(has_air_conditioners(&hot, &tags, &street));
+        let new = BuildingConfig {
+            era: ArchEra::Contemporary,
+            ..hot.clone()
+        };
+        assert!(!has_air_conditioners(&new, &tags, &street));
+        // A tower of flats there hangs them too.
+        let tower = BuildingConfig {
+            building_height: 2 + 20 * 4,
+            is_tall_building: true,
+            ..hot.clone()
+        };
+        assert!(has_air_conditioners(&tower, &tags, &street));
 
         // Window boxes: pre-war European dwellings only.
         let town_house = BuildingConfig {
@@ -22295,49 +26607,6 @@ mod style_tests {
             TILE_ORANGE
         );
         assert_eq!(patched_roof_block(TILE_RED, RoofType::Dome, true), TILE_RED);
-    }
-
-    #[test]
-    fn roof_tone_siblings_keep_tone_and_shape() {
-        for pool in ROOF_POOLS {
-            for &(roof, _) in pool.iter() {
-                let Some(tone) = roof_tone_sibling(roof) else {
-                    continue;
-                };
-                let stairs = get_stair_block_for_material(roof);
-                assert_ne!(
-                    tone.stairs,
-                    stairs,
-                    "{} has no visible sibling",
-                    roof.name()
-                );
-                if roof_slab_for_stair(stairs).is_some() {
-                    assert!(tone.slab.is_some(), "{} sibling lacks a slab", roof.name());
-                }
-            }
-        }
-        // Sheet metal and the tiles with no close sibling stay uniform.
-        for roof in [ZINC, COPPER_ROOF, TILE_DARK, TILE_BROWN] {
-            assert!(roof_tone_sibling(roof).is_none(), "{}", roof.name());
-        }
-        // A few small patches, not a speckle.
-        let cells = 200 * 200;
-        let patched = (0..200)
-            .flat_map(|x| (0..200).map(move |z| (x, z)))
-            .filter(|&(x, z)| roof_tone_patch(roof_tone_patch_of(x, z), 99))
-            .count();
-        assert!(
-            (cells * 4 / 100..=cells * 12 / 100).contains(&patched),
-            "{patched} of {cells} cells patched"
-        );
-        let paired = (0..200)
-            .flat_map(|x| (0..200).map(move |z| (x, z)))
-            .filter(|&(x, z)| {
-                roof_tone_patch(roof_tone_patch_of(x, z), 99)
-                    && roof_tone_patch(roof_tone_patch_of(x ^ 1, z), 99)
-            })
-            .count();
-        assert!(paired * 2 >= patched, "patches are single cells");
     }
 
     /// A rectangular dwelling's wall ring, window dressing and window life,
@@ -22495,6 +26764,138 @@ mod facade_integration_tests {
     use clap::Parser as _;
     use fnv::FnvHashMap;
 
+    #[test]
+    fn some_plain_fronts_glaze_in_panes() {
+        let pane = |b: Block| matches!(b, GLASS_PANE | GRAY_STAINED_GLASS_PANE);
+        let modern: &[(&str, &str)] = &[
+            ("building", "apartments"),
+            ("building:levels", "4"),
+            ("start_date", "1995"),
+        ];
+        let mut paned = 0;
+        for id in 960..990u64 {
+            let world = dwelling_world(berlin(), id, modern);
+            if !world.iter().any(|(&(_, _, z), &b)| z == 20 && pane(b)) {
+                continue;
+            }
+            paned += 1;
+            // In the wall plane between the piers; no glass set back behind that front.
+            let set_back = world
+                .iter()
+                .filter(|&(&(_, y, z), &b)| {
+                    z == 21 && y > 6 && (b == GLASS || b == GRAY_STAINED_GLASS)
+                })
+                .count();
+            assert_eq!(
+                set_back, 0,
+                "way {id}: panes and set-back glass on one front"
+            );
+        }
+        assert!(paned > 0, "no front glazed in panes among 30 plain blocks");
+        let old: &[(&str, &str)] = &[
+            ("building", "apartments"),
+            ("building:levels", "4"),
+            ("start_date", "1900"),
+        ];
+        for id in 960..966u64 {
+            let world = dwelling_world(berlin(), id, old);
+            assert!(
+                !world.iter().any(|(&(_, _, z), &b)| z == 20 && pane(b)),
+                "way {id}: panes in a dressed front"
+            );
+        }
+    }
+
+    #[test]
+    fn halls_open_loading_doors() {
+        // A shutter a block behind an open wall cell, low on the long front.
+        let doors = |world: &HashMap<(i32, i32, i32), Block>| {
+            world
+                .iter()
+                .filter(|&(&(x, y, z), &b)| {
+                    (1..=3).contains(&y)
+                        && (11..=44).contains(&x)
+                        && (z == 21 || z == 35)
+                        && !is_glass(b)
+                        && matches!(
+                            b,
+                            LIGHT_GRAY_CONCRETE | GRAY_CONCRETE | WHITE_CONCRETE | CYAN_TERRACOTTA
+                        )
+                        && world
+                            .get(&(x, y, if z == 21 { 20 } else { 36 }))
+                            .is_none_or(|&w| w == AIR)
+                })
+                .count()
+        };
+        let hall: &[(&str, &str)] = &[("building", "warehouse"), ("building:levels", "1")];
+        let flats: &[(&str, &str)] = &[("building", "apartments"), ("building:levels", "3")];
+        for id in 940..944u64 {
+            assert!(
+                doors(&dwelling_world(nyc(), id, hall)) >= 9,
+                "way {id}: no loading door on the warehouse"
+            );
+            assert_eq!(doors(&dwelling_world(nyc(), id, flats)), 0, "way {id}");
+        }
+    }
+
+    #[test]
+    fn condensers_hang_under_the_windows_of_plain_eastern_blocks() {
+        let flats: &[(&str, &str)] = &[
+            ("building", "apartments"),
+            ("building:levels", "5"),
+            ("start_date", "1965"),
+        ];
+        let mut units = 0;
+        for id in 600..612u64 {
+            let world = dwelling_world(moscow(), id, flats);
+            // A block out from the front or the back, with glass over it and nothing beyond.
+            units += world
+                .iter()
+                .filter(|&(&(x, y, z), &b)| {
+                    let (wall, beyond) = match z {
+                        19 => ([20, 21], 18),
+                        37 => ([36, 35], 38),
+                        _ => return false,
+                    };
+                    b == SMOOTH_STONE
+                        && (11..=44).contains(&x)
+                        && wall
+                            .iter()
+                            .any(|&gz| world.get(&(x, y + 1, gz)).is_some_and(|&g| is_glass(g)))
+                        && world.get(&(x, y, beyond)).is_none_or(|&o| o == AIR)
+                })
+                .count();
+        }
+        assert!(units > 0, "no condenser on a dozen Moscow blocks");
+    }
+
+    #[test]
+    fn hot_fronts_carry_sunshades_over_their_windows() {
+        // In the world: a slab a block out over the head of a recessed window.
+        let flats: &[(&str, &str)] = &[
+            ("building", "apartments"),
+            ("building:levels", "4"),
+            ("start_date", "1995"),
+        ];
+        let mut over_glass = 0;
+        for id in 900..912u64 {
+            let world = dwelling_world(mumbai(), id, flats);
+            over_glass += world
+                .iter()
+                .filter(|&(&(x, y, z), b)| {
+                    z == 19
+                        && b.name().ends_with("_slab")
+                        && (20..=21)
+                            .any(|gz| world.get(&(x, y - 1, gz)).is_some_and(|&g| is_glass(g)))
+                })
+                .count();
+        }
+        assert!(
+            over_glass > 20,
+            "{over_glass} shaded window columns in Mumbai"
+        );
+    }
+
     const DOOR_BLOCKS: &[Block] = &[OAK_DOOR, SPRUCE_DOOR_LOWER, DARK_OAK_DOOR_LOWER, BIRCH_DOOR];
 
     fn flat_args() -> Args {
@@ -22547,14 +26948,316 @@ mod facade_integration_tests {
         let ctx = BuildingContext {
             flood_fill_cache: &cache,
             building_passages: &passages,
+            rail_passages: crate::element_processing::railways::RailPassages::none(),
             road_mask: road,
             building_footprints: footprints,
             group_members: &groups,
             housing_relation_parts: &Default::default(),
+            neighbour_heights: crate::element_processing::buildings::no_neighbour_heights(),
+            inset_plan: crate::element_processing::buildings::no_inset_plan(),
             interior_uses:
                 crate::element_processing::subprocessor::interior::InteriorUseIndex::empty(),
         };
         generate_buildings(editor, way, args, None, None, &ctx, way.id);
+    }
+
+    /// The highest block of a house over cells x 10..=24, z 10..=20 with these
+    /// tags, at each of `cells`.
+    fn house_tops(tags: &[(&str, &str)], cells: &[(i32, i32)]) -> Vec<i32> {
+        use crate::element_processing::building_test_support::bitmap_with_rect;
+        let xz = XZBBox::rect_from_xz_lengths(40.0, 40.0).unwrap();
+        let mut editor = test_editor(&xz);
+        let way = rect_way(1, 10, 10, 24, 20, tags);
+        let footprints = bitmap_with_rect(&xz, 11, 11, 23, 19);
+        run_building(
+            &mut editor,
+            &way,
+            &CoordinateBitmap::new_empty(),
+            &footprints,
+        );
+        cells
+            .iter()
+            .map(|&(x, z)| editor.highest_block_between(x, z, 0, 400).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn a_measured_roof_takes_the_laser_shape_and_ridge() {
+        use crate::survey::roofs::{DIRECTION_HINT, SHAPE_HINT};
+        // Along the middle of the long side (z = 15) and across it (x = 17).
+        let cells = [(13, 15), (21, 15), (17, 12), (17, 18), (17, 15)];
+        // Its slope facing east: the ridge runs north-south across the long
+        // side, so the line x = 17 is level and z = 15 falls to the walls.
+        let t = house_tops(
+            &[
+                ("building", "house"),
+                (SHAPE_HINT, "gabled"),
+                (DIRECTION_HINT, "90"),
+            ],
+            &cells,
+        );
+        assert_eq!(t[2], t[3], "ridge along z: {t:?}");
+        assert_eq!(t[2], t[4], "ridge along z: {t:?}");
+        assert!(
+            t[0] < t[4] && t[1] < t[4],
+            "falls to the east and west walls: {t:?}"
+        );
+        // Facing south, the ridge runs along the long side.
+        let t = house_tops(
+            &[
+                ("building", "house"),
+                (SHAPE_HINT, "gabled"),
+                (DIRECTION_HINT, "180"),
+            ],
+            &cells,
+        );
+        assert_eq!(t[0], t[1], "ridge along x: {t:?}");
+        assert!(
+            t[2] < t[4] && t[3] < t[4],
+            "falls to the north and south walls: {t:?}"
+        );
+        // A flat roof the laser saw stays flat on a house.
+        let t = house_tops(&[("building", "house"), (SHAPE_HINT, "flat")], &cells);
+        assert!(t.iter().all(|&y| y == t[0]), "flat: {t:?}");
+        // A mapped shape and direction win over the laser's.
+        let mapped = [
+            ("building", "house"),
+            ("roof:shape", "gabled"),
+            ("roof:direction", "180"),
+        ];
+        let mut hinted = mapped.to_vec();
+        hinted.extend([(SHAPE_HINT, "flat"), (DIRECTION_HINT, "90")]);
+        assert_eq!(house_tops(&hinted, &cells), house_tops(&mapped, &cells));
+    }
+
+    /// A building over cells x 20..=50, z 20..=40, with `track` (if any) along z = 30 from
+    /// x = 0 to 79, tagged `railway=rail` and the given tags.
+    fn built_over_track<'a>(
+        xz: &'a XZBBox,
+        building: &[(&str, &str)],
+        track: Option<&[(&str, &str)]>,
+    ) -> WorldEditor<'a> {
+        use crate::element_processing::building_test_support::{bitmap_with_rect, tag_map};
+        use crate::element_processing::railways::collect_rail_passages;
+        use crate::osm_parser::{ProcessedElement, ProcessedNode};
+        let mut editor = test_editor(xz);
+        let way = rect_way(1, 20, 20, 50, 40, building);
+        // As the generator collects them: the cells inside the walls.
+        let footprints = bitmap_with_rect(xz, 21, 21, 49, 39);
+        let tracks: Vec<ProcessedElement> = track
+            .map(|tags| {
+                let mut tags = tag_map(tags);
+                tags.insert("railway".into(), "rail".into());
+                let node = |id: u64, x: i32| ProcessedNode {
+                    id,
+                    tags: HashMap::new(),
+                    x,
+                    z: 30,
+                };
+                ProcessedElement::Way(ProcessedWay {
+                    id: 9,
+                    nodes: vec![node(90, 0), node(91, 79)],
+                    tags,
+                })
+            })
+            .into_iter()
+            .collect();
+        let rails = collect_rail_passages(&tracks, xz, 1.0, &footprints);
+        let mut passages = CoordinateBitmap::new_empty();
+        passages.union_with(&rails.cells);
+        let road = CoordinateBitmap::new(xz);
+        let cache = FloodFillCache::new();
+        let groups: FnvHashMap<u64, Vec<u64>> = FnvHashMap::default();
+        let ctx = BuildingContext {
+            flood_fill_cache: &cache,
+            building_passages: &passages,
+            rail_passages: &rails,
+            road_mask: &road,
+            building_footprints: &footprints,
+            group_members: &groups,
+            housing_relation_parts: &Default::default(),
+            neighbour_heights: crate::element_processing::buildings::no_neighbour_heights(),
+            inset_plan: crate::element_processing::buildings::no_inset_plan(),
+            interior_uses:
+                crate::element_processing::subprocessor::interior::InteriorUseIndex::empty(),
+        };
+        generate_buildings(&mut editor, &way, &flat_args(), None, None, &ctx, way.id);
+        editor
+    }
+
+    /// Whether anything stands at a block.
+    fn solid(editor: &WorldEditor, x: i32, y: i32, z: i32) -> bool {
+        editor
+            .get_block_absolute(x, y, z)
+            .is_some_and(|b| b != AIR && b != LIGHT)
+    }
+
+    /// A gabled house over cells x 20..=34, z 20..=30, with a neighbour over
+    /// x 34..=48 when `terraced`.
+    fn gabled_house(xz: &XZBBox, terraced: bool) -> WorldEditor<'_> {
+        let mut editor = test_editor(xz);
+        let way = rect_way(
+            7,
+            20,
+            20,
+            34,
+            30,
+            &[
+                ("building", "house"),
+                ("building:levels", "2"),
+                ("roof:shape", "gabled"),
+            ],
+        );
+        let footprints = bitmap_with_rect(xz, 20, 20, if terraced { 48 } else { 34 }, 30);
+        run_building(&mut editor, &way, &CoordinateBitmap::new(xz), &footprints);
+        editor
+    }
+
+    // OSM outlines follow the roof edge. The walls step in a block so the
+    // eave hangs over the outline's edge cells, not a block of street past them.
+    #[test]
+    fn a_pitched_roof_keeps_its_eave_over_the_outline() {
+        let xz = XZBBox::rect_from_xz_lengths(60.0, 60.0).unwrap();
+        let editor = gabled_house(&xz, false);
+        // Two housing storeys: walls 8 high, the eave above them.
+        for x in 17..=37 {
+            for z in 17..=33 {
+                if (20..=34).contains(&x) && (20..=30).contains(&z) {
+                    continue;
+                }
+                for y in 8..30 {
+                    assert!(
+                        !solid(&editor, x, y, z),
+                        "roof past the outline at {x},{y},{z}"
+                    );
+                }
+            }
+        }
+        // The walls stand a block in, their windows set back a block more;
+        // the outline's edge carries only what hangs off a wall (sills,
+        // shutters, a doorstep) and the eave.
+        let filled = |cells: &[(i32, i32)], (ix, iz): (i32, i32)| {
+            let mut n = 0;
+            for &(x, z) in cells {
+                n += (1..8)
+                    .filter(|&y| solid(&editor, x, y, z) || solid(&editor, x + ix, y, z + iz))
+                    .count();
+            }
+            n as f64 / (7 * cells.len()) as f64
+        };
+        let full = |cells: &[(i32, i32)]| {
+            let mut n = 0;
+            for &(x, z) in cells {
+                n += (1..8)
+                    .filter(|&y| {
+                        editor.get_block_absolute(x, y, z).is_some_and(|b| {
+                            let name = b.name();
+                            b != AIR
+                                && ![
+                                    "_trapdoor",
+                                    "_slab",
+                                    "_stairs",
+                                    "_leaves",
+                                    "_pot",
+                                    "cauldron",
+                                ]
+                                .iter()
+                                .any(|s| name.ends_with(s))
+                        })
+                    })
+                    .count();
+            }
+            n as f64 / (7 * cells.len()) as f64
+        };
+        let column = |x: i32| (22..=28).map(|z| (x, z)).collect::<Vec<_>>();
+        let row = |z: i32| (22..=32).map(|x| (x, z)).collect::<Vec<_>>();
+        for (wall, edge, inward) in [
+            (column(21), column(20), (1, 0)),
+            (column(33), column(34), (-1, 0)),
+            (row(21), row(20), (0, 1)),
+            (row(29), row(30), (0, -1)),
+        ] {
+            assert!(filled(&wall, inward) > 0.9, "wall {wall:?}");
+            assert!(full(&edge) < 0.2, "wall on the outline {edge:?}");
+            assert!(
+                edge.iter()
+                    .all(|&(x, z)| (8..30).any(|y| solid(&editor, x, y, z))),
+                "no eave over {edge:?}"
+            );
+        }
+    }
+
+    // A party wall stays on the line the two houses share.
+    #[test]
+    fn a_terraced_house_keeps_its_party_wall_on_the_shared_line() {
+        let xz = XZBBox::rect_from_xz_lengths(60.0, 60.0).unwrap();
+        let editor = gabled_house(&xz, true);
+        for z in 22..=28 {
+            assert!(
+                solid(&editor, 34, 5, z),
+                "party wall stepped off the shared line"
+            );
+            assert!(solid(&editor, 21, 5, z), "free gable end on the outline");
+        }
+    }
+
+    // Track running into a depot opens its end walls as high as a train, and the depot
+    // is one hall over the tracks; without the track it has its storeys.
+    #[test]
+    fn track_into_a_depot_opens_it_and_takes_its_storeys() {
+        let xz = XZBBox::rect_from_xz_lengths(80.0, 80.0).unwrap();
+        let depot = [("building", "industrial"), ("building:levels", "2")];
+        let editor = built_over_track(&xz, &depot, Some(&[]));
+        for x in [20, 50] {
+            for z in 28..=32 {
+                for y in 1..=5 {
+                    assert!(
+                        !solid(&editor, x, y, z),
+                        "end wall at x {x}, z {z}, row {y}"
+                    );
+                }
+            }
+            assert!(solid(&editor, x, 6, 30), "lintel over the opening at x {x}");
+            assert!(
+                solid(&editor, x, 1, 26),
+                "plinth beside the opening at x {x}"
+            );
+        }
+        // Inside, nothing over the track and nothing between the floor and the roof.
+        assert!(
+            !solid(&editor, 35, 6, 30),
+            "a lintel along the track inside"
+        );
+        let slab = |editor: &WorldEditor| (4..=8).any(|y| solid(editor, 35, y, 25));
+        assert!(!slab(&editor), "a storey over the depot floor");
+        assert!(
+            slab(&built_over_track(&xz, &depot, None)),
+            "no storeys without track"
+        );
+    }
+
+    // Track mapped as passing under an office block gets its passage, and the floors
+    // above and beside it stay.
+    #[test]
+    fn track_under_an_office_keeps_its_storeys() {
+        let xz = XZBBox::rect_from_xz_lengths(80.0, 80.0).unwrap();
+        // Flat-roofed, so its walls stand on the outline the passage crosses.
+        let office = [
+            ("building", "office"),
+            ("building:levels", "6"),
+            ("roof:shape", "flat"),
+        ];
+        let editor = built_over_track(&xz, &office, Some(&[("tunnel", "building_passage")]));
+        for y in 1..=5 {
+            assert!(!solid(&editor, 20, y, 30), "passage at row {y}");
+        }
+        assert!(solid(&editor, 20, 6, 30), "lintel over the passage");
+        // The lintel over the passage, and a storey beside it.
+        assert!(solid(&editor, 35, 6, 30), "no lintel over the track");
+        assert!(
+            (4..=8).any(|y| solid(&editor, 35, y, 25)),
+            "no storey beside it"
+        );
     }
 
     /// Every column's highest block over an 80 x 80 area.
@@ -22594,10 +27297,13 @@ mod facade_integration_tests {
             let ctx = BuildingContext {
                 flood_fill_cache: &cache,
                 building_passages: &passages,
+                rail_passages: crate::element_processing::railways::RailPassages::none(),
                 road_mask: &road,
                 building_footprints: &footprints,
                 group_members: &FnvHashMap::default(),
                 housing_relation_parts: housing,
+                neighbour_heights: crate::element_processing::buildings::no_neighbour_heights(),
+                inset_plan: crate::element_processing::buildings::no_inset_plan(),
                 interior_uses:
                     crate::element_processing::subprocessor::interior::InteriorUseIndex::empty(),
             };
@@ -22822,9 +27528,10 @@ mod facade_integration_tests {
 
         let door_on =
             |e: &WorldEditor, x: i32, z: i32| e.check_for_block(x, 1, z, Some(DOOR_BLOCKS));
-        let street_wall = (20..=40).any(|x| door_on(&editor, x, 20));
-        let other_walls = (20..=40).any(|x| door_on(&editor, x, 32))
-            || (20..=32).any(|z| door_on(&editor, 20, z) || door_on(&editor, 40, z));
+        // The walls stand a block in from the outline, under the eave.
+        let street_wall = (21..=39).any(|x| door_on(&editor, x, 21));
+        let other_walls = (21..=39).any(|x| door_on(&editor, x, 31))
+            || (21..=31).any(|z| door_on(&editor, 21, z) || door_on(&editor, 39, z));
         assert!(street_wall, "door should be on the street-facing wall");
         assert!(!other_walls, "no doors on the other walls");
     }
@@ -22857,15 +27564,86 @@ mod facade_integration_tests {
         let mut editor = test_editor(&xz);
         run_building(&mut editor, &way, &road, &footprints);
 
+        // On the rear wall, which stands a block in from the outline.
         assert!(
-            editor.check_for_block(30, 1, 32, Some(DOOR_BLOCKS)),
+            editor.check_for_block(30, 1, 31, Some(DOOR_BLOCKS)),
             "mapped entrance gets an oriented door"
         );
-        let street_doors = (20..=40).any(|x| editor.check_for_block(x, 1, 20, Some(DOOR_BLOCKS)));
+        let street_doors = (21..=39).any(|x| editor.check_for_block(x, 1, 21, Some(DOOR_BLOCKS)));
         assert!(
             !street_doors,
             "no synthetic door once an entrance is mapped"
         );
+    }
+
+    // A wall a cell from its neighbour stays on the line and hangs its eave
+    // over the gap, as on main, so no slot opens to the sky; a free wall
+    // steps in and its eave stops on the outline.
+    #[test]
+    fn a_wall_kept_beside_a_neighbour_hangs_its_eave_over_the_gap() {
+        let xz = XZBBox::rect_from_xz_lengths(70.0, 60.0).unwrap();
+        let road = CoordinateBitmap::new(&xz);
+        // The neighbour's inside, as the flood fills mark it: its wall line
+        // runs at x = 42, a cell east of this house's.
+        let footprints = bitmap_with_rect(&xz, 43, 21, 53, 31);
+        let way = rect_way(
+            46,
+            20,
+            20,
+            40,
+            32,
+            &[
+                ("building", "house"),
+                ("building:levels", "2"),
+                ("roof:shape", "hipped"),
+            ],
+        );
+        let mut editor = test_editor(&xz);
+        run_building(&mut editor, &way, &road, &footprints);
+        let roofed = |x: i32| editor.highest_block_between(x, 26, 1, 60).is_some();
+        assert!(roofed(40), "the east wall stays on the line");
+        assert!(roofed(41), "its eave closes the gap");
+        assert!(!roofed(42), "and stops short of the neighbour");
+        assert!(roofed(20), "the free west side's eave reaches the outline");
+        assert!(!roofed(19), "and no further");
+    }
+
+    // A door node without `entrance` is drawn after the buildings. Its door
+    // goes on the stepped wall, and none stands alone under the eave.
+    #[test]
+    fn a_door_node_on_a_stepped_wall_leaves_the_strip_clear() {
+        let xz = XZBBox::rect_from_xz_lengths(60.0, 60.0).unwrap();
+        let road = bitmap_with_rect(&xz, 0, 12, 59, 14);
+        let footprints = CoordinateBitmap::new(&xz);
+        let mut way = rect_way(
+            45,
+            20,
+            20,
+            40,
+            32,
+            &[("building", "house"), ("building:levels", "2")],
+        );
+        let door = ProcessedNode {
+            id: 4445,
+            tags: [("door".to_string(), "hinged".to_string())]
+                .into_iter()
+                .collect(),
+            x: 30,
+            z: 32,
+        };
+        way.nodes.insert(3, door.clone());
+        let mut editor = test_editor(&xz);
+        run_building(&mut editor, &way, &road, &footprints);
+        crate::element_processing::doors::generate_doors(&mut editor, &door);
+        assert!(
+            editor.check_for_block(30, 1, 31, Some(DOOR_BLOCKS)),
+            "the door stands on the stepped wall"
+        );
+        assert!(
+            !editor.check_for_block(30, 1, 32, Some(DOOR_BLOCKS)),
+            "no door left in the strip"
+        );
+        assert!(!editor.check_for_block(30, 0, 32, Some(&[GRAY_CONCRETE])));
     }
 
     #[test]
@@ -22955,8 +27733,11 @@ mod facade_integration_tests {
                 .is_some_and(|b| WINDOW_BLOCKS.iter().any(|w| w.id() == b.id()))
         };
         (1..80).any(|y| {
+            // Set-back glass leaves the wall cell open but for a frame in its reveal.
             glass(x, y, z)
-                || (editor.get_block_absolute(x, y, z).is_none()
+                || (editor
+                    .get_block_absolute(x, y, z)
+                    .is_none_or(|b| b.name().ends_with("_trapdoor"))
                     && [(1, 0), (-1, 0), (0, 1), (0, -1)]
                         .iter()
                         .any(|(dx, dz)| glass(x + dx, y, z + dz)))
@@ -23238,10 +28019,13 @@ mod facade_integration_tests {
             let ctx = BuildingContext {
                 flood_fill_cache: &cache,
                 building_passages: &passages,
+                rail_passages: crate::element_processing::railways::RailPassages::none(),
                 road_mask: &road,
                 building_footprints: &footprints,
                 group_members: &groups,
                 housing_relation_parts: &Default::default(),
+                neighbour_heights: crate::element_processing::buildings::no_neighbour_heights(),
+                inset_plan: crate::element_processing::buildings::no_inset_plan(),
                 interior_uses:
                     crate::element_processing::subprocessor::interior::InteriorUseIndex::empty(),
             };
@@ -23354,7 +28138,7 @@ mod facade_integration_tests {
     }
 
     fn is_glass(b: Block) -> bool {
-        b.name().ends_with("glass")
+        b.name().ends_with("glass") || b.name().ends_with("glass_pane")
     }
 
     /// Air conditioners: smooth stone in a wall face with glass behind it.
@@ -23366,12 +28150,16 @@ mod facade_integration_tests {
         world
             .iter()
             .filter(|&(&(x, _, z), &b)| b == SMOOTH_STONE && ring(x, z))
+            // In the lowest row of a window: glass beside it there and in
+            // the row above, which no trim stone in the wall has.
             .filter(|&(&(x, y, z), _)| {
-                ROOF_SIDES.iter().any(|&(dx, dz)| {
-                    world
-                        .get(&(x + dx, y, z + dz))
-                        .is_some_and(|&b| is_glass(b))
-                })
+                let glass = |c: (i32, i32, i32)| world.get(&c).is_some_and(|&b| is_glass(b));
+                let beside = |y: i32| {
+                    ROOF_SIDES
+                        .iter()
+                        .any(|&(dx, dz)| glass((x + dx, y, z + dz)))
+                };
+                beside(y) && beside(y + 1)
             })
             .map(|(&c, _)| c)
             .collect()
@@ -23387,20 +28175,21 @@ mod facade_integration_tests {
     }
 
     #[test]
-    fn air_conditioners_only_in_north_american_walk_ups() {
+    fn air_conditioners_in_walk_ups_and_hot_cities() {
         let walk_up: &[(&str, &str)] = &[
             ("building", "apartments"),
             ("building:levels", "6"),
             ("start_date", "1910"),
         ];
         let mut units = 0;
-        for id in 300..306u64 {
+        for id in 300..324u64 {
             let world = dwelling_world(nyc(), id, walk_up);
             for (x, y, z) in air_conditioners(&world) {
                 units += 1;
                 // Upper floors of the street front, flush in the wall.
                 assert_eq!(z, 20, "air conditioner off the street front at {x},{y},{z}");
-                assert!(y > 6, "air conditioner on the ground floor at {x},{y},{z}");
+                // The ground floor and the band over it end at row 5.
+                assert!(y > 5, "air conditioner on the ground floor at {x},{y},{z}");
                 assert!(
                     !world.contains_key(&(x, y, z - 1)),
                     "air conditioner sticks out at {x},{y},{z}"
@@ -23408,7 +28197,13 @@ mod facade_integration_tests {
             }
             assert!(window_boxes(&world).is_empty(), "window boxes in New York");
         }
-        assert!(units > 0, "no air conditioner on six walk-ups");
+        assert!(units > 0, "no air conditioner on two dozen walk-ups");
+
+        // Window units in the hot cities too.
+        let hot: usize = (300..324u64)
+            .map(|id| air_conditioners(&dwelling_world(mumbai(), id, walk_up)).len())
+            .sum();
+        assert!(hot > 0, "no window unit on two dozen Mumbai walk-ups");
 
         // Not in Europe, not on offices or modern blocks.
         let office: &[(&str, &str)] = &[("building", "office"), ("building:levels", "6")];
@@ -23426,6 +28221,10 @@ mod facade_integration_tests {
 
     fn paris() -> crate::coordinate_system::geographic::LLBBox {
         crate::coordinate_system::geographic::LLBBox::new(48.85, 2.34, 48.86, 2.35).unwrap()
+    }
+
+    fn mumbai() -> crate::coordinate_system::geographic::LLBBox {
+        crate::coordinate_system::geographic::LLBBox::new(18.92, 72.83, 18.93, 72.84).unwrap()
     }
 
     fn moscow() -> crate::coordinate_system::geographic::LLBBox {
@@ -23556,6 +28355,28 @@ mod facade_integration_tests {
             }
         }
         assert!(boxes > 0, "no window box on eight old blocks");
+
+        // A coursed front, a ledge along every storey, keeps its boxes on the ledge.
+        let mut coursed_boxes = 0;
+        for id in 400..416u64 {
+            let world = dwelling_world(paris(), id, old);
+            let ledge_rows = (1..40)
+                .filter(|&y| {
+                    let slabs = (12..=43)
+                        .filter(|&x| {
+                            world
+                                .get(&(x, y, 19))
+                                .is_some_and(|b| b.name().ends_with("_slab"))
+                        })
+                        .count();
+                    slabs >= 28
+                })
+                .count();
+            if ledge_rows >= 4 {
+                coursed_boxes += window_boxes(&world).len();
+            }
+        }
+        assert!(coursed_boxes > 0, "no window box on a coursed Paris front");
 
         // Not on new blocks, offices, or in North America.
         let new: &[(&str, &str)] = &[
@@ -23759,42 +28580,460 @@ mod facade_integration_tests {
         );
     }
 
-    // A mapped roof colour keeps one covering; an unmapped one shows the odd
-    // patch of its sibling.
+    /// A sill, hood, string course or cornice: a slab or a stair.
+    fn is_ledge(b: Block) -> bool {
+        b.name().ends_with("_slab") || b.name().ends_with("_stairs")
+    }
+
+    /// Ledges standing a cell proud of the street front, over the ground floor.
+    fn proud_of_street_front(world: &HashMap<(i32, i32, i32), Block>) -> usize {
+        world
+            .iter()
+            .filter(|&(&(x, y, z), &b)| z == 19 && (11..=44).contains(&x) && y > 7 && is_ledge(b))
+            .count()
+    }
+
     #[test]
-    fn roof_tone_patches_skip_mapped_roofs() {
-        let count = |tags: &[(&str, &str)]| {
-            let mut sibling = 0;
-            for id in 500..504u64 {
-                let world = dwelling_world(berlin(), id, tags);
-                sibling += world
-                    .values()
-                    .filter(|&&b| {
-                        matches!(
-                            b,
-                            POLISHED_GRANITE_STAIRS
-                                | POLISHED_DEEPSLATE_STAIRS
-                                | DEEPSLATE_BRICK_STAIRS
-                                | BLACKSTONE_STAIRS
-                        )
-                    })
-                    .count();
+    fn plain_modern_fronts_carry_no_ledges() {
+        // A dated modern office: no sill, hood, string course or cornice.
+        let modern: &[(&str, &str)] = &[
+            ("building", "office"),
+            ("building:levels", "4"),
+            ("start_date", "1995"),
+        ];
+        // A pre-war hotel keeps its cornice, and sills under wide windows.
+        let old: &[(&str, &str)] = &[
+            ("building", "hotel"),
+            ("building:levels", "4"),
+            ("start_date", "1900"),
+        ];
+        for id in 700..706u64 {
+            let proud = proud_of_street_front(&dwelling_world(berlin(), id, modern));
+            assert_eq!(
+                proud, 0,
+                "way {id}: {proud} ledges stand proud of a modern front"
+            );
+            assert!(
+                proud_of_street_front(&dwelling_world(berlin(), id, old)) > 0,
+                "way {id}: a pre-war front lost its cornice"
+            );
+        }
+    }
+
+    /// A world with one way built in it, by `run_building`.
+    fn built_world(
+        llbbox: crate::coordinate_system::geographic::LLBBox,
+        way: &ProcessedWay,
+    ) -> HashMap<(i32, i32, i32), Block> {
+        use crate::element_processing::building_test_support::test_editor_at;
+        let xz = XZBBox::rect_from_xz_lengths(70.0, 60.0).unwrap();
+        let road = CoordinateBitmap::new_empty();
+        let cells: Vec<(i32, i32)> = way.nodes.iter().map(|n| (n.x, n.z)).collect();
+        let footprints = crate::element_processing::building_test_support::bitmap_with(&xz, &cells);
+        let mut editor = test_editor_at(&xz, llbbox);
+        run_building(&mut editor, way, &road, &footprints);
+        let mut out = HashMap::new();
+        for x in 0..70 {
+            for z in 0..60 {
+                for y in -2..60 {
+                    if let Some(b) = editor.get_block_absolute(x, y, z) {
+                        out.insert((x, y, z), b);
+                    }
+                }
             }
-            sibling
-        };
+        }
+        out
+    }
+
+    fn roof_stairs(world: &HashMap<(i32, i32, i32), Block>) -> usize {
+        world
+            .iter()
+            .filter(|&(&(_, y, _), b)| y > 5 && b.name().ends_with("_stairs"))
+            .count()
+    }
+
+    #[test]
+    fn low_roofs_are_laid_in_slabs() {
         let house: &[(&str, &str)] = &[
             ("building", "house"),
+            ("building:levels", "1"),
             ("roof:shape", "gabled"),
-            ("building:levels", "2"),
         ];
-        assert!(count(house) > 0, "no tone patch on four tiled roofs");
-        let tagged: &[(&str, &str)] = &[
+        for id in 720..724u64 {
+            // New York builds low: slabs of the covering, eave and all.
+            let low = dwelling_world(nyc(), id, house);
+            assert_eq!(roof_stairs(&low), 0, "way {id}: stairs in a low roof");
+            let slabs = |z: i32| -> std::collections::BTreeSet<&str> {
+                low.iter()
+                    .filter(|&(&(_, y, wz), b)| wz == z && y >= 4 && b.name().ends_with("_slab"))
+                    .map(|(_, b)| b.name())
+                    .collect()
+            };
+            // The wall stands a block in, the eave over the outline's edge.
+            let (eave, roof) = (slabs(20), slabs(24));
+            assert!(!eave.is_empty(), "way {id}: no eave past the wall");
+            assert_eq!(
+                eave, roof,
+                "way {id}: the eave is not the covering's own slab"
+            );
+            // Berlin keeps its steep tiles.
+            let steep = dwelling_world(berlin(), id, house);
+            assert!(
+                roof_stairs(&steep) > 0,
+                "way {id}: no stairs in a steep roof"
+            );
+        }
+    }
+
+    /// A way through `points`, turned 30 degrees about (20, 20).
+    fn turned_way(id: u64, points: &[(f64, f64)], tags: &[(&str, &str)]) -> ProcessedWay {
+        let (c, sn) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+        ProcessedWay {
+            id,
+            nodes: points
+                .iter()
+                .chain(points.first())
+                .enumerate()
+                .map(|(i, &(u, v))| ProcessedNode {
+                    id: id * 100 + i as u64,
+                    tags: HashMap::new(),
+                    x: (20.0 + u * c - v * sn).round() as i32,
+                    z: (20.0 + u * sn + v * c).round() as i32,
+                })
+                .collect(),
+            tags: crate::element_processing::building_test_support::tag_map(tags),
+        }
+    }
+
+    /// Blocks over the ground floor in columns the building does not stand in.
+    fn past_the_walls(world: &HashMap<(i32, i32, i32), Block>) -> Vec<Block> {
+        world
+            .iter()
+            .filter(|&(&(x, y, z), _)| y > 7 && !(0..=2).any(|g| world.contains_key(&(x, g, z))))
+            .map(|(_, &b)| b)
+            .collect()
+    }
+
+    #[test]
+    fn stepped_fronts_carry_no_ledges() {
+        // A pre-war hotel is dressed: on the grid it has a cornice and sills,
+        // turned off it no ledge stands out from its walls.
+        let old: &[(&str, &str)] = &[
+            ("building", "hotel"),
+            ("building:levels", "4"),
+            ("start_date", "1900"),
+        ];
+        let rect = [(0.0, 0.0), (30.0, 0.0), (30.0, 16.0), (0.0, 16.0)];
+        for id in 760..764u64 {
+            let world = built_world(berlin(), &turned_way(id, &rect, old));
+            let ledges = past_the_walls(&world)
+                .into_iter()
+                .filter(|&b| is_ledge(b))
+                .count();
+            assert_eq!(ledges, 0, "way {id}: a ledge proud of a stepped wall");
+        }
+    }
+
+    #[test]
+    fn a_turned_mansard_keeps_its_dormers() {
+        let flats: &[(&str, &str)] = &[
+            ("building", "apartments"),
+            ("building:levels", "5"),
+            ("start_date", "1880"),
+            ("roof:shape", "mansard"),
+        ];
+        let rect = [(0.0, 0.0), (30.0, 0.0), (30.0, 16.0), (0.0, 16.0)];
+        let mut dormer_glass = 0;
+        for id in 700..704u64 {
+            let world = built_world(paris(), &turned_way(id, &rect, flats));
+            // Glass over the lowest roof stair is a dormer's.
+            let Some(eave) = world
+                .iter()
+                .filter(|&(&(_, y, _), b)| y > 8 && b.name().ends_with("_stairs"))
+                .map(|(&(_, y, _), _)| y)
+                .min()
+            else {
+                continue;
+            };
+            dormer_glass += world
+                .iter()
+                .filter(|&(&(_, y, _), &b)| y > eave && is_glass(b))
+                .count();
+        }
+        assert!(dormer_glass > 0, "no dormer on four turned mansards");
+    }
+
+    #[test]
+    fn a_turned_l_shape_keeps_a_roof_without_stairs() {
+        let ell = [
+            (0.0, 0.0),
+            (26.0, 0.0),
+            (26.0, 10.0),
+            (10.0, 10.0),
+            (10.0, 22.0),
+            (0.0, 22.0),
+        ];
+        let tags: &[(&str, &str)] = &[
             ("building", "house"),
+            ("building:levels", "1"),
             ("roof:shape", "gabled"),
-            ("building:levels", "2"),
-            ("roof:colour", "darkred"),
         ];
-        assert_eq!(count(tagged), 0, "a mapped roof colour got patches");
+        let world = built_world(berlin(), &turned_way(780, &ell, tags));
+        assert_eq!(roof_stairs(&world), 0, "stairs in a turned roof");
+        assert!(
+            past_the_walls(&world).is_empty(),
+            "roof hangs past the walls"
+        );
+        assert!(world.keys().any(|&(_, y, _)| y > 7), "no roof was built");
+    }
+
+    #[test]
+    fn house_windows_stand_under_a_solid_head() {
+        let house: &[(&str, &str)] = &[("building", "house"), ("building:levels", "2")];
+        for id in 790..794u64 {
+            let world = dwelling_world(nyc(), id, house);
+            let glass_at = |y: i32| {
+                world
+                    .iter()
+                    .filter(|&(&(_, wy, z), &b)| wy == y && (z == 20 || z == 21) && is_glass(b))
+                    .count()
+            };
+            assert!(
+                glass_at(2) > 0 && glass_at(3) > 0,
+                "way {id}: no ground-floor window"
+            );
+            assert_eq!(glass_at(4), 0, "way {id}: glass up to the storey above");
+        }
+    }
+
+    #[test]
+    fn plain_shops_and_halls_carry_a_top_band() {
+        let band =
+            |category, wall, height, cells| top_band_for(category, wall, height, 4, cells, 7);
+        let shop = band(BuildingCategory::Commercial, WHITE_CONCRETE, 6, 900);
+        assert!(
+            matches!(shop, Some((b, 2)) if b != WHITE_CONCRETE),
+            "{shop:?}"
+        );
+        let hall = band(BuildingCategory::Warehouse, BRICK, 9, 4000);
+        assert!(matches!(hall, Some((_, 3))), "{hall:?}");
+        // Not on a kiosk, a tall block or housing.
+        assert_eq!(
+            band(BuildingCategory::Commercial, WHITE_CONCRETE, 6, 60),
+            None
+        );
+        assert_eq!(
+            band(BuildingCategory::Commercial, WHITE_CONCRETE, 22, 900),
+            None
+        );
+        assert_eq!(
+            band(BuildingCategory::Residential, WHITE_CONCRETE, 6, 900),
+            None
+        );
+    }
+
+    #[test]
+    fn a_retail_box_wears_its_band_along_the_top() {
+        for levels in ["1", "2"] {
+            let shop: &[(&str, &str)] = &[("building", "retail"), ("building:levels", levels)];
+            let mut banded = 0;
+            for id in 820..826u64 {
+                let world = dwelling_world(nyc(), id, shop);
+                // The side wall at x = 10: its top rows against the row below them.
+                let at = |y: i32| world.get(&(10, y, 28)).copied();
+                let top = (1..30).rev().find(|&y| at(y).is_some()).unwrap();
+                let band = at(top - 1) != at(top - 3);
+                banded += i32::from(band);
+                // A banded top is whole: no storey band, panel or window head cuts into it.
+                if band {
+                    for z in 22..=34 {
+                        let rows = [top, top - 1, top - 2].map(|y| world.get(&(10, y, z)));
+                        assert!(
+                            rows.iter().all(|b| *b == rows[0]),
+                            "{levels} storeys, way {id}: the top band breaks at z {z}"
+                        );
+                    }
+                }
+            }
+            assert!(
+                banded >= 4,
+                "{banded} of six {levels}-storey retail boxes carry a top band"
+            );
+        }
+    }
+
+    #[test]
+    fn shutters_keep_clear_of_a_shopfront() {
+        let flats: &[(&str, &str)] = &[
+            ("building", "apartments"),
+            ("building:levels", "4"),
+            ("shop", "bakery"),
+        ];
+        let shutter = |b: Block| b.name().ends_with("_trapdoor") && b != IRON_TRAPDOOR;
+        let mut shuttered = 0;
+        for id in 860..884u64 {
+            let world = dwelling_world(paris(), id, flats);
+            let at = |rows: std::ops::RangeInclusive<i32>| {
+                world
+                    .iter()
+                    .filter(|&(&(_, y, z), &b)| z == 19 && rows.contains(&y) && shutter(b))
+                    .count()
+            };
+            // Row 2 is display glass, under the awning's row.
+            assert_eq!(at(2..=2), 0, "way {id}: a shutter before the shop window");
+            shuttered += i32::from(at(6..=16) > 0);
+        }
+        assert!(
+            shuttered > 0,
+            "no shuttered front among two dozen Paris blocks"
+        );
+    }
+
+    #[test]
+    fn brick_walk_ups_carry_the_odd_fire_escape() {
+        let walk_up: &[(&str, &str)] = &[
+            ("building", "apartments"),
+            ("building:levels", "5"),
+            ("building:material", "brick"),
+            ("start_date", "1910"),
+        ];
+        let escape = |world: &HashMap<(i32, i32, i32), Block>| {
+            let at = |b: Block, z: i32| {
+                world
+                    .iter()
+                    .filter(|&(&(_, _, wz), &w)| wz == z && w == b)
+                    .count()
+            };
+            // The ladder against the wall, the deck two cells deep, the railing on the outer row.
+            (
+                at(LADDER, 19),
+                at(IRON_TRAPDOOR, 19).min(at(IRON_TRAPDOOR, 18)),
+                at(IRON_BARS, 18),
+            )
+        };
+        let mut escapes = 0;
+        for id in 840..856u64 {
+            let (ladder, deck, rail) = escape(&dwelling_world(nyc(), id, walk_up));
+            if ladder > 0 {
+                escapes += 1;
+                // A deck and a railing at every landing, a ladder between them.
+                assert!(deck >= 9 && rail >= 9, "way {id}: {deck} deck, {rail} rail");
+            }
+            assert_eq!(
+                escape(&dwelling_world(berlin(), id, walk_up)).0,
+                0,
+                "way {id}"
+            );
+        }
+        assert!(
+            (2..=12).contains(&escapes),
+            "{escapes} of 16 walk-ups with a fire escape"
+        );
+    }
+
+    #[test]
+    fn window_reveals_leave_room_for_curtains() {
+        // Dressed New York brick frames its windows and still hangs curtains.
+        let walk_up: &[(&str, &str)] = &[
+            ("building", "apartments"),
+            ("building:levels", "5"),
+            ("building:material", "brick"),
+            ("start_date", "1910"),
+        ];
+        let (mut frames, mut curtains) = (0, 0);
+        for id in 800..806u64 {
+            let world = dwelling_world(nyc(), id, walk_up);
+            frames += world
+                .iter()
+                .filter(|&(&(_, y, z), b)| z == 20 && y > 5 && b.name().ends_with("_trapdoor"))
+                .count();
+            curtains += world
+                .iter()
+                .filter(|&(&(_, _, z), &b)| z == 22 && matches!(b, WHITE_WOOL | LIGHT_GRAY_WOOL))
+                .count();
+        }
+        assert!(frames > 0, "no window frames on six brick walk-ups");
+        assert!(
+            curtains > 0,
+            "window frames left no curtain on six walk-ups"
+        );
+    }
+
+    #[test]
+    fn guessed_storeys_keep_the_guessed_height() {
+        // Two guessed housing storeys of three metres stand as two of four
+        // blocks, three as two, four as three: about the same height.
+        let way = rect_way(1, 0, 0, 10, 10, &[("building", "house")]);
+        for seed in 0..40u64 {
+            let (h, _) = calculate_building_height(&way, "house", 0, 1.0, None, 4, 120, seed);
+            assert!(matches!(h, 6 | 10), "guessed house wall of {h}");
+        }
+    }
+
+    #[test]
+    fn turned_roofs_hang_one_block_and_carry_no_stairs() {
+        // A 12 x 24 house turned 30 degrees off the grid.
+        let (c, sn) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+        let corners: Vec<(i32, i32)> = [
+            (0.0, 0.0),
+            (24.0, 0.0),
+            (24.0, 12.0),
+            (0.0, 12.0),
+            (0.0, 0.0),
+        ]
+        .iter()
+        .map(|&(u, v): &(f64, f64)| {
+            (
+                (20.0 + u * c - v * sn).round() as i32,
+                (20.0 + u * sn + v * c).round() as i32,
+            )
+        })
+        .collect();
+        for (bbox, shape) in [
+            (berlin(), "gabled"),
+            (berlin(), "hipped"),
+            (nyc(), "gabled"),
+        ] {
+            let way = ProcessedWay {
+                id: 740,
+                nodes: corners
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &(x, z))| ProcessedNode {
+                        id: 74000 + i as u64,
+                        tags: HashMap::new(),
+                        x,
+                        z,
+                    })
+                    .collect(),
+                tags: crate::element_processing::building_test_support::tag_map(&[
+                    ("building", "house"),
+                    ("building:levels", "1"),
+                    ("roof:shape", shape),
+                ]),
+            };
+            let world = built_world(bbox, &way);
+            assert_eq!(roof_stairs(&world), 0, "{shape}: stairs in a turned roof");
+            // The roof hangs a one-block eave past the walls, as a roof on
+            // the grid does, and no further: a second ring would comb every
+            // step of the walls.
+            let stands = |x: i32, z: i32| (0..=2).any(|g| world.contains_key(&(x, g, z)));
+            let hanging: FnvHashSet<(i32, i32)> = world
+                .keys()
+                .filter(|&&(x, y, z)| y > 5 && !stands(x, z))
+                .map(|&(x, _, z)| (x, z))
+                .collect();
+            assert!(
+                hanging.len() > 30,
+                "{shape}: only {} eave columns past the walls",
+                hanging.len()
+            );
+            let far = hanging
+                .iter()
+                .filter(|&&(x, z)| !(-1..=1).any(|dx| (-1..=1).any(|dz| stands(x + dx, z + dz))))
+                .count();
+            assert_eq!(far, 0, "{shape}: {far} roof columns hang two blocks out");
+        }
     }
 }
 
@@ -23926,10 +29165,13 @@ mod facade_dump {
                 let ctx = BuildingContext {
                     flood_fill_cache: &cache,
                     building_passages: &passages,
+                    rail_passages: crate::element_processing::railways::RailPassages::none(),
                     road_mask: &road,
                     building_footprints: &footprints,
                     group_members: &groups,
                     housing_relation_parts: &Default::default(),
+                    neighbour_heights: crate::element_processing::buildings::no_neighbour_heights(),
+                    inset_plan: crate::element_processing::buildings::no_inset_plan(),
                     interior_uses:
                         crate::element_processing::subprocessor::interior::InteriorUseIndex::empty(),
                 };
@@ -24070,7 +29312,15 @@ mod doorstep_tests {
         let xz = XZBBox::rect_from_min_max(0, 0, MAX_X, MAX_Z).unwrap();
         let road = bitmap_with_rect(&xz, 0, 12, MAX_X, 14);
         let footprints = CoordinateBitmap::new(&xz);
-        let way = rect_way(4242, 22, WALL_Z, 52, 34, &[("building", "house")]);
+        // Flat-roofed, so the wall stands on the outline where the ground steps.
+        let way = rect_way(
+            4242,
+            22,
+            WALL_Z,
+            52,
+            34,
+            &[("building", "house"), ("roof:shape", "flat")],
+        );
         let mut editor = test_editor(&xz);
         editor.set_map_decals(presets);
         let heights: Vec<Vec<f32>> = (0..WORLD_L)
@@ -24093,10 +29343,13 @@ mod doorstep_tests {
         let ctx = BuildingContext {
             flood_fill_cache: &cache,
             building_passages: &passages,
+            rail_passages: crate::element_processing::railways::RailPassages::none(),
             road_mask: &road,
             building_footprints: &footprints,
             group_members: &groups,
             housing_relation_parts: &Default::default(),
+            neighbour_heights: crate::element_processing::buildings::no_neighbour_heights(),
+            inset_plan: crate::element_processing::buildings::no_inset_plan(),
             interior_uses:
                 crate::element_processing::subprocessor::interior::InteriorUseIndex::empty(),
         };
@@ -24394,6 +29647,96 @@ mod roof_geometry_tests {
         // Along the bearing it descends monotonically.
         let along: Vec<i32> = (0..20).map(|i| top(&editor, i, 19 - i)).collect();
         assert!(along.windows(2).all(|w| w[0] >= w[1]), "{along:?}");
+    }
+
+    /// A tall sloped glass face is a skin: glass facing the air, the curtain
+    /// wall's backing behind it (a spandrel on each floor row), and nothing
+    /// further in, where filled solid it would be a block of clear glass.
+    #[test]
+    fn a_sloped_glass_facade_is_a_skin_over_its_storeys() {
+        let xz = XZBBox::rect_from_xz_lengths(40.0, 40.0).unwrap();
+        let mut editor = test_editor(&xz);
+        let cells = rect_cells(10, 10);
+        let mut config = roof_config(&cells);
+        config.roof_block = CYAN_STAINED_GLASS;
+        config.peak_cap = Some(60);
+        config.trim.glass_skin = Some(GlassSkin {
+            floor_cycle: 4,
+            floor_row_y: config.base_height,
+        });
+        // Falling to the south (+z): the north row is the crown.
+        generate_skillion_roof(&mut editor, &cells, &config, Some("south"));
+        let at = |x: i32, y: i32, z: i32| editor.get_block_absolute(x, y, z);
+        let backing = glass_backing(CYAN_STAINED_GLASS);
+        // The south row faces the air from the base up: all glass.
+        let (south_top, mid_top) = (top(&editor, 5, 9), top(&editor, 5, 5));
+        assert!(mid_top - south_top > 10, "{south_top} {mid_top}");
+        for y in config.base_height..=south_top {
+            assert_eq!(at(5, y, 9), Some(CYAN_STAINED_GLASS), "south face at {y}");
+        }
+        // A row further in: glass above its southern neighbour's roof, the
+        // backing behind that neighbour's glass, empty further down.
+        let below = top(&editor, 5, 6);
+        assert_eq!(at(5, mid_top, 5), Some(CYAN_STAINED_GLASS));
+        assert_eq!(at(5, top(&editor, 5, 6) + 1, 5), Some(CYAN_STAINED_GLASS));
+        let behind: Vec<Option<Block>> = (top(&editor, 5, 7) + 1..=below)
+            .map(|y| at(5, y, 5))
+            .collect();
+        assert!(
+            behind
+                .iter()
+                .all(|b| *b == Some(backing.panel) || *b == Some(backing.spandrel)),
+            "{behind:?}"
+        );
+        // A spandrel on the floor rows of the backing.
+        let floor_y = (top(&editor, 5, 7) + 1..=below)
+            .find(|y| (y - config.base_height).rem_euclid(4) == 0)
+            .expect("a floor row behind the glass");
+        assert_eq!(at(5, floor_y, 5), Some(backing.spandrel));
+        assert_eq!(at(5, config.base_height + 1, 5), None, "open inside");
+        // Without the skin the same roof is solid glass.
+        let mut solid = test_editor(&xz);
+        config.trim.glass_skin = None;
+        generate_skillion_roof(&mut solid, &cells, &config, Some("south"));
+        assert_eq!(
+            solid.get_block_absolute(5, config.base_height + 1, 5),
+            Some(CYAN_STAINED_GLASS)
+        );
+    }
+
+    /// On a slope shallower than a block a cell, a cell's glass is a single
+    /// block: the backing still closes it, so the open inside never shows.
+    #[test]
+    fn a_shallow_glass_facade_has_no_holes() {
+        let xz = XZBBox::rect_from_xz_lengths(40.0, 40.0).unwrap();
+        let mut editor = test_editor(&xz);
+        let cells = rect_cells(20, 20);
+        let mut config = roof_config(&cells);
+        config.roof_block = CYAN_STAINED_GLASS;
+        config.peak_cap = Some(6);
+        config.trim.glass_skin = Some(GlassSkin {
+            floor_cycle: 4,
+            floor_row_y: config.base_height,
+        });
+        generate_skillion_roof(&mut editor, &cells, &config, Some("south"));
+        let mut open_below = 0;
+        for &(x, z) in &cells {
+            let top = top(&editor, x, z);
+            assert_eq!(
+                editor.get_block_absolute(x, top, z),
+                Some(CYAN_STAINED_GLASS)
+            );
+            if top > config.base_height {
+                assert!(
+                    editor.get_block_absolute(x, top - 1, z).is_some(),
+                    "open under the glass at {x},{z}"
+                );
+            }
+            if top - 2 > config.base_height && editor.get_block_absolute(x, top - 2, z).is_none() {
+                open_below += 1;
+            }
+        }
+        assert!(open_below > 0, "still a skin, not a solid wedge");
     }
 
     #[test]

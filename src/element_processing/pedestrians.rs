@@ -1,9 +1,10 @@
 //! People walking the mapped footways, sidewalks, squares, pedestrian streets and paths,
 //! run by the extras data pack. A lane each way along every way, more on a wide pedestrian
 //! street, lines across squares, the ways on at each junction, where walkers wait at a kerb
-//! or a light and how busy each way is are worked out here and written into the pack as
-//! storage. Each walker is a mannequin (a villager before 1.21.9) the pack carries from
-//! point to point; the storage layout and the scores are the contract with
+//! or a light, short of a railway crossing while a train closes it, and how busy each way is
+//! are worked out here and written into the pack as storage. Each walker is a mannequin (a
+//! villager before 1.21.9) the pack carries from point to point; the storage layout and the
+//! scores are the contract with
 //! `assets/minecraft/datapack_extras/data/arnis/function/walk`.
 
 use crate::clipping::is_invented_node_id;
@@ -11,6 +12,7 @@ use crate::coordinate_system::cartesian::{XZBBox, XZPoint};
 use crate::datapack::macro_coord;
 use crate::element_processing::cars::{drivable, lane_line};
 use crate::element_processing::highways::highway_block_range;
+use crate::element_processing::level_crossings::WalkStop;
 use crate::element_processing::traffic_lights::group_of;
 use crate::osm_parser::{ProcessedElement, ProcessedMemberRole, ProcessedNode, ProcessedWay};
 use crate::water_probe::WalkProbe;
@@ -40,6 +42,13 @@ const DETOUR_MAX: f64 = 1.2;
 const FOOTFALL_M: f64 = 75.0;
 /// How far a walker on a way that meets a road waits back from its middle, past the kerb.
 const KERB_BACK: f64 = 1.5;
+/// How far from the middle of a track a walker waits for its crossing to open, in metres,
+/// and how far from a lane a crossing's spot may be and still be on its way, in blocks.
+const RAIL_BACK_M: f64 = 3.5;
+/// Least sine of the angle a lane crosses the tracks at, about 17 degrees: a way at a
+/// shallower one runs along them rather than over.
+const RAIL_MIN_SINE: f64 = 0.3;
+const RAIL_REACH: f64 = 2.0;
 /// How far a walker may sink into the ground between two points, and float over it,
 /// before a point is put in where the ground bends, in blocks.
 const SINK: f64 = 0.3;
@@ -303,6 +312,7 @@ impl Furniture {
                         z: a.z + (b.z - a.z) * f,
                         light: None,
                         kerb: false,
+                        rail: None,
                     }
                 }
             };
@@ -669,6 +679,8 @@ struct Point {
     light: Option<u8>,
     /// A kerb, where a walker waits for a gap in the traffic.
     kerb: bool,
+    /// The railway crossing to wait at while a train closes it.
+    rail: Option<u32>,
 }
 
 struct Lane {
@@ -716,16 +728,18 @@ struct Piece<'a> {
     density: f64,
 }
 
-/// Mark along a lane: distance, light and kerb.
-type Mark = (f64, Option<u8>, bool);
+/// Mark along a lane: distance, light, kerb and railway crossing.
+type Mark = (f64, Option<u8>, bool, Option<u32>);
 
 impl WalkNetwork {
-    /// `surface_y` is the height of a way's surface block at a column.
+    /// `surface_y` is the height of a way's surface block at a column; `rail` where the
+    /// railway crossings trains close are.
     pub fn build(
         elements: &[ProcessedElement],
         scale: f64,
         keep_left: bool,
         signals: bool,
+        rail: &[WalkStop],
         world: &XZBBox,
         surface_y: impl Fn(&ProcessedWay, i32, i32) -> i32,
     ) -> Self {
@@ -877,9 +891,9 @@ impl WalkNetwork {
                         1.0
                     };
                     let mut marks: Vec<Mark> =
-                        vec![(0.0, None, false), (path.length(), None, false)];
+                        vec![(0.0, None, false, None), (path.length(), None, false, None)];
                     let inner = path.at.iter().take(path.points.len().saturating_sub(1));
-                    marks.extend(inner.skip(1).map(|&at| (at, None, false)));
+                    marks.extend(inner.skip(1).map(|&at| (at, None, false, None)));
                     let heading = |k: usize| {
                         let (a, b) = (
                             path.points[k.saturating_sub(1).min(path.points.len() - 2)],
@@ -907,7 +921,39 @@ impl WalkNetwork {
                         }
                         let s = (path.at[k] - (f64::from(road) + KERB_BACK)).max(0.0);
                         let light = (signals && node_signalled(&n.tags)).then(|| group(heading(k)));
-                        marks.push((s, light, light.is_none()));
+                        marks.push((s, light, light.is_none(), None));
+                    }
+                    // A railway crossing on the way, short of its tracks: as far back along
+                    // the lane as it takes to stand clear of them, at a slant further.
+                    let reach = f64::from(piece.half) + RAIL_REACH;
+                    let (lo, hi) = path.points.iter().fold(
+                        ((f64::MAX, f64::MAX), (f64::MIN, f64::MIN)),
+                        |(lo, hi), p| {
+                            (
+                                (lo.0.min(p.0), lo.1.min(p.1)),
+                                (hi.0.max(p.0), hi.1.max(p.1)),
+                            )
+                        },
+                    );
+                    for stop in rail.iter().filter(|s| {
+                        (lo.0 - reach..=hi.0 + reach).contains(&s.at.0)
+                            && (lo.1 - reach..=hi.1 + reach).contains(&s.at.1)
+                    }) {
+                        let Some((s, dir)) = path.nearest(stop.at, reach) else {
+                            continue;
+                        };
+                        // Only a lane that goes over the tracks, or ends on them where its way
+                        // is split at the crossing: not one ending short of them, nor one
+                        // running along beside them.
+                        let sine = (dir.0 * stop.track.1 - dir.1 * stop.track.0).abs();
+                        let end = path.points[path.points.len() - 1];
+                        let ends_short = s + 1.0 > path.length()
+                            && (end.0 - stop.at.0).hypot(end.1 - stop.at.1) > 1.5;
+                        if s < 1.0 || ends_short || sine < RAIL_MIN_SINE {
+                            continue;
+                        }
+                        let back = RAIL_BACK_M * scale / sine.max(0.4);
+                        marks.push(((s - back).max(0.0), None, false, Some(stop.crossing)));
                     }
                     // A way that stops on a road, as many are mapped, stops at its kerb.
                     let kerb = |n: &ProcessedNode| match road_at(n, piece.way.id) {
@@ -918,7 +964,7 @@ impl WalkNetwork {
                     if lo > 0.0 || hi < path.length() {
                         marks.retain(|m| (lo..=hi).contains(&m.0));
                         if hi - lo >= 2.0 {
-                            marks.extend([(lo, None, false), (hi, None, false)]);
+                            marks.extend([(lo, None, false, None), (hi, None, false, None)]);
                         } else {
                             marks.clear();
                         }
@@ -930,6 +976,7 @@ impl WalkNetwork {
                             Some(last) if m.0 - last.0 < 0.5 => {
                                 last.1 = last.1.or(m.1);
                                 last.2 |= m.2;
+                                last.3 = last.3.or(m.3);
                             }
                             _ => merged.push(m),
                         }
@@ -940,19 +987,20 @@ impl WalkNetwork {
                     };
                     let mut stations: Vec<Mark> = Vec::new();
                     for &m in &merged {
-                        if let Some(&(prev, _, _)) = stations.last() {
+                        if let Some(&(prev, ..)) = stations.last() {
                             refine(prev, m.0, &y_at, 0, &mut stations);
                         }
                         stations.push(m);
                     }
                     let (mut pts, mut alt) = (Vec::new(), Vec::new());
-                    for &(s, light, kerb) in &stations {
+                    for &(s, light, kerb, rail) in &stations {
                         let at = |(x, z): (f64, f64)| Point {
                             x: (x * 10.0).round() / 10.0,
                             y: y_at(s),
                             z: (z * 10.0).round() / 10.0,
                             light,
                             kerb,
+                            rail,
                         };
                         let p = at(path.point_at(s));
                         if world.contains(&XZPoint::new(p.x.floor() as i32, p.z.floor() as i32)) {
@@ -1028,56 +1076,15 @@ impl WalkNetwork {
     pub fn finish(&mut self, probe: &WalkProbe) {
         for lane in &mut self.lanes {
             if lane.points.len() >= 2 {
-                let mut side = settle(&lane.points, probe);
-                // Bent round street furniture into a wall: straight on, if that gets further.
-                if side.as_ref().is_none_or(|s| s.cut != (false, false)) {
-                    if let Some(p) = settle(&lane.plain, probe) {
-                        if side.as_ref().is_none_or(|s| p.length() > s.length()) {
-                            side = Some(p);
-                        }
-                    }
+                // A sign it would walk through rather than step round stands in its way as
+                // a wall does.
+                let (mut points, mut cut, through) = place(lane, probe, true);
+                if through {
+                    (points, cut, _) = place(lane, probe, false);
                 }
-                let best = match side {
-                    Some(s) if s.cut == (false, false) => Some(s),
-                    _ if lane.across => None,
-                    side => match (side, settle(&lane.alt, probe)) {
-                        (Some(s), Some(m))
-                            if s.length() >= m.length() && m.cut != (false, false) =>
-                        {
-                            Some(s)
-                        }
-                        (side, middle) => middle.or(side),
-                    },
-                };
-                let best = best.unwrap_or(Settled {
-                    points: Vec::new(),
-                    cut: (false, false),
-                    posts: Vec::new(),
-                });
-                // Round the posts it met, as round mapped furniture, onto the ground read
-                // round them; where that is not clear, past them.
-                let posts: Vec<Item> = best
-                    .posts
-                    .iter()
-                    .map(|&(x, z)| Item {
-                        x: x as f64 + 0.5,
-                        z: z as f64 + 0.5,
-                        hx: 0.4,
-                        hz: 0.4,
-                        long: 0.0,
-                    })
-                    .collect();
-                lane.points = if posts.is_empty() {
-                    best.points
-                } else {
-                    let bent = Furniture::new(posts).go_round(best.points.clone());
-                    match settle(&bent, probe) {
-                        Some(s) if s.cut == (false, false) => s.points,
-                        _ => best.points,
-                    }
-                };
-                lane.cut = best.cut;
-                lane.out &= !best.cut.1;
+                lane.points = points;
+                lane.cut = cut;
+                lane.out &= !cut.1;
             }
             lane.alt = Vec::new();
             lane.plain = Vec::new();
@@ -1159,6 +1166,9 @@ impl WalkNetwork {
                     }
                     if p.kerb {
                         network.push_str(",c:1b");
+                    }
+                    if let Some(r) = p.rail {
+                        let _ = write!(network, ",r:{r}");
                     }
                     network.push('}');
                 }
@@ -1335,6 +1345,25 @@ impl Measured {
         *self.at.last().unwrap_or(&0.0)
     }
 
+    /// How far along the line it comes nearest `p`, and which way it runs there, if it comes
+    /// within `reach` of it.
+    fn nearest(&self, p: (f64, f64), reach: f64) -> Option<(f64, (f64, f64))> {
+        let mut best: Option<(f64, f64, (f64, f64))> = None;
+        for (k, w) in self.points.windows(2).enumerate() {
+            let (a, b) = (w[0], w[1]);
+            let Some(dir) = unit(b.0 - a.0, b.1 - a.1) else {
+                continue;
+            };
+            let len = self.at[k + 1] - self.at[k];
+            let t = ((p.0 - a.0) * dir.0 + (p.1 - a.1) * dir.1).clamp(0.0, len);
+            let d = (a.0 + dir.0 * t - p.0).hypot(a.1 + dir.1 * t - p.1);
+            if d <= reach && best.is_none_or(|(bd, ..)| d < bd) {
+                best = Some((d, self.at[k] + t, dir));
+            }
+        }
+        best.map(|(_, s, dir)| (s, dir))
+    }
+
     fn point_at(&self, s: f64) -> (f64, f64) {
         let s = s.clamp(0.0, self.length());
         let k = self
@@ -1365,7 +1394,7 @@ fn refine(a: f64, b: f64, y_at: &impl Fn(f64) -> f64, depth: u32, out: &mut Vec<
             let end = a + step * (j + 1) as f64;
             refine(end - step, end, y_at, depth + 1, out);
             if j + 1 < pieces {
-                out.push((end, None, false));
+                out.push((end, None, false, None));
             }
         }
         return;
@@ -1373,7 +1402,7 @@ fn refine(a: f64, b: f64, y_at: &impl Fn(f64) -> f64, depth: u32, out: &mut Vec<
     let mid = (a + b) / 2.0;
     if (y_at(mid) - (y_at(a) + y_at(b)) / 2.0).abs() >= 1.0 {
         refine(a, mid, y_at, depth + 1, out);
-        out.push((mid, None, false));
+        out.push((mid, None, false, None));
         refine(mid, b, y_at, depth + 1, out);
     }
 }
@@ -1429,6 +1458,8 @@ struct Settled {
     cut: (bool, bool),
     /// Columns of the posts it passes, as a lamp or a tree trunk nobody mapped.
     posts: Vec<(i32, i32)>,
+    /// Whether a sign's post is among them.
+    signs: bool,
 }
 
 impl Settled {
@@ -1440,15 +1471,85 @@ impl Settled {
     }
 }
 
+/// A lane put on the ground: its side line, straight on past the furniture, or the middle
+/// of its way, round the posts it meets where there is room, with where it is cut and
+/// whether it walks through a sign's post. `signs` lets it past signs as past lamps.
+fn place(lane: &Lane, probe: &WalkProbe, signs: bool) -> (Vec<Point>, (bool, bool), bool) {
+    let mut side = settle(&lane.points, probe, signs);
+    // Bent round street furniture into a wall: straight on, if that gets further.
+    if side.as_ref().is_none_or(|s| s.cut != (false, false)) {
+        if let Some(p) = settle(&lane.plain, probe, signs) {
+            if side.as_ref().is_none_or(|s| p.length() > s.length()) {
+                side = Some(p);
+            }
+        }
+    }
+    let best = match side {
+        Some(s) if s.cut == (false, false) => Some(s),
+        _ if lane.across => None,
+        side => match (side, settle(&lane.alt, probe, signs)) {
+            (Some(s), Some(m)) if s.length() >= m.length() && m.cut != (false, false) => Some(s),
+            (side, middle) => middle.or(side),
+        },
+    };
+    let best = best.unwrap_or(Settled {
+        points: Vec::new(),
+        cut: (false, false),
+        posts: Vec::new(),
+        signs: false,
+    });
+    // Round the posts it met, as round mapped furniture, onto the ground read
+    // round them; None where that is not clear.
+    let round = |settled: &Settled| -> Option<Vec<Point>> {
+        if settled.posts.is_empty() {
+            return Some(settled.points.clone());
+        }
+        let posts: Vec<Item> = settled
+            .posts
+            .iter()
+            .map(|&(x, z)| Item {
+                x: x as f64 + 0.5,
+                z: z as f64 + 0.5,
+                hx: 0.4,
+                hz: 0.4,
+                long: 0.0,
+            })
+            .collect();
+        let bent = Furniture::new(posts).go_round(settled.points.clone());
+        match settle(&bent, probe, signs) {
+            Some(s) if s.cut == (false, false) && !s.signs => Some(s.points),
+            _ => None,
+        }
+    };
+    match round(&best) {
+        Some(points) => (points, best.cut, false),
+        // A post it cannot step round, as a tree in a row along a wide sidewalk:
+        // the middle of the way if that passes fewer, else past them.
+        None => match (!lane.across)
+            .then(|| settle(&lane.alt, probe, signs))
+            .flatten()
+        {
+            Some(m) if m.cut == (false, false) && m.posts.len() < best.posts.len() => {
+                match round(&m) {
+                    Some(points) => (points, m.cut, false),
+                    None => (m.points, m.cut, m.signs),
+                }
+            }
+            _ => (best.points, best.cut, best.signs),
+        },
+    }
+}
+
 /// The lane on the ground the probe found along it, with points put in where that ground
 /// bends. Something wider than a post in the way, or a climb of more than a step, cuts it:
 /// the longest stretch clear of those is kept, if it is a few blocks long.
-fn settle(points: &[Point], probe: &WalkProbe) -> Option<Settled> {
+fn settle(points: &[Point], probe: &WalkProbe, signs: bool) -> Option<Settled> {
     let steps = steps(points);
     let mut feet: Vec<Option<f64>> = Vec::with_capacity(steps.len());
     let mut prev: Option<f64> = None;
     let mut post: Option<(i32, i32)> = None;
     let mut posts = Vec::new();
+    let mut past_sign = false;
     for s in &steps {
         let (x, z, level) = s.column();
         let footing = probe.get(x, z, level);
@@ -1466,10 +1567,13 @@ fn settle(points: &[Point], probe: &WalkProbe) -> Option<Settled> {
                 Some(g)
             }
             // One post is walked past, but not a wall, nor posts side by side.
-            None if footing.is_some_and(|f| f.thin()) && post.is_none_or(|p| p == (x, z)) => {
+            None if footing.is_some_and(|f| f.thin() && (signs || !f.sign()))
+                && post.is_none_or(|p| p == (x, z)) =>
+            {
                 if post.is_none() {
                     posts.push((x, z));
                 }
+                past_sign |= footing.is_some_and(|f| f.sign());
                 post = Some((x, z));
                 Some(prev.unwrap_or(s.y))
             }
@@ -1531,6 +1635,7 @@ fn settle(points: &[Point], probe: &WalkProbe) -> Option<Settled> {
         points: out,
         cut: (a > 0, b + 1 < steps.len()),
         posts,
+        signs: past_sign,
     })
 }
 
@@ -1543,6 +1648,7 @@ fn step_point(s: &Step, y: f64) -> Point {
         z: tenth(s.z),
         light: None,
         kerb: false,
+        rail: None,
     }
 }
 
@@ -1841,10 +1947,10 @@ fn spots(lanes: &[Lane], meta: &[Meta], scale: f64) -> BTreeMap<(i32, i32), Vec<
                 k += 1;
             }
             // A busy lane's point may hold several spots: more chances to start there.
-            if lane.points[k].light.is_some() || lane.points[k].kerb {
+            let p = lane.points[k];
+            if p.light.is_some() || p.kerb || p.rail.is_some() {
                 continue;
             }
-            let p = lane.points[k];
             let cell = (
                 (p.x / SPOT_CELL).floor() as i32,
                 (p.z / SPOT_CELL).floor() as i32,
@@ -1887,7 +1993,7 @@ mod tests {
     }
 
     fn build(elements: &[ProcessedElement], signals: bool) -> WalkNetwork {
-        WalkNetwork::build(elements, 1.0, false, signals, &world(), |_, _, _| 64)
+        WalkNetwork::build(elements, 1.0, false, signals, &[], &world(), |_, _, _| 64)
     }
 
     #[test]
@@ -2245,6 +2351,7 @@ mod tests {
                     z: 0.0,
                     light: None,
                     kerb: false,
+                    rail: None,
                 })
                 .to_vec(),
             alt: Vec::new(),
@@ -2492,6 +2599,7 @@ mod tests {
                     z,
                     light: None,
                     kerb: true,
+                    rail: None,
                 })
                 .to_vec()
         };
@@ -2539,6 +2647,7 @@ mod tests {
                 z,
                 light: None,
                 kerb: false,
+                rail: None,
             })
             .to_vec();
         let lamp = Furniture::new(vec![item(22, 0, &[("highway", "street_lamp")])]);
@@ -2576,5 +2685,161 @@ mod tests {
                 assert!(!line.contains("$("), "{line}");
             }
         }
+    }
+
+    #[test]
+    fn walkers_wait_short_of_a_railway_crossing_on_either_side() {
+        let elements = vec![way(
+            1,
+            vec![node(1, 0, -50, &[]), node(2, 0, 50, &[])],
+            &[("highway", "footway")],
+        )];
+        // A track along z = 0, its crossing number 7.
+        let stops = [WalkStop {
+            crossing: 7,
+            at: (0.5, 0.5),
+            track: (1.0, 0.0),
+        }];
+        let net = WalkNetwork::build(&elements, 1.0, false, false, &stops, &world(), |_, _, _| 64);
+        let lanes: Vec<&Lane> = net.lanes.iter().filter(|l| l.points.len() >= 2).collect();
+        assert_eq!(lanes.len(), 2);
+        for lane in lanes {
+            let waits: Vec<&Point> = lane.points.iter().filter(|p| p.rail.is_some()).collect();
+            assert_eq!(waits.len(), 1, "{:?}", lane.points);
+            let (wait, from) = (waits[0], lane.points[0]);
+            assert_eq!(wait.rail, Some(7));
+            // Clear of the track, on the side the lane comes from, and nobody starts there.
+            let off = wait.z - 0.5;
+            assert!((off.abs() - RAIL_BACK_M).abs() < 0.2, "{wait:?}");
+            assert_eq!(off.signum(), (from.z - 0.5).signum());
+        }
+        assert!(net
+            .spots
+            .values()
+            .flatten()
+            .all(|&(l, k)| net.lanes[l].points[k].rail.is_none()));
+        let (_, network) = net
+            .pack_functions()
+            .into_iter()
+            .find(|(p, _)| p.ends_with("walk/network.mcfunction"))
+            .unwrap();
+        assert_eq!(network.matches(",r:7}").count(), 2);
+        // Nowhere near the way: no wait.
+        let far = [WalkStop {
+            at: (40.5, 0.5),
+            ..stops[0]
+        }];
+        let net = WalkNetwork::build(&elements, 1.0, false, false, &far, &world(), |_, _, _| 64);
+        assert!(net
+            .lanes
+            .iter()
+            .all(|l| l.points.iter().all(|p| p.rail.is_none())));
+        // A track along this way, crossed by a road beside it: walkers on it never cross.
+        let along = [WalkStop {
+            track: (0.0, 1.0),
+            at: (1.5, 0.5),
+            ..stops[0]
+        }];
+        let net = WalkNetwork::build(&elements, 1.0, false, false, &along, &world(), |_, _, _| 64);
+        assert!(net
+            .lanes
+            .iter()
+            .all(|l| l.points.iter().all(|p| p.rail.is_none())));
+    }
+
+    /// Runs one of the walk functions on a walker: its scores and tags, the scores of the
+    /// crossings, and `r` for the macro. True where it ends by going on.
+    fn run_walk(
+        name: &str,
+        r: u32,
+        walker: &mut (HashMap<String, i64>, FnvHashSet<String>),
+        crossings: &HashMap<String, i64>,
+    ) -> bool {
+        let path = format!(
+            "{}/assets/minecraft/datapack_extras/data/arnis/function/walk/{name}.mcfunction",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let text = std::fs::read_to_string(path).unwrap();
+        for line in text
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.is_empty())
+        {
+            let line = line.trim_start_matches('$').replace("$(r)", &r.to_string());
+            let words: Vec<&str> = line.split(' ').collect();
+            let closed = |x: &str| crossings.get(x).is_some_and(|v| *v >= 1);
+            match words.as_slice() {
+                ["execute", "unless", "score", x, "arnis.xing", "matches", "1..", "run", "return", "0"] => {
+                    if !closed(x) {
+                        return false;
+                    }
+                }
+                ["execute", "unless", "score", x, "arnis.xing", "matches", "1..", "run", "return", "run", "function", "arnis:walk/go"] => {
+                    if !closed(x) {
+                        return true;
+                    }
+                }
+                ["scoreboard", "players", "set", "@s", score, v] => {
+                    walker.0.insert(score.to_string(), v.parse().unwrap());
+                }
+                ["scoreboard", "players", "remove", "@s", score, v] => {
+                    *walker.0.entry(score.to_string()).or_default() -= v.parse::<i64>().unwrap();
+                }
+                ["tag", "@s", "add", tag] => {
+                    walker.1.insert(tag.to_string());
+                }
+                ["execute", "if", "score", "@s", "arnis.ww", "matches", "..0", "run", "function", "arnis:walk/go"] => {
+                    if walker.0.get("arnis.ww").is_none_or(|v| *v <= 0) {
+                        return true;
+                    }
+                }
+                ["execute", "store", "result", "storage", "arnis:walk", "w.r", "int", "1", "run", "scoreboard", "players", "get", "@s", "arnis.wx"]
+                | ["function", "arnis:walk/rail_open", "with", "storage", "arnis:walk", "w"] => {}
+                other => panic!("{name} has a line the test does not read: {other:?}"),
+            }
+        }
+        false
+    }
+
+    #[test]
+    fn a_walker_holds_at_a_railway_crossing_until_it_opens() {
+        let mut walker = (HashMap::new(), FnvHashSet::default());
+        let mut crossings: HashMap<String, i64> = HashMap::new();
+        // Open, or never closed by any train: on they go.
+        run_walk("rail", 7, &mut walker, &crossings);
+        assert!(walker.1.is_empty() && walker.0.is_empty());
+        crossings.insert("#x7".into(), 0);
+        run_walk("rail", 7, &mut walker, &crossings);
+        assert!(walker.1.is_empty());
+        // Warning, booms down, rising: wait, for the crossing it came to.
+        crossings.insert("#x7".into(), 2);
+        run_walk("rail", 7, &mut walker, &crossings);
+        assert!(walker.1.contains("arnis.w_rail"));
+        assert_eq!(walker.0["arnis.wx"], 7);
+        assert!(walker.0["arnis.ww"] > 600);
+        let wx = walker.0["arnis.wx"] as u32;
+        for state in [2, 3, 4, 4, 1] {
+            crossings.insert("#x7".into(), state);
+            assert!(!run_walk("rail_open", wx, &mut walker, &crossings));
+        }
+        // Another crossing opening is nothing to it; its own is.
+        crossings.insert("#x8".into(), 0);
+        assert!(!run_walk("rail_open", wx, &mut walker, &crossings));
+        crossings.insert("#x7".into(), 0);
+        assert!(run_walk("rail_open", wx, &mut walker, &crossings));
+        // Held at a light or a kerb, a walker goes the way it did; at a crossing, here.
+        let hold = std::fs::read_to_string(format!(
+            "{}/assets/minecraft/datapack_extras/data/arnis/function/walk/hold.mcfunction",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
+        assert!(hold
+            .lines()
+            .next()
+            .unwrap()
+            .contains("[tag=arnis.w_rail] run return run function arnis:walk/rail_hold"));
+        // Should it never open, not for ever.
+        crossings.insert("#x7".into(), 4);
+        walker.0.insert("arnis.ww".into(), 1);
+        assert!(run_walk("rail_open", wx, &mut walker, &crossings));
     }
 }

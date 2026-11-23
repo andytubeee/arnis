@@ -28,54 +28,30 @@ const SKELETON_PATH: &str = "assets/minecraft/textures/entity/skeleton/skeleton.
 
 /// Adds the banner to `<world>/resources.zip`: into the pack Arnis already wrote there, or
 /// into a new one. A pack the user put there is left alone, and the menu shows no banner.
+#[cfg(test)]
 pub fn install_banner(world: &Path) -> Result<(), String> {
-    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-    let font = json!({
-        "providers": [{
-            "type": "bitmap",
-            "file": "arnis:font/banner.png",
-            "height": GLYPH_HEIGHT,
-            "ascent": GLYPH_HEIGHT,
-            "chars": [GLYPH.to_string()],
-        }]
-    });
-    // Four empty lines above the glyph give its 40 pixels the room of five text lines.
-    let lang = json!({ BANNER_KEY: format!("\n\n\n\n{GLYPH}") });
-    install(
-        world,
-        &[
-            (FONT_PATH, font.to_string().into_bytes(), deflated),
-            (TEXTURE_PATH, BANNER_PNG.to_vec(), stored()),
-            (LANG_PATH, lang.to_string().into_bytes(), deflated),
-        ],
-    )
+    install(world, true, &[])
 }
 
-/// Dresses every skeleton in the world as a police officer.
-pub fn install_police(world: &Path) -> Result<(), String> {
-    install(world, &[(SKELETON_PATH, POLICE_PNG.to_vec(), stored())])
+/// The texture that dresses every skeleton in the world as a police officer.
+pub fn police() -> (String, Vec<u8>) {
+    (SKELETON_PATH.to_string(), POLICE_PNG.to_vec())
 }
 
-/// The street network the map mod routes along.
-pub fn install_roads(world: &Path, json: Vec<u8>) -> Result<(), String> {
-    let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-    install(world, &[(super::roads::PATH, json, deflated)])
-}
-
-fn stored() -> SimpleFileOptions {
-    SimpleFileOptions::default().compression_method(CompressionMethod::Stored)
-}
-
-type PackFile<'a> = (&'a str, Vec<u8>, SimpleFileOptions);
-
-/// Writes `files` into `<world>/resources.zip`, keeping the rest of an Arnis pack there.
-fn install(world: &Path, files: &[PackFile]) -> Result<(), String> {
+/// Adds the banner (if `banner`) and `files` to `<world>/resources.zip`, into the pack
+/// Arnis already wrote there or into a new one, replacing what it held under those names.
+/// A pack the user put there is left alone: without the banner the menu just looks plain,
+/// but files left out are an error.
+pub fn install(world: &Path, banner: bool, files: &[(String, Vec<u8>)]) -> Result<(), String> {
     let path = world.join("resources.zip");
     if path.exists() && !is_arnis_pack(&path) {
-        return Ok(());
+        if files.is_empty() {
+            return Ok(());
+        }
+        return Err("the world already has a resources.zip of its own".into());
     }
     let staged = path.with_extension("zip.tmp");
-    let written = write_pack(&path, &staged, files);
+    let written = write_pack(&path, &staged, banner, files);
     if let Err(e) = written {
         let _ = std::fs::remove_file(&staged);
         return Err(e);
@@ -83,7 +59,13 @@ fn install(world: &Path, files: &[PackFile]) -> Result<(), String> {
     install_world_pack(&path, &staged)
 }
 
-fn write_pack(existing: &Path, staged: &Path, files: &[PackFile]) -> Result<(), String> {
+fn write_pack(
+    existing: &Path,
+    staged: &Path,
+    banner: bool,
+    files: &[(String, Vec<u8>)],
+) -> Result<(), String> {
+    let replaced: std::collections::HashSet<&str> = files.iter().map(|(p, _)| p.as_str()).collect();
     let err = |e: zip::result::ZipError| e.to_string();
     let file = File::create(staged).map_err(|e| format!("create {}: {e}", staged.display()))?;
     let mut zip = ZipWriter::new(BufWriter::new(file));
@@ -95,10 +77,10 @@ fn write_pack(existing: &Path, staged: &Path, files: &[PackFile]) -> Result<(), 
         let mut old = ZipArchive::new(source).map_err(err)?;
         for i in 0..old.len() {
             let entry = old.by_index_raw(i).map_err(err)?;
-            if entry
-                .name()
-                .is_ok_and(|n| files.iter().any(|f| f.0 == n.as_ref()))
-            {
+            if entry.name().is_ok_and(|n| {
+                (banner && [FONT_PATH, TEXTURE_PATH, LANG_PATH].contains(&n.as_ref()))
+                    || replaced.contains(n.as_ref())
+            }) {
                 continue;
             }
             zip.raw_copy_file(entry).map_err(err)?;
@@ -121,8 +103,35 @@ fn write_pack(existing: &Path, staged: &Path, files: &[PackFile]) -> Result<(), 
             .map_err(|e| e.to_string())?;
     }
 
-    for (path, bytes, opts) in files {
+    let font = json!({
+        "providers": [{
+            "type": "bitmap",
+            "file": "arnis:font/banner.png",
+            "height": GLYPH_HEIGHT,
+            "ascent": GLYPH_HEIGHT,
+            "chars": [GLYPH.to_string()],
+        }]
+    });
+    // Four empty lines above the glyph give its 40 pixels the room of five text lines.
+    let lang = json!({ BANNER_KEY: format!("\n\n\n\n{GLYPH}") });
+    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let banner_files = [
+        (FONT_PATH, font.to_string().into_bytes(), deflated),
+        (TEXTURE_PATH, BANNER_PNG.to_vec(), stored),
+        (LANG_PATH, lang.to_string().into_bytes(), deflated),
+    ];
+    for (path, bytes, opts) in banner_files.iter().filter(|_| banner) {
         zip.start_file(*path, *opts).map_err(err)?;
+        zip.write_all(bytes).map_err(|e| e.to_string())?;
+    }
+    for (path, bytes) in files {
+        // PNGs are compressed already.
+        let opts = if path.ends_with(".png") {
+            stored
+        } else {
+            deflated
+        };
+        zip.start_file(path.as_str(), opts).map_err(err)?;
         zip.write_all(bytes).map_err(|e| e.to_string())?;
     }
     let mut out = zip.finish().map_err(err)?;
@@ -174,8 +183,8 @@ mod tests {
     fn the_police_uniform_joins_the_banner_in_one_pack() {
         let dir = tempfile::tempdir().unwrap();
         install_banner(dir.path()).unwrap();
-        install_police(dir.path()).unwrap();
-        install_police(dir.path()).unwrap();
+        install(dir.path(), false, &[police()]).unwrap();
+        install(dir.path(), false, &[police()]).unwrap();
         let names = names(&dir.path().join("resources.zip"));
         assert!(names.iter().any(|n| n == FONT_PATH));
         assert_eq!(names.iter().filter(|n| *n == SKELETON_PATH).count(), 1);
@@ -191,6 +200,13 @@ mod tests {
         zip.write_all(b"{}").unwrap();
         zip.finish().unwrap();
         install_banner(dir.path()).unwrap();
+        assert_eq!(names(&pack), vec!["pack.mcmeta".to_string()]);
+        // Models it cannot carry are reported, not dropped without a word.
+        let models = vec![(
+            "assets/arnis/items/vehicle/x.json".to_string(),
+            b"{}".to_vec(),
+        )];
+        assert!(install(dir.path(), false, &models).is_err());
         assert_eq!(names(&pack), vec!["pack.mcmeta".to_string()]);
     }
 }
