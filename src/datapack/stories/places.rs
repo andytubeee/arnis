@@ -10,7 +10,8 @@ const MAX_PLACES: usize = 200;
 const MIN_APART: i32 = 12;
 
 /// What a place can stand for in a story.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Role {
     Park,
     FoodShop,

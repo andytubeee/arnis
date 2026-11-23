@@ -1,2 +1,3 @@
 function arnis:story/current
+execute if data storage arnis:story cur{kind:"riddle"} run return run tellraw @s [{"selector":"@e[tag=arnis.npc_it,limit=1]","color":"aqua"},{"text":": ","color":"aqua"},{"text":"Someone's going round asking a riddle: ","color":"white"},{"storage":"arnis:story","nbt":"cur.hint","color":"yellow"},{"text":". No idea what it means.","color":"white"}]
 tellraw @s [{"selector":"@e[tag=arnis.npc_it,limit=1]","color":"aqua"},{"text":": ","color":"aqua"},{"text":"Have you heard? Something's going on over at ","color":"white"},{"storage":"arnis:story","nbt":"cur.name","color":"yellow"},{"text":".","color":"white"}]

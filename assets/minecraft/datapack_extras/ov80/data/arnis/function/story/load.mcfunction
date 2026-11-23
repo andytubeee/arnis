@@ -13,7 +13,11 @@ bossbar set arnis:hunt1 color green
 bossbar set arnis:hunt2 color green
 scoreboard players set #story_t arnis.story 0
 function arnis:story/plan
+# Which story of the run is playing, and its step; a new world starts at the first.
+execute unless score #story arnis.story matches 0.. run scoreboard players set #story arnis.story 0
 execute unless score #step arnis.story matches 0.. run scoreboard players set #step arnis.story 0
+execute if score #story arnis.story >= #stories arnis.story run scoreboard players set #story arnis.story 0
+function arnis:story/open
 execute unless score #errand arnis.story matches 0.. run function arnis:story/errand/reset
 bossbar add arnis:story {"text":"City Stories"}
 bossbar set arnis:story color yellow

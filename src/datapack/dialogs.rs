@@ -206,7 +206,7 @@ pub fn story(ctx: &PackContext) -> Value {
         "type": "minecraft:multi_action",
         "title": text("City Stories", "gold"),
         "body": [
-            message(text("Right-click the glowing person at each stop to hear what happens next. Anyone can do a step for everyone, and passers-by sometimes wave you over for an errand.", "gray")),
+            message(text("Stories play one after another all over town. Talk to the glowing person, solve riddles by walking to the place, and search for hidden things. Anyone can do a step for everyone, and passers-by sometimes wave you over for an errand.", "gray")),
         ],
         "columns": 1,
         "actions": [

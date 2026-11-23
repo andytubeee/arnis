@@ -3312,7 +3312,7 @@ pub fn generate_world_with_options(
             extras.stories = false;
         }
         if let Some(story) = &story {
-            println!("  City Stories: {} stops", story.plan.stops.len());
+            println!("  City Stories: {} stories", story.run.len());
         }
         let (places, settlement) = extras_places.unwrap_or_default();
         let surface = crate::datapack::disasters::Surface::finish();

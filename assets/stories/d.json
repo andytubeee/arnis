@@ -1,0 +1,1729 @@
+{
+ "stories": [
+  {
+   "key": "d_museum_1",
+   "title": "The Shuffled Labels",
+   "series": "d_museum",
+   "episode": 1,
+   "finale": "gift",
+   "gift": "minecraft:item_frame",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "culture",
+      "civic",
+      "any"
+     ],
+     "npc": "Curator Odile Pemberton",
+     "line": "Someone tidied every museum label into alphabetical order, which is very neat and completely wrong. The first stray card blew out the window toward {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "bridge",
+      "water",
+      "any"
+     ],
+     "thing": "Label Card One",
+     "item": "minecraft:paper",
+     "line": "It reads: 'Exhibit 1. Before anything else, a footbridge, so two farms could share one cow.' Card two drifted over to {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "thing": "Label Card Two",
+     "item": "minecraft:paper",
+     "line": "'Exhibit 2. With the cow shared, somebody started selling cheese.' Bring both cards back to the curator at {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "civic",
+      "any"
+     ],
+     "npc": "Curator Odile Pemberton",
+     "line": "The first display case is empty and judging me. Which exhibit belongs in case one?",
+     "options": [
+      "The cheese shop",
+      "The footbridge",
+      "The town clock"
+     ],
+     "answer": 1,
+     "wrong": "Close, but that card said it came after something. What came before anything else?",
+     "right": "The footbridge, of course, the cow needed it. Case one is fixed! Let's celebrate at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Curator Odile Pemberton",
+     "line": "The first wall of the museum makes sense again. Take a frame, every good label deserves one. Two more walls to go, another night."
+    }
+   ]
+  },
+  {
+   "key": "d_museum_2",
+   "title": "The Middle of the Story",
+   "series": "d_museum",
+   "episode": 2,
+   "finale": "gift",
+   "gift": "minecraft:candle",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "culture",
+      "civic",
+      "any"
+     ],
+     "npc": "Curator Odile Pemberton",
+     "line": "Wall two tonight: a flood, a festival and a fountain. The first card is somewhere that runs all day but never gets tired, and has a bed but never sleeps."
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "water",
+      "any"
+     ],
+     "hint": "Runs all day, has a bed",
+     "line": "Tucked by the water: 'Exhibit 3. The river rose one spring and everyone carried their chickens uphill.' The next card is near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "landmark",
+      "any"
+     ],
+     "thing": "Label Card Four",
+     "item": "minecraft:paper",
+     "line": "'Exhibit 4. Once the water went down, the town threw a festival to dry out its socks.' Someone at {next} found the last card."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "civic",
+      "culture",
+      "any"
+     ],
+     "npc": "Night guard Benny Okafor",
+     "line": "This was in the lost and found, under one mitten. 'Exhibit 5. A fountain to remember the flood, politely.' The curator's waiting at {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "civic",
+      "any"
+     ],
+     "npc": "Curator Odile Pemberton",
+     "line": "The festival card needs a neighbor. Which exhibit came right before the festival?",
+     "options": [
+      "The fountain",
+      "The flood",
+      "The footbridge"
+     ],
+     "answer": 1,
+     "wrong": "Hmm, the card said they were drying out their socks. Drying them from what?",
+     "right": "The flood! Wet socks, then a party. Wall two is in order. Come to {next}, I brought cocoa."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "food_shop",
+      "park",
+      "any"
+     ],
+     "npc": "Curator Odile Pemberton",
+     "line": "Two walls done and only one mitten lost. Here, the museum's spare candle, for working late. Next time we finish the story."
+    }
+   ]
+  },
+  {
+   "key": "d_museum_3",
+   "title": "The Last Label",
+   "series": "d_museum",
+   "episode": 3,
+   "finale": "gift",
+   "gift": "minecraft:painting",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "culture",
+      "civic",
+      "any"
+     ],
+     "npc": "Curator Odile Pemberton",
+     "line": "Final wall! The town's last two labels were spotted near {next}, where everyone gathers on big town days."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "civic",
+      "landmark",
+      "any"
+     ],
+     "thing": "Label Card Six",
+     "item": "minecraft:paper",
+     "line": "'Exhibit 6. The town clock, built so the festival would start on time. It never has.' The last card is up where the roofs look small and the sky feels close."
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "viewpoint",
+      "landmark",
+      "any"
+     ],
+     "hint": "Roofs look small from here",
+     "line": "Pinned under a pebble: 'Exhibit 7. And then you came, and the story kept going.' Odd label. Show the curator at {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "civic",
+      "any"
+     ],
+     "npc": "Curator Odile Pemberton",
+     "line": "Seven cases, seven labels. Which one goes at the very end of the town's story?",
+     "options": [
+      "The town clock",
+      "The footbridge",
+      "And then you came"
+     ],
+     "answer": 2,
+     "wrong": "That one has an earlier number on its card. Look for the biggest number.",
+     "right": "Exhibit 7, the newest one. Someone wrote you into the museum! Opening night is at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "civic",
+      "any"
+     ],
+     "npc": "Curator Odile Pemberton",
+     "line": "The whole story of the town, in order, for the first time in years, and your names are on the last label. This is from the gift shop, on the house."
+    }
+   ]
+  },
+  {
+   "key": "d_society_1",
+   "title": "An Invitation in Ink",
+   "series": "d_society",
+   "episode": 1,
+   "finale": "gift",
+   "gift": "minecraft:compass",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Mail carrier June Abara",
+     "line": "Odd one today, addressed to 'Whoever is walking about looking curious.' That's you. It says: go where trains sigh and rest, and find the compass rose."
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "station",
+      "any"
+     ],
+     "hint": "Where trains sigh and rest",
+     "line": "A tiny compass rose is chalked near the platform, one arm longer than the rest. It points straight at {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "landmark",
+      "civic",
+      "any"
+     ],
+     "thing": "Brass Compass Token",
+     "item": "minecraft:gold_nugget",
+     "line": "A token stamped S.F.C. On the back: 'Password: the first letters of North, East, West and South, in that order.' Take it to {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "park",
+      "any"
+     ],
+     "npc": "A woman with ink on her cuffs",
+     "line": "Oh, you found the token. Before I say a word, I'm required to ask for the password.",
+     "options": [
+      "STEW",
+      "NEWS",
+      "WEST"
+     ],
+     "answer": 1,
+     "wrong": "A lovely word, but not in the order the token gave. North first, then East...",
+     "right": "NEWS, perfect. I'm Marguerite, of the Society of Friendly Cartographers. Tea at {next}?"
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "npc": "Marguerite Vell",
+     "line": "We map the small things, like which bench gets morning sun and where the best puddles are. Keep this compass. We'll send for you again."
+    }
+   ]
+  },
+  {
+   "key": "d_society_2",
+   "title": "The Second Riddle",
+   "series": "d_society",
+   "episode": 2,
+   "finale": "gift",
+   "gift": "minecraft:feather",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Marguerite Vell",
+     "line": "Welcome back! Members must prove they notice things. Test two: find where people cross the water without getting wet."
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "bridge",
+      "any"
+     ],
+     "hint": "Cross water, stay dry",
+     "line": "String on the railing holds a note: 'Every map needs a legend, a scale and a north arrow. The archivist at {next} will quiz you.'"
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "school",
+      "any"
+     ],
+     "npc": "Archivist Teodor Lim",
+     "line": "The note listed what every map needs. Which of these is NOT one of them?",
+     "options": [
+      "A north arrow",
+      "A legend",
+      "A gold frame"
+     ],
+     "answer": 2,
+     "wrong": "That one was on the note! Which one is just fancy?",
+     "right": "Right, frames are optional, sadly. Marguerite has a job for all of you at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "landmark",
+      "any"
+     ],
+     "npc": "Marguerite Vell",
+     "line": "Everyone's back, with all three pieces! We'll draw your very first map together at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "viewpoint",
+      "park",
+      "any"
+     ],
+     "npc": "Marguerite Vell",
+     "line": "Look at that, your first map, and the puddles are labeled beautifully. One more test and you're members. Keep the quill."
+    }
+   ],
+   "hunt": {
+    "line": "A map is a team sport. Split up and bring me {items}.",
+    "items": [
+     [
+      "Legend Scroll",
+      "minecraft:paper"
+     ],
+     [
+      "Scale Ruler",
+      "minecraft:stick"
+     ],
+     [
+      "North Arrow Feather",
+      "minecraft:feather"
+     ]
+    ]
+   }
+  },
+  {
+   "key": "d_society_3",
+   "title": "Members of the Map",
+   "series": "d_society",
+   "episode": 3,
+   "finale": "gift",
+   "gift": "minecraft:map",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "culture",
+      "any"
+     ],
+     "npc": "Marguerite Vell",
+     "line": "Final test! Our founder hid the members' book at the star on our oldest map. The star sits right on {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "landmark",
+      "civic",
+      "any"
+     ],
+     "thing": "Society Members Book",
+     "item": "minecraft:book",
+     "line": "The cover reads 'Society of Friendly Cartographers'. Inside: 'Bring this where bells call people in and voices sing on special days.'"
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "faith",
+      "any"
+     ],
+     "hint": "Where bells call people in",
+     "line": "Teodor is on the steps sharpening a pencil. 'Almost there,' he says. 'Marguerite has one question for you at {next}.'"
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "park",
+      "any"
+     ],
+     "npc": "Marguerite Vell",
+     "line": "Members' question! According to the cover of our book, what are we?",
+     "options": [
+      "Secret fishing club",
+      "Friendly cartographers",
+      "Sunday fudge committee"
+     ],
+     "answer": 1,
+     "wrong": "Lovely idea for a club, but check the book's cover again.",
+     "right": "Friendly cartographers, map-makers who wave a lot. Come sign at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "viewpoint",
+      "landmark",
+      "any"
+     ],
+     "npc": "Marguerite Vell",
+     "line": "Sign here, and draw your favorite spot beside your name. Welcome to the Society! Your first official map, blank and full of promise."
+    }
+   ]
+  },
+  {
+   "key": "d_grandma_will",
+   "title": "Grandma Rosa's Hunt",
+   "finale": "gift",
+   "gift": "minecraft:cake",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "civic",
+      "any"
+     ],
+     "npc": "Lawyer Penelope Ashworth",
+     "line": "Rosa Delgado's will is one page and says: 'No money. Just a hunt.' Her grandkids need help. Step one is at {next}, where she fed the ducks."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "water",
+      "park",
+      "any"
+     ],
+     "thing": "Envelope Marked Rosa",
+     "item": "minecraft:paper",
+     "line": "Grandma's handwriting: 'The best thing in this town costs a coin and comes warm in a paper bag. Go there.'"
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "hint": "Costs a coin, comes warm",
+     "line": "The baker grins. 'Rosa left me three numbers: her birthday month 4, then her lucky 7, then her 3 grandkids.' Take them to {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "civic",
+      "culture",
+      "any"
+     ],
+     "npc": "Grandson Mateo Delgado",
+     "line": "Grandma's lock box wants the numbers in the order she gave them. Which is it?",
+     "options": [
+      "3-7-4",
+      "4-7-3",
+      "7-4-3"
+     ],
+     "answer": 1,
+     "wrong": "Nope. The baker said them in a particular order, try that one.",
+     "right": "Click! Inside are three tags that say 'one for each of you.' Lucia's waiting at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Granddaughter Lucia Delgado",
+     "line": "We found all three. Grandma just wanted us to walk the town together, didn't she. Last stop is {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "viewpoint",
+      "park",
+      "any"
+     ],
+     "npc": "Lawyer Penelope Ashworth",
+     "line": "The final envelope says: 'The treasure was the walk. Also, there is cake.' There is, in fact, cake."
+    }
+   ],
+   "hunt": {
+    "line": "The tags name three of Grandma's favorite spots. Split up and bring back {items}.",
+    "items": [
+     [
+      "Grandma's Button",
+      "minecraft:iron_nugget"
+     ],
+     [
+      "Recipe Card",
+      "minecraft:paper"
+     ],
+     [
+      "Bell From Her Bike",
+      "minecraft:bell"
+     ]
+    ]
+   }
+  },
+  {
+   "key": "d_shift_cipher",
+   "title": "Shift by One",
+   "finale": "gift",
+   "gift": "minecraft:pumpkin_pie",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "school",
+      "any"
+     ],
+     "npc": "Ms. Haverford",
+     "line": "My class left me a note that just says QJF. They love moving every letter one step forward. Another note's waiting at {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "thing": "Second Note",
+     "item": "minecraft:paper",
+     "line": "'Each letter moved one step forward, so move each one back.' At the bottom: 'Take the word to {next}.'"
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "npc": "Baker Fen",
+     "line": "The kids pre-ordered something for their teacher, but they only gave me the code. What's QJF with each letter moved back one?",
+     "options": [
+      "PIE",
+      "RKG",
+      "JAM"
+     ],
+     "answer": 0,
+     "wrong": "Hmm, that's moving forward, or guessing. Q goes back to P...",
+     "right": "PIE! Warm and boxed. Ms. Haverford's at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "school",
+      "park",
+      "any"
+     ],
+     "npc": "Ms. Haverford",
+     "line": "A pie, and a card reading UIBOL ZPV, which took me twenty minutes. Best class ever. Have a slice."
+    }
+   ]
+  },
+  {
+   "key": "d_first_letters",
+   "title": "Read Down the Side",
+   "finale": "gift",
+   "gift": "minecraft:book",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "culture",
+      "any"
+     ],
+     "npc": "Poet Lionel Brisk",
+     "line": "I hid a word in my new poem, in the first letter of each line. Then the wind took the pages. One landed near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "thing": "Poem Page One",
+     "item": "minecraft:paper",
+     "line": "'Breezes bend the grass, / Every pigeon takes a nap.' Page two drifted to {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "water",
+      "bridge",
+      "any"
+     ],
+     "thing": "Poem Page Two",
+     "item": "minecraft:paper",
+     "line": "'Nobody hurries here, / Children skip a stone, / Hours go soft and slow.' Bring both pages to {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "any"
+     ],
+     "npc": "Poet Lionel Brisk",
+     "line": "Read the first letter of every line, top to bottom. Where should I sit to read it aloud?",
+     "options": [
+      "A boat",
+      "A bench",
+      "A bridge"
+     ],
+     "answer": 1,
+     "wrong": "Read down the side again, letter by letter. B, E, N...",
+     "right": "A bench! I always forget my own puzzles. There's a good one at {next}, come listen."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "viewpoint",
+      "any"
+     ],
+     "npc": "Poet Lionel Brisk",
+     "line": "Five lines, one bench and a very patient audience. Take a signed copy, only slightly crumpled."
+    }
+   ]
+  },
+  {
+   "key": "d_combo_lock",
+   "title": "Three Digits, Three Stops",
+   "finale": "gift",
+   "gift": "minecraft:gold_ingot",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "school",
+      "civic",
+      "any"
+     ],
+     "npc": "Janitor Gus Pellerin",
+     "line": "The old trophy cupboard has a three-digit lock and nobody knows the code. My predecessor hid each digit around town. One is near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "thing": "Stone Painted With a 2",
+     "item": "minecraft:flint",
+     "line": "A flat stone with a 2 on top and FIRST on the bottom. Another digit is hiding at {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "thing": "Bottle Cap With a 9",
+     "item": "minecraft:iron_nugget",
+     "line": "A cap scratched with a 9 and the word LAST. The middle digit is up where the whole town spreads out like a picnic blanket."
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "viewpoint",
+      "landmark",
+      "any"
+     ],
+     "hint": "The town like a picnic blanket",
+     "line": "A little brass tag hangs here: '5, the MIDDLE one.' Take all three to {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "school",
+      "civic",
+      "any"
+     ],
+     "npc": "Janitor Gus Pellerin",
+     "line": "Right, first, middle and last. What's the code?",
+     "options": [
+      "2-9-5",
+      "5-2-9",
+      "2-5-9"
+     ],
+     "answer": 2,
+     "wrong": "The lock sighs. Which stop said first, which said middle, which said last?",
+     "right": "Click! The cupboard swings open. Carry the dusty box to the principal at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "school",
+      "any"
+     ],
+     "npc": "Principal Adaeze Nwosu",
+     "line": "Trophies from every school fair, and one marked Best Helper that was never given out. I think it's yours now."
+    }
+   ]
+  },
+  {
+   "key": "d_puzzle_box",
+   "title": "The Puzzle Box",
+   "finale": "gift",
+   "gift": "minecraft:amethyst_shard",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "culture",
+      "any"
+     ],
+     "npc": "Shopkeeper Wren Ostrowski",
+     "line": "Someone traded me a puzzle box with three slots: shell, leaf and feather. Carved underneath: 'Pieces are numbered. Start by the water.' Try {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "water",
+      "bridge",
+      "any"
+     ],
+     "thing": "Little Carved Shell",
+     "item": "minecraft:nautilus_shell",
+     "line": "The shell piece has a 1 on the back. The leaf piece should be somewhere green, like {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "thing": "Little Carved Leaf",
+     "item": "minecraft:emerald",
+     "line": "A 2 on the back of the leaf. The feather piece is already in the box, it just needs to go in the right place. Back to {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "any"
+     ],
+     "npc": "Shopkeeper Wren Ostrowski",
+     "line": "Shell was 1, leaf was 2. Which piece slides in last?",
+     "options": [
+      "Shell",
+      "Leaf",
+      "Feather"
+     ],
+     "answer": 2,
+     "wrong": "That one already had its number. Which piece is left over?",
+     "right": "The feather! The lid pops open with a tiny click. Inside is a note: 'Thank the carver at {next}.'"
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "faith",
+      "any"
+     ],
+     "npc": "Old carver Bram Hollis",
+     "line": "You opened it! I make one every winter and trade it away to see who's clever enough. What's inside is yours."
+    }
+   ]
+  },
+  {
+   "key": "d_geocache",
+   "title": "The Geocache Trail",
+   "finale": "gift",
+   "gift": "minecraft:spyglass",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Geocacher Tilly Marchetti",
+     "line": "My logbook's been quiet for a year, so I hid fresh caches. The first is near {next}, tucked somewhere sneaky."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "landmark",
+      "civic",
+      "any"
+     ],
+     "thing": "Tiny Cache Tin",
+     "item": "minecraft:iron_nugget",
+     "line": "A logbook page inside: 'Cache two is where people sit and wait to go somewhere else, and listen for wheels on rails.'"
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "station",
+      "any"
+     ],
+     "hint": "Waiting for wheels on rails",
+     "line": "Cache two is taped under a bench. The log says 'Sign, then trade something fair.' Tilly is waiting at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Geocacher Tilly Marchetti",
+     "line": "Everyone's back with something to trade! Let's fill the big cache at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "viewpoint",
+      "park",
+      "any"
+     ],
+     "npc": "Geocacher Tilly Marchetti",
+     "line": "In it goes, with your names in the log. Someday a stranger will find a lucky feather and wonder about you. Take this for the road."
+    }
+   ],
+   "hunt": {
+    "line": "A cache is only good if there's treasure to trade. Split up and find {items}.",
+    "items": [
+     [
+      "Shiny Pebble",
+      "minecraft:quartz"
+     ],
+     [
+      "Spool of String",
+      "minecraft:string"
+     ],
+     [
+      "Lucky Feather",
+      "minecraft:feather"
+     ]
+    ]
+   }
+  },
+  {
+   "key": "d_crossword",
+   "title": "Seven Down",
+   "finale": "gift",
+   "gift": "minecraft:writable_book",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "npc": "Crossword fan Harriet Moss",
+     "line": "Seven down has stumped me all week: 'It joins two banks, but no money changes hands.' Go stand on the answer for me."
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "bridge",
+      "any"
+     ],
+     "hint": "Joins two banks, no money",
+     "line": "BRIDGE, six letters, perfect! Tucked in the railing is Harriet's grid, nearly done. She circled one more clue near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "culture",
+      "school",
+      "any"
+     ],
+     "thing": "Folded Crossword Grid",
+     "item": "minecraft:paper",
+     "line": "The grid is finished, and the circled squares spell T, E, A. Harriet always sends her order to {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "npc": "Cafe owner Sol Reyes",
+     "line": "Harriet sent you? She said the circled squares were her order.",
+     "options": [
+      "Coffee",
+      "Tea",
+      "Cocoa"
+     ],
+     "answer": 1,
+     "wrong": "She'd send that right back. What did the circled squares spell?",
+     "right": "Tea, as always. Bring it to {next}, she'll be on her usual bench."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Crossword fan Harriet Moss",
+     "line": "Seven down AND tea. You've made my week. Take the finished puzzle, I've got a fresh one for tomorrow."
+    }
+   ]
+  },
+  {
+   "key": "d_lighthouse",
+   "title": "The Keeper's Code",
+   "finale": "gift",
+   "gift": "minecraft:lantern",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "water",
+      "viewpoint",
+      "any"
+     ],
+     "npc": "Retired keeper Agnes Fairweather",
+     "line": "When I kept the light, I flashed my sister a code: one long for yes, two short for no, three short for come for tea. I left her a message near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "water",
+      "bridge",
+      "any"
+     ],
+     "thing": "Keeper's Logbook Page",
+     "item": "minecraft:paper",
+     "line": "Three short dashes drawn in pencil, and 'for Maud.' Agnes's sister Maud spends her afternoons at {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "park",
+      "civic",
+      "any"
+     ],
+     "npc": "Maud Fairweather",
+     "line": "My sister's flashes! I haven't seen them in years. Three short ones, what did that mean again?",
+     "options": [
+      "Yes",
+      "No",
+      "Come for tea"
+     ],
+     "answer": 2,
+     "wrong": "That's not it. Agnes told you the whole code, three short ones meant...",
+     "right": "Come for tea! Oh, she's a softie. Tell her I'll meet her at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "food_shop",
+      "water",
+      "any"
+     ],
+     "npc": "Retired keeper Agnes Fairweather",
+     "line": "Maud came! Forty years of tea by lamp code and she still pretends to forget. Take the old lantern from my light."
+    }
+   ]
+  },
+  {
+   "key": "d_garden_key",
+   "title": "The Secret Garden Key",
+   "finale": "secret_garden",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Gardener Ilse Thornbury",
+     "line": "A walled garden's been locked for years, and the last gardener split the key into three charms. Her note says the first sleeps where the water is still."
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "water",
+      "park",
+      "any"
+     ],
+     "hint": "Where the water is still",
+     "line": "A tiny iron key-head is tied to a reed. The middle of the key is near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "landmark",
+      "civic",
+      "any"
+     ],
+     "thing": "Key Shaft Charm",
+     "item": "minecraft:iron_nugget",
+     "line": "The shaft of the key! A note: 'The teeth are with whoever sells the most flowers in town.' Ask at {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "park",
+      "food_shop",
+      "any"
+     ],
+     "npc": "Florist Benedikt Cho",
+     "line": "I have the key's teeth, but I promised to give them only to someone who knows where the first charm slept.",
+     "options": [
+      "By the still water",
+      "On a windy hill",
+      "Under a bakery"
+     ],
+     "answer": 0,
+     "wrong": "Not quite. Think back to the gardener's first note.",
+     "right": "That's the one. Here, the key fits together now. The garden door is at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Gardener Ilse Thornbury",
+     "line": "It turns! Look at it, overgrown and perfect. Let's see what's been growing all these years."
+    }
+   ]
+  },
+  {
+   "key": "d_book_club",
+   "title": "The Daisy in Chapter Twelve",
+   "finale": "gift",
+   "gift": "minecraft:oxeye_daisy",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "culture",
+      "any"
+     ],
+     "npc": "Book club host Priya Vasquez",
+     "line": "Every month a pressed daisy shows up in our book club novel, and nobody admits to it. This one smells like bread. Ask at {next}?"
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "npc": "Baker Odette Fournier",
+     "line": "Daisies? A regular reads at my window every morning, flower in his hatband. He left for {next} with half a roll."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "thing": "Dropped Bookmark",
+     "item": "minecraft:paper",
+     "line": "A bookmark with a daisy doodle: 'Chapter 12, don't tell Priya the ending.' Initials W.B. Back to {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "any"
+     ],
+     "npc": "Book club host Priya Vasquez",
+     "line": "Our members are Margot Linde, Wilbur Brandt and Ines Park. Who's leaving the daisies?",
+     "options": [
+      "Margot Linde",
+      "Wilbur Brandt",
+      "Ines Park"
+     ],
+     "answer": 1,
+     "wrong": "Check the initials on the bookmark again.",
+     "right": "Wilbur! The quiet one who never says a word at meetings. Let's thank him at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "faith",
+      "any"
+     ],
+     "npc": "Wilbur Brandt",
+     "line": "I'm too shy to talk at book club, so I leave a daisy on my favorite page. You found me out. Take one for your own book."
+    }
+   ]
+  },
+  {
+   "key": "d_chess",
+   "title": "Mate in Two on the Bench",
+   "finale": "gift",
+   "gift": "minecraft:chiseled_quartz_block",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Chess player Vasily Ondrak",
+     "line": "Someone leaves a chess problem on this bench every week. This week's just says: 'The knight waits where the bells ring.'"
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "faith",
+      "landmark",
+      "any"
+     ],
+     "hint": "Where the bells ring",
+     "line": "A white knight piece by the door, with a note: 'Knights hop in an L. The second clue is at {next}.'"
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "school",
+      "culture",
+      "any"
+     ],
+     "thing": "Little Bishop Piece",
+     "item": "minecraft:quartz",
+     "line": "A bishop and a note: 'Winning move: two squares up, one to the side.' Bring both pieces to {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Chess player Vasily Ondrak",
+     "line": "Two squares up and one to the side. Which piece can even make that move?",
+     "options": [
+      "The bishop",
+      "The rook",
+      "The knight"
+     ],
+     "answer": 2,
+     "wrong": "That one slides in straight lines. Which piece hops in an L?",
+     "right": "The knight! Checkmate. The puzzle-maker signed it: 'Come say hi at {next}.'"
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "culture",
+      "any"
+     ],
+     "npc": "Retired champion Lottie Greaves",
+     "line": "It's me! I love watching people puzzle. Next week's is harder, I promise. Take a white square for your board."
+    }
+   ]
+  },
+  {
+   "key": "d_wrong_map",
+   "title": "The Map With One Mistake",
+   "finale": "gift",
+   "gift": "minecraft:map",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "culture",
+      "civic",
+      "any"
+     ],
+     "npc": "Map collector Desmond Achterberg",
+     "line": "This old town map is perfect except one mark is in the wrong place. Check them for me, starting with the little fish at {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "water",
+      "any"
+     ],
+     "thing": "Fish Mark Pin",
+     "item": "minecraft:prismarine_shard",
+     "line": "A fish pin, right where the map says. That mark is correct! The bell mark points to {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "faith",
+      "civic",
+      "any"
+     ],
+     "thing": "Bell Mark Pin",
+     "item": "minecraft:gold_nugget",
+     "line": "The map puts the bell here, but a small sign says the old bell moved away ages ago. A local historian at {next} can confirm."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Historian Fern Okonkwo",
+     "line": "So, which mark on Desmond's map is the wrong one?",
+     "options": [
+      "The fish",
+      "The bell",
+      "Neither"
+     ],
+     "answer": 1,
+     "wrong": "That one checked out fine. Which mark pointed somewhere that changed?",
+     "right": "The bell, it moved ages ago. Let's fix the map with Desmond at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "culture",
+      "civic",
+      "any"
+     ],
+     "npc": "Map collector Desmond Achterberg",
+     "line": "One tiny correction and the map is perfect again. Have the fresh copy, the ink's barely dry."
+    }
+   ]
+  },
+  {
+   "key": "d_perfume",
+   "title": "Eau de Here",
+   "finale": "gift",
+   "gift": "minecraft:honey_bottle",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "npc": "Perfumer Celestine Arnaud",
+     "line": "I want to bottle the smell of this town. A good perfume goes fresh on top, green in the middle, sweet at the bottom. I lost my stopper near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "thing": "Glass Stopper",
+     "item": "minecraft:quartz",
+     "line": "The stopper, shining in the grass. Celestine's apprentice is mixing at {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "culture",
+      "any"
+     ],
+     "npc": "Apprentice Remy Loiseau",
+     "line": "Help me pour the layers. Which note goes at the very bottom?",
+     "options": [
+      "Fresh",
+      "Green",
+      "Sweet"
+     ],
+     "answer": 2,
+     "wrong": "Celestine was very particular. What did she say sits lowest?",
+     "right": "Sweet, at the bottom. Now we need actual scents! Celestine is at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Perfumer Celestine Arnaud",
+     "line": "Everyone's back with the whole town in three bundles! Let's mix it at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "food_shop",
+      "culture",
+      "any"
+     ],
+     "npc": "Perfumer Celestine Arnaud",
+     "line": "Fresh, green, sweet. It smells exactly like a Tuesday here. A bottle for each of you."
+    }
+   ],
+   "hunt": {
+    "line": "Split up and sniff out {items}. Nobody will judge the sniffing.",
+    "items": [
+     [
+      "Fresh Breeze Ribbon",
+      "minecraft:string"
+     ],
+     [
+      "Green Moss Sample",
+      "minecraft:green_dye"
+     ],
+     [
+      "Sweet Honey Drop",
+      "minecraft:honeycomb"
+     ]
+    ]
+   }
+  },
+  {
+   "key": "d_recipe",
+   "title": "Nana's Soup in Pieces",
+   "finale": "picnic_bakeoff",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "npc": "Cook Tomasz Wierzbicki",
+     "line": "Nana's soup recipe was one card until a very excited dog tore it up. The biggest piece is near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "thing": "Recipe Corner Piece",
+     "item": "minecraft:paper",
+     "line": "It says 'Carrots first, always. Pinch of salt LAST, or Nana will know.' Tomasz's sister is at {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "npc": "Ola Wierzbicki",
+     "line": "Tomasz and I argue about this every winter. When does the salt go in?",
+     "options": [
+      "First",
+      "Halfway",
+      "Last"
+     ],
+     "answer": 2,
+     "wrong": "Ha, that's what Tomasz says. What does Nana's card say?",
+     "right": "Last! I'll tell him I was right. He's waiting at {next} for the other pieces."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Cook Tomasz Wierzbicki",
+     "line": "Every piece is back! Nana's soup, whole again. Let's cook for everyone at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Cook Tomasz Wierzbicki",
+     "line": "Carrots first, salt last, and a lot of love in the middle. Everyone grab a bowl!"
+    }
+   ],
+   "hunt": {
+    "line": "The dog ran three ways. Split up and find {items}.",
+    "items": [
+     [
+      "Torn Recipe Strip",
+      "minecraft:paper"
+     ],
+     [
+      "Nana's Tasting Spoon",
+      "minecraft:iron_nugget"
+     ],
+     [
+      "Bundle of Herb String",
+      "minecraft:string"
+     ]
+    ]
+   }
+  },
+  {
+   "key": "d_time_capsule",
+   "title": "The Class of Long Ago",
+   "finale": "time_capsule",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "school",
+      "any"
+     ],
+     "npc": "Mr. Abernathy",
+     "line": "Fifty years ago a class buried a time capsule and left a riddle: 'Find us where we waited every morning for the 8:15.'"
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "station",
+      "any"
+     ],
+     "hint": "Waiting for the 8:15",
+     "line": "A plaque, signed Dot, Ezra and Hamish: 'Dot still lives in town and knows the rest.' Their old class photo is tucked near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "civic",
+      "park",
+      "any"
+     ],
+     "thing": "Faded Class Photo",
+     "item": "minecraft:paper",
+     "line": "A photo of three kids grinning at a train. On the back: 'Bring this to Dot.' She's just over at {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "civic",
+      "culture",
+      "any"
+     ],
+     "npc": "Dot Kingsley",
+     "line": "I'll say where it's buried if you tell me which train we wrote into our riddle.",
+     "options": [
+      "The 7:45",
+      "The 8:15",
+      "The 9:30"
+     ],
+     "answer": 1,
+     "wrong": "Close! It was the one in the riddle at the school.",
+     "right": "The 8:15! We missed it on purpose every day. It's buried at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "school",
+      "any"
+     ],
+     "npc": "Mr. Abernathy",
+     "line": "It's open! Old letters, a yo-yo, and a drawing of the future with a great many flying cars."
+    }
+   ]
+  },
+  {
+   "key": "d_bell_ringer",
+   "title": "The Bell Ringer's Tune",
+   "finale": "gift",
+   "gift": "minecraft:bell",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "faith",
+      "landmark",
+      "any"
+     ],
+     "npc": "Bell ringer Hollis Abbey",
+     "line": "I'm writing a new tune and hid the notes around town so I'd stop fiddling with them. The first card is at {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "thing": "First Note Card",
+     "item": "minecraft:paper",
+     "line": "'Note one: HIGH.' On the back: 'Note two waits where both sides of the water hold hands.'"
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "bridge",
+      "any"
+     ],
+     "hint": "Both sides of the water hold hands",
+     "line": "Tied to the railing: 'Note two: LOW. Note three: same as note one.' That's the tune. Back to {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "faith",
+      "landmark",
+      "any"
+     ],
+     "npc": "Bell ringer Hollis Abbey",
+     "line": "Lovely! So, start to finish, what's the tune?",
+     "options": [
+      "Low, high, low",
+      "High, low, high",
+      "High, high, low"
+     ],
+     "answer": 1,
+     "wrong": "Not quite. Note one, then note two, then note one again.",
+     "right": "High, low, high, ding dong ding! Let's ring it for the whole town from {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "viewpoint",
+      "faith",
+      "any"
+     ],
+     "npc": "Bell ringer Hollis Abbey",
+     "line": "Hear that? Every pigeon in town just looked up. Here, a little bell of your own."
+    }
+   ]
+  },
+  {
+   "key": "d_riddle_trail",
+   "title": "The Riddle Marathon",
+   "finale": "riddle_treasure",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Puzzle grandpa Ezio Bellandi",
+     "line": "Every year I set a riddle trail for the neighborhood, and this year it's yours. First: find the place where a bell sends everyone home and nobody minds."
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "school",
+      "any"
+     ],
+     "hint": "A bell sends everyone home",
+     "line": "Chalked on the step: 'The treasure lock wants a spider's legs minus a bike's wheels.' Ezio's chalk box is hidden at {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "thing": "Ezio's Chalk Box",
+     "item": "minecraft:white_dye",
+     "line": "Inside the box: 'Last riddle. Go up where the wind is loud and the view is long.'"
+    },
+    {
+     "kind": "riddle",
+     "roles": [
+      "viewpoint",
+      "any"
+     ],
+     "hint": "Wind loud, view long",
+     "line": "A ribbon tied here flaps in the breeze, pointing on to {next}, where the lock waits."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "park",
+      "culture",
+      "any"
+     ],
+     "npc": "Bea Bellandi",
+     "line": "I'm guarding the lock. Spider legs minus bike wheels, what's the number?",
+     "options": [
+      "6",
+      "10",
+      "4"
+     ],
+     "answer": 0,
+     "wrong": "Count again. Eight legs, two wheels...",
+     "right": "Six! The lock clicks open. Grandpa has the treasure at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Puzzle grandpa Ezio Bellandi",
+     "line": "You ran the whole marathon! The treasure's the same every year, the chest, and a lot of applause."
+    }
+   ]
+  },
+  {
+   "key": "d_bottle_code",
+   "title": "Numbers in a Bottle",
+   "finale": "message_bottle",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "water",
+      "any"
+     ],
+     "npc": "Beachcomber Nell Fitzgibbon",
+     "line": "A bottle washed up with a coded note: numbers for letters, 1 is A, 2 is B, and so on. A second note floated off near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "water",
+      "bridge",
+      "any"
+     ],
+     "thing": "Second Corked Note",
+     "item": "minecraft:paper",
+     "line": "It says 'If found, write back,' and at the bottom, in code: 8-9. The postmaster at {next} loves this sort of thing."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "civic",
+      "culture",
+      "any"
+     ],
+     "npc": "Postmaster Quentin Arbuckle",
+     "line": "With 1 as A and 2 as B, what does 8-9 spell?",
+     "options": [
+      "HI",
+      "GO",
+      "OK"
+     ],
+     "answer": 0,
+     "wrong": "Count it out on your fingers. 8 is H...",
+     "right": "HI! Someone just wanted to say hi to the whole world. Let's write back from {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "water",
+      "any"
+     ],
+     "npc": "Beachcomber Nell Fitzgibbon",
+     "line": "We'll send our own bottle, coded 8-9 right back. Somewhere, someone's going to grin."
+    }
+   ]
+  },
+  {
+   "key": "d_birthday_hunt",
+   "title": "The Birthday Puzzle",
+   "finale": "surprise_party",
+   "steps": [
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Party planner Bibi Achebe",
+     "line": "It's Oskar's birthday and he loves puzzles, so I planned the party as one. The first clue card is hidden near {next}."
+    },
+    {
+     "kind": "search",
+     "roles": [
+      "food_shop",
+      "civic",
+      "any"
+     ],
+     "thing": "Party Clue Card",
+     "item": "minecraft:paper",
+     "line": "'Oskar's cake: not chocolate, he's had too much. Not lemon, it makes him sneeze.' Take that to the baker at {next}."
+    },
+    {
+     "kind": "choice",
+     "roles": [
+      "food_shop",
+      "any"
+     ],
+     "npc": "Baker Imogen Patel",
+     "line": "Bibi said you'd know the flavor. Which one?",
+     "options": [
+      "Chocolate",
+      "Lemon",
+      "Strawberry"
+     ],
+     "answer": 2,
+     "wrong": "Hmm, the clue card ruled that one out.",
+     "right": "Strawberry it is, frosting going on now. Bibi needs help at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "any"
+     ],
+     "npc": "Party planner Bibi Achebe",
+     "line": "Everything's here! Quick and quiet, he's almost at {next}."
+    },
+    {
+     "kind": "talk",
+     "roles": [
+      "park",
+      "civic",
+      "any"
+     ],
+     "npc": "Oskar Lindqvist",
+     "line": "A surprise? For me? And strawberry! You solved my own party, I'm so proud and a little jealous."
+    }
+   ],
+   "hunt": {
+    "line": "Split up and grab {items}. Shh, it's a surprise.",
+    "items": [
+     [
+      "Balloon Strings",
+      "minecraft:string"
+     ],
+     [
+      "Paper Crown",
+      "minecraft:paper"
+     ],
+     [
+      "Party Bell",
+      "minecraft:bell"
+     ]
+    ]
+   }
+  }
+ ]
+}

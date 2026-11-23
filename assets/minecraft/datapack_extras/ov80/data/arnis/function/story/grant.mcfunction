@@ -1,1 +1,1 @@
-$advancement grant @s only arnis:story/step_$(k)
+$advancement grant @a only arnis:story/$(key)

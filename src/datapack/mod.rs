@@ -331,7 +331,6 @@ const STORIES: &[(&str, &[u8])] = static_files![
     "data/arnis/function/story/unsupported.mcfunction",
     "ov80/data/arnis/function/story/advance.mcfunction",
     "ov80/data/arnis/function/story/bar.mcfunction",
-    "ov80/data/arnis/function/story/catch_up.mcfunction",
     "ov80/data/arnis/function/story/control.mcfunction",
     "ov80/data/arnis/function/story/current.mcfunction",
     "ov80/data/arnis/function/story/current_at.mcfunction",
@@ -366,6 +365,19 @@ const STORIES: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/story/leave_spot.mcfunction",
     "ov80/data/arnis/function/story/load.mcfunction",
     "ov80/data/arnis/function/story/next_place.mcfunction",
+    "ov80/data/arnis/function/story/begin.mcfunction",
+    "ov80/data/arnis/function/story/between.mcfunction",
+    "ov80/data/arnis/function/story/done.mcfunction",
+    "ov80/data/arnis/function/story/next_stop.mcfunction",
+    "ov80/data/arnis/function/story/open.mcfunction",
+    "ov80/data/arnis/function/story/open_at.mcfunction",
+    "ov80/data/arnis/function/story/wrong.mcfunction",
+    "ov80/data/arnis/function/story/beat/found.mcfunction",
+    "ov80/data/arnis/function/story/beat/hide.mcfunction",
+    "ov80/data/arnis/function/story/beat/riddle.mcfunction",
+    "ov80/data/arnis/function/story/beat/search.mcfunction",
+    "ov80/data/arnis/function/story/finale/gift.mcfunction",
+    "ov80/data/arnis/function/story/finale/give.mcfunction",
     "ov80/data/arnis/function/story/hunt/assign.mcfunction",
     "ov80/data/arnis/function/story/hunt/bar.mcfunction",
     "ov80/data/arnis/function/story/hunt/count.mcfunction",
@@ -1457,7 +1469,7 @@ mod tests {
             "second",
             "talk",
             "advance",
-            "catch_up",
+            "between",
             "next_place",
             "gossip",
             "control",
@@ -1512,6 +1524,32 @@ mod tests {
     }
 
     #[test]
+    fn stories_run_one_after_another_with_riddles_searches_and_choices() {
+        let out = files(&ctx(all()));
+        let f = |p: &str| {
+            text_of(
+                &out,
+                &format!("ov80/data/arnis/function/story/{p}.mcfunction"),
+            )
+            .unwrap()
+        };
+        // A finished story hands over to the next after a breather, round and round.
+        assert!(f("second").contains("if score #step arnis.story >= #steps arnis.story run return run function arnis:story/between"));
+        let between = f("between");
+        assert!(between.contains("if score #story arnis.story >= #stories arnis.story run scoreboard players set #story arnis.story 0"), "{between}");
+        assert!(f("advance").contains("run return run function arnis:story/done"));
+        assert!(f("grant").contains("advancement grant @a only arnis:story/$(key)"));
+        // Riddles and searches have nobody waiting; reaching or finding moves the story on.
+        assert!(f("second")
+            .contains(r#"cur{kind:"riddle"} run return run function arnis:story/beat/riddle"#));
+        assert!(f("beat/found").contains("function arnis:story/advance"));
+        // A riddle's answer is never given away by the people in the street.
+        assert!(f("next_place").contains(r#"cur{kind:"riddle"} run return 0"#));
+        // A wrong answer (8) only nudges.
+        assert!(f("control").contains("matches 8 if entity"));
+    }
+
+    #[test]
     fn the_menu_click_needs_no_version_specific_predicate() {
         // Predicates are spelled three ways across versions; the function filters instead.
         let out = files(&ctx(all()));
@@ -1532,12 +1570,12 @@ mod tests {
     }
 
     #[test]
-    fn every_storyline_has_its_finale() {
+    fn every_story_has_its_finale() {
         let out = files(&ctx(all()));
-        for line in &stories::lines::STORYLINES {
+        for story in stories::lines::book() {
             let path = format!(
                 "ov80/data/arnis/function/story/finale/{}.mcfunction",
-                line.key
+                story.finale
             );
             assert!(text_of(&out, &path).is_some(), "{path}");
         }
@@ -1547,8 +1585,8 @@ mod tests {
     fn the_pause_page_never_names_the_storyline() {
         let out = files(&ctx(all()));
         let page = text_of(&out, "ov80/data/arnis/dialog/story.json").unwrap();
-        for line in &stories::lines::STORYLINES {
-            assert!(!page.contains(line.title), "{}", line.title);
+        for story in stories::lines::book() {
+            assert!(!page.contains(&story.title), "{}", story.title);
         }
     }
 
@@ -1684,7 +1722,7 @@ mod tests {
         let has = |p: &str| out.iter().any(|(path, _)| path == p);
         assert!(has("ov80/data/arnis/function/story/plan.mcfunction"));
         assert!(has("ov80/data/arnis/advancement/story/root.json"));
-        assert!(has("ov80/data/arnis/advancement/story/step_3.json"));
+        assert!(has("ov80/data/arnis/advancement/story/root.json"));
         c.extras.stories = false;
         assert!(!files(&c).iter().any(|(path, _)| path.contains("/story/")));
     }

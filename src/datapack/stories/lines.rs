@@ -1,425 +1,492 @@
-//! The fifteen storylines, and fitting one to the map's places.
+//! The stories, from `assets/stories/*.json`, and laying a long run of them over the map:
+//! each story's stops a walk apart, each new story somewhere else in the city.
 
 use super::places::{Role, StoryPlace};
-use rand::seq::IndexedRandom;
+use rand::seq::SliceRandom;
 use rand::Rng;
-use Role::*;
+use serde::Deserialize;
 
-/// A hop longer than this, in blocks, is taken only when no closer place fits.
-const HOP: i64 = 600;
-/// The fewest places a story needs.
-const MIN_STOPS: usize = 3;
+/// The longest walk between two stops of a story, and from its first stop to any other.
+const HOP: f64 = 250.0;
+const REACH: f64 = 450.0;
+/// The hunt's places: a walk from the meeting place, and apart from each other.
+const HUNT_REACH: std::ops::RangeInclusive<f64> = 80.0..=300.0;
+const HUNT_SPREAD: f64 = 60.0;
+/// A new story starts far from the last few.
+const RECENT: usize = 3;
 
-/// One stop: who waits there, the roles its place may have (best first), and what they say.
-/// `{next}` in the line is the next stop's name.
+#[derive(Deserialize)]
+struct File {
+    stories: Vec<Story>,
+}
+
+#[derive(Deserialize)]
+pub struct Story {
+    pub key: String,
+    pub title: String,
+    pub series: Option<String>,
+    pub episode: Option<u32>,
+    pub finale: String,
+    pub gift: Option<String>,
+    pub steps: Vec<Step>,
+    pub hunt: Option<Hunt>,
+}
+
+#[derive(Deserialize)]
 pub struct Step {
-    pub roles: &'static [Role],
-    pub npc: &'static str,
-    pub line: &'static str,
+    pub roles: Vec<Role>,
+    #[serde(flatten)]
+    pub beat: Beat,
 }
 
-pub struct Storyline {
-    pub key: &'static str,
-    pub title: &'static str,
-    pub steps: &'static [Step],
-    pub finale: Step,
-    pub hunt: Hunt,
+/// What happens at a stop. `{next}` in a text is the next stop's name.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Beat {
+    /// Someone waits there and says `line`.
+    Talk { npc: String, line: String },
+    /// The place is not named: the step before gives the riddle, `hint` stays on the bar,
+    /// and reaching it shows `line`.
+    Riddle { hint: String, line: String },
+    /// `thing` lies hidden near the place, unmarked; finding it shows `line`.
+    Search {
+        thing: String,
+        item: String,
+        line: String,
+    },
+    /// Someone asks `line`; `options[answer]` is right and shows `right`, the others `wrong`.
+    Choice {
+        npc: String,
+        line: String,
+        options: [String; 3],
+        answer: usize,
+        wrong: String,
+        right: String,
+    },
 }
 
-/// The step before the finale splits the players up: each fetches one of `items` (a name
-/// and an item id) from its own place, then everyone meets back at that step's person.
-/// `{items}` in the line names them and their places.
+#[derive(Deserialize)]
 pub struct Hunt {
-    pub line: &'static str,
-    pub items: [(&'static str, &'static str); 3],
+    pub line: String,
+    pub items: [(String, String); 3],
 }
 
-/// The storyline this world got, and its stops as indices into the places: the steps it
-/// uses, then the finale. A short Postcard Tour uses only its first steps.
-pub struct Plan {
-    pub line: &'static Storyline,
-    pub stops: Vec<usize>,
-}
-
-impl Plan {
-    /// The steps in play, finale last, each with its stop.
-    pub fn steps(&self) -> impl Iterator<Item = (&'static Step, usize)> + '_ {
-        let n = self.stops.len() - 1;
-        self.line.steps[..n]
-            .iter()
-            .chain(std::iter::once(&self.line.finale))
-            .zip(self.stops.iter().copied())
-    }
-}
-
-const fn hunt(line: &'static str, items: [(&'static str, &'static str); 3]) -> Hunt {
-    Hunt { line, items }
-}
-
-const fn step(roles: &'static [Role], npc: &'static str, line: &'static str) -> Step {
-    Step { roles, npc, line }
-}
-
-pub static STORYLINES: [Storyline; 15] = [
-    Storyline {
-        key: "lost_dog",
-        title: "The Lost Dog",
-        steps: &[
-            step(&[Park, Any], "Mrs. Okafor", "My dog Biscuit slipped his lead! Someone saw a scruffy dog heading for {next}."),
-            step(&[FoodShop, Any], "Sam the baker", "A dog? He begged for a crust here and ran off towards {next}."),
-            step(&[School, Civic, Any], "A school janitor", "He dug up the flower bed and bolted. Kids saw him going to {next}."),
-            step(&[Water, Bridge, Park], "A fisher", "Wet paws, muddy nose, happy as anything. He trotted off to {next}."),
-        ],
-        finale: step(&[Park, Any], "Biscuit", "There he is, tail going like mad. Mrs. Okafor says he picked you, so he's yours now."),
-        hunt: hunt("Biscuit won't go home without his things: {items}. Split up, then meet me back here!", [("Biscuit's Lead", "minecraft:lead"), ("Squeaky Ball", "minecraft:slime_ball"), ("Favourite Blanket", "minecraft:white_wool")]),
-    },
-    Storyline {
-        key: "time_capsule",
-        title: "Time Capsule",
-        steps: &[
-            step(&[Culture, Civic, Any], "The librarian", "This old map fell out of a 1985 yearbook. The first mark is at {next}."),
-            step(&[School, Any], "A retired teacher", "My class buried a capsule! I only remember we met up after at {next}."),
-            step(&[FoodShop, Any], "The owner", "Oh, those kids! They argued here for an hour, then marched to {next}."),
-            step(&[Park, Landmark, Any], "A dog walker", "There's an old marker post by the path. The map's last X points to {next}."),
-        ],
-        finale: step(&[Landmark, Park, Any], "The capsule", "A rusty tin full of letters from 1985. Everyone takes one to read."),
-        hunt: hunt("The capsule's locked, and the class hid what opens it: {items}. Split up and meet me back here.", [("Brass Key", "minecraft:tripwire_hook"), ("Class Photo", "minecraft:paper"), ("Combination Note", "minecraft:paper")]),
-    },
-    Storyline {
-        key: "surprise_party",
-        title: "Surprise Party",
-        steps: &[
-            step(&[Civic, Any], "Priya", "It's Grandpa Lou's 90th and nothing's ready! Can you get the cake from {next}?"),
-            step(&[FoodShop, Any], "The baker", "One giant cake, done. Priya also wanted music, try the busker at {next}."),
-            step(&[Station, Park, Any], "A busker", "A party? I'm in. You'll want fireworks, my cousin keeps some at {next}."),
-            step(&[Civic, Landmark, Any], "Cousin Dee", "Fireworks, check. Lou loves the view, so the party is at {next}."),
-        ],
-        finale: step(&[Viewpoint, Park, Landmark], "Grandpa Lou", "SURPRISE! Lou nearly drops his hat. The whole street came to watch the fireworks."),
-        hunt: hunt("Lou's party still needs {items}. Split up, grab them, and meet me back here!", [("Bunting", "minecraft:red_banner"), ("Birthday Candles", "minecraft:candle"), ("Guest Book", "minecraft:writable_book")]),
-    },
-    Storyline {
-        key: "band_reunion",
-        title: "Band Reunion",
-        steps: &[
-            step(&[Culture, Any], "Old Ray", "The Night Owls haven't played in 30 years. Our drummer works at {next}."),
-            step(&[Station, Any], "Dot the drummer", "Ray wants a reunion? About time. Our bassist busks near {next}."),
-            step(&[Station, Park, Any], "Lenny on bass", "I still have the riffs. Our singer runs a little place at {next}."),
-            step(&[FoodShop, Any], "Marisol", "Fine, one show! Tell everyone to meet at {next}."),
-        ],
-        finale: step(&[Park, Civic, Landmark], "The Night Owls", "Count it in! The Night Owls play their comeback show, and the crowd sings along."),
-        hunt: hunt("We can't play without our gear: {items}. Split up and meet me back here.", [("Lucky Drumsticks", "minecraft:stick"), ("Old Bass Strings", "minecraft:string"), ("Lyric Sheet", "minecraft:paper")]),
-    },
-    Storyline {
-        key: "riddle_treasure",
-        title: "Riddle Treasure",
-        steps: &[
-            step(&[Culture, Landmark, Any], "A note in a bottle", "\"Where old things sleep and new eyes wake, find the next clue at {next}.\""),
-            step(&[Faith, Landmark, Any], "A chalk mark", "\"Bells and stones, quiet tones. Walk on to {next}.\""),
-            step(&[Park, Any], "A carved bench", "\"Green and wide where children play, the river waits, go {next} way.\""),
-            step(&[Water, Station, Any], "A soggy riddle", "\"Over the water, under the sky, the treasure waits at {next}.\""),
-        ],
-        finale: step(&[Bridge, Water, Landmark], "The treasure", "Tucked under the span, an old chest full of gold and diamonds. Not bad."),
-        hunt: hunt("\"Three torn pieces, scattered wide: {items}. Bring them here and set them side by side.\"", [("Map Corner", "minecraft:paper"), ("Map Middle", "minecraft:paper"), ("Map Edge", "minecraft:paper")]),
-    },
-    Storyline {
-        key: "friendly_ghost",
-        title: "The Friendly Ghost",
-        steps: &[
-            step(&[Landmark, Culture, Any], "A faint voice", "Psst. I'm Edith, I'm a ghost, don't scream. I never sent my letters. The first goes to {next}."),
-            step(&[Civic, Any], "The postmaster", "A letter from Edith? She was my grandmother's friend. Her sister lived near {next}."),
-            step(&[Park, Any], "Edith's grand-niece", "Aunt Edith wrote to us? Thank you. She loved the place at {next}."),
-            step(&[FoodShop, Any], "An old waiter", "Edith had tea here every Sunday. She said she'd rest at {next}."),
-        ],
-        finale: step(&[Faith, Landmark, Park], "Edith", "All my letters delivered. Thank you, friends. Edith smiles and fades into the light."),
-        hunt: hunt("Edith left three keepsakes for her goodbye: {items}. Split up, fetch them, and meet back here.", [("Pressed Rose", "minecraft:poppy"), ("Pocket Watch", "minecraft:clock"), ("Edith's Teacup", "minecraft:flower_pot")]),
-    },
-    Storyline {
-        key: "stargazer",
-        title: "Stargazer",
-        steps: &[
-            step(&[Culture, School, Any], "Dr. Lin", "A meteor shower tonight, but the town's too bright. Light my beacon at {next}."),
-            step(&[Viewpoint, Landmark, Any], "A night owl", "Beacon one, lit! Dr. Lin wants another one at {next}."),
-            step(&[Viewpoint, Park, Any], "A night walker", "Beacon two, glowing. The last one's at {next}."),
-            step(&[Viewpoint, Landmark, Any], "Dr. Lin's assistant", "All lit! Dr. Lin is setting up at {next}. Hurry, it's starting."),
-        ],
-        finale: step(&[Viewpoint, Park, Landmark], "Dr. Lin", "Look up! The sky fills with falling stars. Make a wish."),
-        hunt: hunt("Dr. Lin forgot half her kit: {items}. Split up and meet back here before the sky starts!", [("Brass Telescope", "minecraft:spyglass"), ("Star Chart", "minecraft:paper"), ("Thermos of Cocoa", "minecraft:honey_bottle")]),
-    },
-    Storyline {
-        key: "cat_mayor",
-        title: "The Cat Mayor",
-        steps: &[
-            step(&[Civic, Any], "The town clerk", "Mayor Whiskers is missing before the ceremony! She was last seen near {next}."),
-            step(&[FoodShop, Any], "The fishmonger", "Her Honour stole a sardine and strolled towards {next}."),
-            step(&[Park, Any], "A gardener", "The mayor napped in my tulips, then went to {next}."),
-            step(&[Faith, Culture, Any], "A sleepy caretaker", "A cat with a tiny sash? She's heading back towards {next}."),
-        ],
-        finale: step(&[Civic, Landmark, Any], "Mayor Whiskers", "Found her! Mayor Whiskers is crowned for another term, purring the whole time."),
-        hunt: hunt("The ceremony needs the mayor's regalia: {items}. Split up and meet me back here.", [("Tiny Crown", "minecraft:gold_nugget"), ("Ceremonial Sash", "minecraft:red_wool"), ("Golden Sardine", "minecraft:cod")]),
-    },
-    Storyline {
-        key: "message_bottle",
-        title: "Message in a Bottle",
-        steps: &[
-            step(&[Water, Bridge, Any], "A beachcomber", "This bottle washed up: \"To Arthur, from Rose, 1962.\" Someone at {next} might know them."),
-            step(&[Civic, Culture, Any], "An archivist", "Rose Bell! She moved away. Arthur still lives near {next}."),
-            step(&[Park, Any], "Arthur", "Rose? After all these years? She always loved {next}. Could you find her?"),
-            step(&[FoodShop, Any], "Rose", "Arthur kept my letter? Tell him to meet me at {next}."),
-        ],
-        finale: step(&[Bridge, Water, Viewpoint], "Rose and Arthur", "Two old friends meet again on the bridge, laughing like it was 1962."),
-        hunt: hunt("Before I see Arthur I want to bring {items}. Split up, and meet me back here?", [("Old Love Letter", "minecraft:paper"), ("Faded Photograph", "minecraft:paper"), ("Seashell", "minecraft:nautilus_shell")]),
-    },
-    Storyline {
-        key: "allay_courier",
-        title: "The Allay Courier",
-        steps: &[
-            step(&[Park, Any], "A tiny blue allay", "La-la! I dropped my shiny things all over town. The first is at {next}!"),
-            step(&[FoodShop, Any], "A shopkeeper", "A little blue thing took a cookie and left a bell. It flew to {next}."),
-            step(&[Station, Any], "A conductor", "Found this ribbon on platform two. The allay went towards {next}."),
-            step(&[School, Culture, Any], "A student", "It sang in our class and dropped a note block! It's waiting at {next}."),
-        ],
-        finale: step(&[Park, Landmark, Any], "The allay", "All its shiny things back! The allay twirls around you and decides to stay."),
-        hunt: hunt("The allay's last shiny things are scattered: {items}. Split up and meet me back here!", [("Shiny Bell", "minecraft:bell"), ("Tiny Note Block", "minecraft:note_block"), ("Jar of Glitter", "minecraft:glowstone_dust")]),
-    },
-    Storyline {
-        key: "founders_festival",
-        title: "Founders' Festival",
-        steps: &[
-            step(&[Civic, Any], "The festival planner", "The Founders' Festival is tonight and the banners aren't up! Start at {next}."),
-            step(&[Culture, Faith, Any], "A volunteer", "Banners up here, beautiful. The next lot go to {next}."),
-            step(&[School, Any], "Kids from the art club", "We painted lanterns! Take some to {next}."),
-            step(&[Station, Landmark, Any], "A busy conductor", "Banners and lanterns, perfect. Everyone's gathering at {next}."),
-        ],
-        finale: step(&[Park, Civic, Landmark], "The whole town", "Lanterns glow, music plays and the Founders' Festival begins. You made it happen."),
-        hunt: hunt("We're short on festival things: {items}. Split up and meet me back here!", [("Paper Lantern", "minecraft:lantern"), ("Founders' Flag", "minecraft:white_banner"), ("Festival Drum", "minecraft:note_block")]),
-    },
-    Storyline {
-        key: "secret_garden",
-        title: "The Secret Garden",
-        steps: &[
-            step(&[Park, Any], "Old Mrs. Greene", "My secret garden needs one seed from every park in town. Start at {next}."),
-            step(&[Park, Any], "A park ranger", "Sunflower seeds, take some. The poppies grow best at {next}."),
-            step(&[Park, Water, Any], "A birdwatcher", "Poppy seeds, here. Cornflowers? Ask at {next}."),
-            step(&[FoodShop, School, Any], "A florist", "Cornflowers, and a little extra. Mrs. Greene's garden is hidden at {next}."),
-        ],
-        finale: step(&[Park, Landmark, Any], "Mrs. Greene", "You plant the seeds and the whole garden bursts into bloom."),
-        hunt: hunt("Mrs. Greene needs her old tools too: {items}. Split up and meet me back here.", [("Garden Shears", "minecraft:shears"), ("Old Trowel", "minecraft:iron_shovel"), ("Magic Fertiliser", "minecraft:bone_meal")]),
-    },
-    Storyline {
-        key: "golems_heart",
-        title: "The Golem's Heart",
-        steps: &[
-            step(&[Landmark, Civic, Any], "An old engineer", "This town once had an iron guardian. Its parts were scattered. One's at {next}."),
-            step(&[Station, Any], "A rail worker", "A big iron arm in the lost and found! The other one's at {next}."),
-            step(&[Bridge, Civic, Any], "A bridge keeper", "The second arm, here. The heart was kept safe at {next}."),
-            step(&[Culture, Faith, Any], "A curator", "The golem's heart, still warm. Rebuild it at {next}."),
-        ],
-        finale: step(&[Civic, Landmark, Park], "The iron golem", "Clank by clank, the guardian stands again and gives you a poppy."),
-        hunt: hunt("The golem needs three more things to wake: {items}. Split up and meet me back here.", [("Iron Bolt", "minecraft:iron_nugget"), ("Copper Spring", "minecraft:copper_ingot"), ("Spark of Redstone", "minecraft:redstone")]),
-    },
-    Storyline {
-        key: "picnic_bakeoff",
-        title: "Picnic Bake-off",
-        steps: &[
-            step(&[FoodShop, Any], "Chef Amara", "The great picnic bake-off is today and I'm out of everything! Wheat first, from {next}."),
-            step(&[FoodShop, Park, Any], "A farmer", "Wheat, freshly cut. Eggs are at {next}."),
-            step(&[FoodShop, Any], "A grocer", "A dozen eggs, careful now. Sugar from {next}."),
-            step(&[FoodShop, School, Any], "A cafe owner", "Sugar and a pinch of cinnamon. The picnic is at {next}!"),
-        ],
-        finale: step(&[Park, Water, Any], "Chef Amara", "Everyone shares cake on the grass. Amara declares it a tie, so everyone wins."),
-        hunt: hunt("The picnic needs {items}. Split up and meet me back here!", [("Picnic Blanket", "minecraft:red_wool"), ("Jar of Honey", "minecraft:honey_bottle"), ("Basket of Berries", "minecraft:sweet_berries")]),
-    },
-    Storyline {
-        key: "postcard_tour",
-        title: "The Postcard Tour",
-        steps: &[
-            step(&[Any], "A lost tourist", "I dropped all my postcards around town! The first one shows {next}."),
-            step(&[Any], "A friendly local", "A postcard? It's a picture of {next}. Go on!"),
-            step(&[Any], "A street sweeper", "Found another one here. This one shows {next}."),
-            step(&[Any], "A cyclist", "Postcard! It's of {next}, not far."),
-            step(&[Any], "A photographer", "Last postcard. The tourist is waiting at {next}."),
-        ],
-        finale: step(&[Any], "The tourist", "All my postcards! Here, take this painting of the town. Sign it, it's yours."),
-        hunt: hunt("Wait, my suitcase burst open too! Help me find {items}. Split up and meet me back here.", [("Lost Passport", "minecraft:book"), ("Travel Camera", "minecraft:spyglass"), ("Snow Globe", "minecraft:heart_of_the_sea")]),
-    },
-];
-
-fn dist2(a: (i32, i32), b: (i32, i32)) -> i64 {
-    let (dx, dz) = ((a.0 - b.0) as i64, (a.1 - b.1) as i64);
-    dx * dx + dz * dz
-}
-
-/// The nearest unused place for the first of `roles` that has one within `HOP`, else the
-/// nearest unused place for the first role that has any.
-fn next_stop(
-    places: &[StoryPlace],
-    used: &[usize],
-    from: (i32, i32),
-    roles: &[Role],
-) -> Option<usize> {
-    let mut far = None;
-    for role in roles {
-        let nearest = (0..places.len())
-            .filter(|i| !used.contains(i) && places[*i].roles.contains(role))
-            .min_by_key(|&i| dist2(from, places[i].place.anchor));
-        if let Some(i) = nearest {
-            if dist2(from, places[i].place.anchor) <= HOP * HOP {
-                return Some(i);
-            }
-            far.get_or_insert(i);
+impl Step {
+    /// The text shown once the step is done, which points on to the next stop.
+    pub fn onward(&self) -> &str {
+        match &self.beat {
+            Beat::Talk { line, .. } | Beat::Riddle { line, .. } | Beat::Search { line, .. } => line,
+            Beat::Choice { right, .. } => right,
         }
     }
-    far
 }
 
-/// `line`'s first `stops - 1` steps and its finale, each on a distinct place, starting
-/// nearest the middle of the places.
-fn fill(line: &Storyline, places: &[StoryPlace], stops: usize) -> Option<Vec<usize>> {
-    let n = places.len().max(1) as i64;
-    let sum = places.iter().fold((0i64, 0i64), |s, p| {
-        (s.0 + p.place.anchor.0 as i64, s.1 + p.place.anchor.1 as i64)
-    });
-    let mut at = ((sum.0 / n) as i32, (sum.1 / n) as i32);
-    let mut used = Vec::new();
-    for step in line.steps[..stops - 1].iter().chain([&line.finale]) {
-        let i = next_stop(places, &used, at, step.roles)?;
-        at = places[i].place.anchor;
-        used.push(i);
-    }
-    Some(used)
-}
-
-/// A storyline the map can carry, picked at random, or a Postcard Tour as long as there
-/// are places for it; `None` below `MIN_STOPS` places.
-pub fn pick(places: &[StoryPlace], rng: &mut impl Rng) -> Option<Plan> {
-    let (tour, rest) = STORYLINES.split_last()?;
-    let fitting: Vec<Plan> = rest
+/// Every story Arnis ships, read once.
+pub fn book() -> &'static [Story] {
+    static BOOK: std::sync::OnceLock<Vec<Story>> = std::sync::OnceLock::new();
+    BOOK.get_or_init(|| {
+        [
+            include_str!("../../../assets/stories/a.json"),
+            include_str!("../../../assets/stories/b.json"),
+            include_str!("../../../assets/stories/c.json"),
+            include_str!("../../../assets/stories/d.json"),
+        ]
         .iter()
-        .filter_map(|line| {
-            Some(Plan {
-                line,
-                stops: fill(line, places, line.steps.len() + 1)?,
-            })
-        })
-        .collect();
-    let chosen = (0..fitting.len()).collect::<Vec<_>>().choose(rng).copied();
-    if let Some(i) = chosen {
-        return fitting.into_iter().nth(i);
-    }
-    let stops = places.len().min(tour.steps.len() + 1);
-    (stops >= MIN_STOPS).then(|| Plan {
-        line: tour,
-        stops: fill(tour, places, stops).unwrap(),
+        .flat_map(|f| parse(f).expect("the shipped stories are checked by tests"))
+        .collect()
     })
 }
 
+pub fn parse(json: &str) -> Result<Vec<Story>, serde_json::Error> {
+    serde_json::from_str::<File>(json).map(|f| f.stories)
+}
+
+/// A story laid over the map: its stops, then the hunt's places, as indices into the places.
+pub struct Placed<'a> {
+    pub story: &'a Story,
+    pub stops: Vec<usize>,
+    pub hunt: Vec<usize>,
+}
+
+fn dist(a: (i32, i32), b: (i32, i32)) -> f64 {
+    (((a.0 - b.0) as f64).powi(2) + ((a.1 - b.1) as f64).powi(2)).sqrt()
+}
+
+/// Every story the map can carry, in a random order with each series' episodes in turn.
+pub fn run<'a>(book: &'a [Story], places: &[StoryPlace], rng: &mut impl Rng) -> Vec<Placed<'a>> {
+    let mut order: Vec<usize> = (0..book.len()).collect();
+    order.shuffle(rng);
+    // A series keeps the slots its episodes drew, filled in episode order.
+    let mut series: Vec<&str> = book.iter().filter_map(|s| s.series.as_deref()).collect();
+    series.sort();
+    series.dedup();
+    for name in series {
+        let slots: Vec<usize> = (0..order.len())
+            .filter(|&i| book[order[i]].series.as_deref() == Some(name))
+            .collect();
+        let mut eps: Vec<usize> = slots.iter().map(|&i| order[i]).collect();
+        eps.sort_by_key(|&s| book[s].episode);
+        for (slot, ep) in slots.into_iter().zip(eps) {
+            order[slot] = ep;
+        }
+    }
+    let mut out: Vec<Placed> = Vec::new();
+    let mut broken: Vec<String> = Vec::new();
+    for s in order {
+        let recent: Vec<(i32, i32)> = out
+            .iter()
+            .rev()
+            .take(RECENT)
+            .map(|p| places[p.stops[0]].place.anchor)
+            .collect();
+        // A later episode would recall one that never played, so a broken series stops.
+        if book[s].series.as_ref().is_some_and(|n| broken.contains(n)) {
+            continue;
+        }
+        match lay(&book[s], places, &recent, rng) {
+            Some(p) => out.push(p),
+            None => broken.extend(book[s].series.clone()),
+        }
+    }
+    out
+}
+
+/// The first place of the first role that has one, among `pick`.
+fn first_role(places: &[StoryPlace], roles: &[Role], pick: impl Fn(usize) -> bool) -> Vec<usize> {
+    roles
+        .iter()
+        .map(|r| {
+            (0..places.len())
+                .filter(|&i| places[i].roles.contains(r) && pick(i))
+                .collect::<Vec<_>>()
+        })
+        .find(|c| !c.is_empty())
+        .unwrap_or_default()
+}
+
+fn lay<'a>(
+    story: &'a Story,
+    places: &[StoryPlace],
+    recent: &[(i32, i32)],
+    rng: &mut impl Rng,
+) -> Option<Placed<'a>> {
+    let at = |i: usize| places[i].place.anchor;
+    // Of a few places that fit, the furthest from where the last stories began whose stops
+    // all lie within a walk; an edge of the map may have too few around it.
+    let mut starts = first_role(places, &story.steps.first()?.roles, |_| true);
+    starts.shuffle(rng);
+    starts.truncate(12);
+    let away = |i: usize| {
+        recent
+            .iter()
+            .map(|&r| dist(at(i), r))
+            .fold(f64::MAX, f64::min)
+    };
+    starts.sort_by(|&a, &b| away(b).total_cmp(&away(a)));
+    let stops = starts
+        .into_iter()
+        .find_map(|start| walk(story, places, start))?;
+    let mut hunt = Vec::new();
+    if story.hunt.is_some() && stops.len() >= 2 {
+        let meet = at(stops[stops.len() - 2]);
+        let mut spare: Vec<usize> = (0..places.len()).filter(|i| !stops.contains(i)).collect();
+        spare.shuffle(rng);
+        for i in spare {
+            if hunt.len() < 3
+                && HUNT_REACH.contains(&dist(at(i), meet))
+                && hunt.iter().all(|&j| dist(at(i), at(j)) >= HUNT_SPREAD)
+            {
+                hunt.push(i);
+            }
+        }
+    }
+    Some(Placed { story, stops, hunt })
+}
+
+/// The story's stops from `start`, each the nearest fitting place a walk from the last.
+fn walk(story: &Story, places: &[StoryPlace], start: usize) -> Option<Vec<usize>> {
+    let at = |i: usize| places[i].place.anchor;
+    let mut stops = vec![start];
+    for step in &story.steps[1..] {
+        let from = at(*stops.last()?);
+        // A riddle's clue describes its kind of place, so it never falls back to just any place.
+        let roles: Vec<Role> = match step.beat {
+            Beat::Riddle { .. } if step.roles.len() > 1 => step
+                .roles
+                .iter()
+                .copied()
+                .filter(|r| *r != Role::Any)
+                .collect(),
+            _ => step.roles.clone(),
+        };
+        let near = first_role(places, &roles, |i| {
+            !stops.contains(&i) && dist(at(i), from) <= HOP && dist(at(i), at(start)) <= REACH
+        });
+        let next = near
+            .into_iter()
+            .min_by(|&a, &b| dist(at(a), from).total_cmp(&dist(at(b), from)))?;
+        stops.push(next);
+    }
+    Some(stops)
+}
+
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::datapack::stories::places::test_place as place;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
-    /// Three of every role, spread over a 900-block square.
-    fn rich_map() -> Vec<StoryPlace> {
-        use Role::*;
-        let roles = [
-            Park, FoodShop, School, Viewpoint, Faith, Bridge, Water, Station, Civic, Culture,
-            Landmark,
-        ];
+    /// Every kind of step, a hunt and a two-episode series.
+    pub(crate) const SAMPLE: &str = r#"{"stories": [
+      {"key": "t_one", "title": "One", "finale": "gift", "gift": "minecraft:cake",
+       "steps": [
+         {"kind": "talk", "roles": ["park", "any"], "npc": "Ann", "line": "Riddle me this: where do trains sleep?"},
+         {"kind": "riddle", "roles": ["station", "any"], "hint": "Where trains sleep", "line": "Here! Now search {next}."},
+         {"kind": "search", "roles": ["any"], "thing": "Old Key", "item": "minecraft:tripwire_hook", "line": "The key! Take it to {next}."},
+         {"kind": "choice", "roles": ["any"], "npc": "Bo", "line": "Which key was it?", "options": ["Gold", "Old", "New"], "answer": 1, "wrong": "Hmm, no.", "right": "Yes! Meet Cy at {next}."},
+         {"kind": "talk", "roles": ["any"], "npc": "Cy", "line": "Everyone, take a look at {next}."},
+         {"kind": "talk", "roles": ["any"], "npc": "Di", "line": "The end."}
+       ],
+       "hunt": {"line": "Fetch {items}.", "items": [["A", "minecraft:paper"], ["B", "minecraft:book"], ["C", "minecraft:string"]]}},
+      {"key": "t_ep2", "title": "Two", "series": "t_s", "episode": 2, "finale": "lost_dog",
+       "steps": [
+         {"kind": "talk", "roles": ["any"], "npc": "Ed", "line": "Go to {next}."},
+         {"kind": "talk", "roles": ["any"], "npc": "Fa", "line": "And {next}."},
+         {"kind": "talk", "roles": ["any"], "npc": "Gi", "line": "Done again."}
+       ]},
+      {"key": "t_ep1", "title": "Two begins", "series": "t_s", "episode": 1, "finale": "gift", "gift": "minecraft:emerald",
+       "steps": [
+         {"kind": "talk", "roles": ["any"], "npc": "Ed", "line": "Go to {next}."},
+         {"kind": "talk", "roles": ["any"], "npc": "Fa", "line": "And {next}."},
+         {"kind": "talk", "roles": ["any"], "npc": "Gi", "line": "Done."}
+       ]}
+    ]}"#;
+
+    /// Places every 100 blocks over a 2 km square.
+    pub(crate) fn city() -> Vec<StoryPlace> {
         let mut out = Vec::new();
-        for (i, r) in roles.iter().enumerate() {
-            for k in 0..3 {
-                let n = (i * 3 + k) as i32;
-                out.push(place(
-                    &format!("{r:?} {k}"),
-                    (n * 97) % 900,
-                    (n * 211) % 900,
-                    *r,
-                ));
+        for x in 0..20 {
+            for z in 0..20 {
+                let role = if (x + z) % 5 == 0 {
+                    Role::Station
+                } else {
+                    Role::Park
+                };
+                out.push(place(&format!("P{x}-{z}"), x * 100, z * 100, role));
             }
         }
         out
     }
 
-    #[test]
-    fn every_storyline_is_filled_with_distinct_places_on_a_rich_map() {
-        let places = rich_map();
-        for line in &STORYLINES {
-            let stops = fill(line, &places, line.steps.len() + 1)
-                .unwrap_or_else(|| panic!("{} not filled", line.key));
-            assert_eq!(stops.len(), line.steps.len() + 1, "{}", line.key);
-            let mut seen = stops.clone();
-            seen.sort();
-            seen.dedup();
-            assert_eq!(seen.len(), stops.len(), "{} repeats a place", line.key);
-        }
-    }
+    /// The finales the pack ships a scene for.
+    const FINALES: [&str; 16] = [
+        "gift",
+        "lost_dog",
+        "time_capsule",
+        "surprise_party",
+        "band_reunion",
+        "riddle_treasure",
+        "friendly_ghost",
+        "stargazer",
+        "cat_mayor",
+        "message_bottle",
+        "allay_courier",
+        "founders_festival",
+        "secret_garden",
+        "golems_heart",
+        "picnic_bakeoff",
+        "postcard_tour",
+    ];
 
     #[test]
-    fn every_storyline_has_four_or_five_steps_naming_the_next_stop() {
-        assert_eq!(STORYLINES.len(), 15);
-        for line in &STORYLINES {
-            assert!((4..=5).contains(&line.steps.len()), "{}", line.key);
+    fn every_shipped_story_follows_the_format() {
+        let book = book();
+        let mut keys = std::collections::HashSet::new();
+        let item = |s: &str| {
+            s.starts_with("minecraft:")
+                && s[10..]
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        };
+        let label = |s: &str| !s.contains(['"', '\\']);
+        for s in book {
+            let k = &s.key;
+            assert!(keys.insert(k.as_str()), "{k} twice");
+            // Keys name advancement files.
             assert!(
-                line.steps.iter().all(|s| s.line.contains("{next}")),
-                "{}",
-                line.key
+                k.chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                "{k}"
             );
-            assert!(!line.finale.line.contains("{next}"), "{}", line.key);
-        }
-    }
-
-    #[test]
-    fn every_hunt_names_its_things_and_their_labels_fit_in_a_command() {
-        for line in &STORYLINES {
-            assert!(line.hunt.line.contains("{items}"), "{}", line.key);
-            for (label, item) in line.hunt.items {
-                assert!(item.starts_with("minecraft:"), "{item}");
-                // A label is written into a summon command by a macro, inside quotes.
-                assert!(!label.contains(['"', '\\']), "{label}");
+            assert!(
+                FINALES.contains(&s.finale.as_str()),
+                "{k}: finale {}",
+                s.finale
+            );
+            assert!(
+                s.finale != "gift" || s.gift.as_deref().is_some_and(item),
+                "{k}: gift"
+            );
+            assert_eq!(
+                s.series.is_some(),
+                s.episode.is_some(),
+                "{k}: series and episode"
+            );
+            assert!((3..=6).contains(&s.steps.len()), "{k}: steps");
+            assert!(
+                !matches!(s.steps[0].beat, Beat::Riddle { .. }),
+                "{k}: starts with a riddle"
+            );
+            assert!(
+                matches!(s.steps.last().unwrap().beat, Beat::Talk { .. }),
+                "{k}: ends without a talk"
+            );
+            for (i, step) in s.steps.iter().enumerate() {
+                assert_eq!(step.roles.last(), Some(&Role::Any), "{k} step {i}: roles");
+                let onward = step.onward();
+                match s.steps.get(i + 1).map(|n| &n.beat) {
+                    None => assert!(!onward.contains("{next}"), "{k}: ending names a next stop"),
+                    Some(Beat::Riddle { .. }) => assert!(
+                        !onward.contains("{next}"),
+                        "{k} step {i} gives the riddle away"
+                    ),
+                    Some(_) => assert!(onward.contains("{next}"), "{k} step {i} points nowhere"),
+                }
+                match &step.beat {
+                    Beat::Search {
+                        thing, item: id, ..
+                    } => assert!(label(thing) && item(id), "{k} step {i}"),
+                    Beat::Choice { answer, .. } => assert!(*answer < 3, "{k} step {i}"),
+                    Beat::Riddle { hint, .. } => assert!(hint.len() <= 40, "{k} step {i}: hint"),
+                    Beat::Talk { .. } => {}
+                }
+            }
+            if let Some(h) = &s.hunt {
+                assert!(
+                    matches!(s.steps[s.steps.len() - 2].beat, Beat::Talk { .. }),
+                    "{k}: hunt"
+                );
+                assert!(h.line.contains("{items}"), "{k}: hunt line");
+                assert!(
+                    h.items.iter().all(|(l, i)| label(l) && item(i)),
+                    "{k}: hunt items"
+                );
             }
         }
+        // Each series runs 1, 2, 3... with no gaps.
+        let mut series: std::collections::HashMap<&str, Vec<u32>> = Default::default();
+        for s in book {
+            if let (Some(n), Some(e)) = (&s.series, s.episode) {
+                series.entry(n).or_default().push(e);
+            }
+        }
+        for (n, mut eps) in series {
+            eps.sort();
+            assert_eq!(eps, (1..=eps.len() as u32).collect::<Vec<_>>(), "{n}");
+        }
     }
 
     #[test]
-    fn a_sparse_map_gets_a_short_postcard_tour() {
-        let places: Vec<_> = (0..4)
-            .map(|i| place(&format!("P{i}"), i * 50, 0, Role::Any))
-            .collect();
-        let plan = pick(&places, &mut ChaCha8Rng::seed_from_u64(1)).unwrap();
-        assert_eq!(plan.line.key, "postcard_tour");
-        assert_eq!(plan.stops.len(), 4);
-    }
-
-    #[test]
-    fn two_places_get_no_story() {
-        let places: Vec<_> = (0..2)
-            .map(|i| place(&format!("P{i}"), i * 50, 0, Role::Park))
-            .collect();
-        assert!(pick(&places, &mut ChaCha8Rng::seed_from_u64(1)).is_none());
-    }
-
-    #[test]
-    fn hops_prefer_places_within_600_blocks() {
+    fn nearly_every_shipped_story_fits_a_city_with_every_kind_of_place() {
         use Role::*;
-        // From the park in the middle, the near school wins over the far one.
-        let places = vec![
-            place("Park", 500, 500, Park),
-            place("Far School", 500, 1400, School),
-            place("Near School", 900, 500, School),
+        let roles = [
+            Park, FoodShop, School, Viewpoint, Faith, Bridge, Water, Station, Civic, Culture,
+            Landmark,
         ];
-        assert_eq!(next_stop(&places, &[], (500, 500), &[School]), Some(2));
-        assert_eq!(next_stop(&places, &[2], (500, 500), &[School]), Some(1));
+        let mut places = Vec::new();
+        for x in 0..20 {
+            for z in 0..20 {
+                places.push(place(
+                    &format!("P{x}-{z}"),
+                    x * 90,
+                    z * 90,
+                    roles[(x * 7 + z * 3) as usize % roles.len()],
+                ));
+            }
+        }
+        let run = run(book(), &places, &mut ChaCha8Rng::seed_from_u64(9));
+        let missing: Vec<&str> = book()
+            .iter()
+            .filter(|b| !run.iter().any(|p| p.story.key == b.key))
+            .map(|b| b.key.as_str())
+            .collect();
+        assert!(run.len() >= 95, "{} don't fit: {missing:?}", missing.len());
     }
 
     #[test]
-    fn the_pick_follows_the_seed() {
-        let places = rich_map();
-        let a = pick(&places, &mut ChaCha8Rng::seed_from_u64(7)).unwrap();
-        let b = pick(&places, &mut ChaCha8Rng::seed_from_u64(7)).unwrap();
-        assert_eq!(a.line.key, b.line.key);
-        assert_eq!(a.stops, b.stops);
-        assert_ne!(a.line.key, "postcard_tour");
+    fn every_kind_of_step_reads() {
+        let book = parse(SAMPLE).unwrap();
+        assert_eq!(book.len(), 3);
+        assert!(matches!(book[0].steps[1].beat, Beat::Riddle { .. }));
+        assert!(matches!(book[0].steps[2].beat, Beat::Search { .. }));
+        assert_eq!(book[0].steps[3].onward(), "Yes! Meet Cy at {next}.");
+        assert_eq!(book[0].steps[1].roles, vec![Role::Station, Role::Any]);
+    }
+
+    #[test]
+    fn a_story_is_a_walk_and_the_next_starts_elsewhere() {
+        let book = parse(SAMPLE).unwrap();
+        let places = city();
+        let at = |i: usize| places[i].place.anchor;
+        let run = run(&book, &places, &mut ChaCha8Rng::seed_from_u64(4));
+        assert_eq!(run.len(), 3);
+        for p in &run {
+            assert_eq!(p.stops.len(), p.story.steps.len());
+            for w in p.stops.windows(2) {
+                assert!(dist(at(w[0]), at(w[1])) <= HOP, "{}", p.story.key);
+            }
+            for &s in &p.stops {
+                assert!(dist(at(s), at(p.stops[0])) <= REACH);
+            }
+            let mut seen = p.stops.clone();
+            seen.sort();
+            seen.dedup();
+            assert_eq!(seen.len(), p.stops.len());
+        }
+        for w in run.windows(2) {
+            assert!(
+                dist(at(w[0].stops[0]), at(w[1].stops[0])) > REACH,
+                "stories bunch up"
+            );
+        }
+        let hunt = &run.iter().find(|p| p.story.key == "t_one").unwrap().hunt;
+        assert_eq!(hunt.len(), 3);
+    }
+
+    #[test]
+    fn a_series_plays_in_episode_order() {
+        let book = parse(SAMPLE).unwrap();
+        for seed in 0..20 {
+            let run = run(&book, &city(), &mut ChaCha8Rng::seed_from_u64(seed));
+            let eps: Vec<&str> = run
+                .iter()
+                .map(|p| p.story.key.as_str())
+                .filter(|k| k.starts_with("t_ep"))
+                .collect();
+            assert_eq!(eps, ["t_ep1", "t_ep2"], "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn a_series_whose_episode_cannot_be_placed_stops_there() {
+        let mut book = parse(SAMPLE).unwrap();
+        // Episode 1 now needs a school, which the city has none of.
+        book[2].steps[1].roles = vec![Role::School];
+        let run = run(&book, &city(), &mut ChaCha8Rng::seed_from_u64(2));
+        assert!(
+            run.iter().all(|p| p.story.series.is_none()),
+            "an episode played without the one before"
+        );
+    }
+
+    #[test]
+    fn a_story_with_no_stop_in_walking_range_is_left_out() {
+        let book = parse(SAMPLE).unwrap();
+        // Three places, each a kilometre from the next.
+        let places: Vec<_> = (0..3)
+            .map(|i| place(&format!("P{i}"), i * 1000, 0, Role::Any))
+            .collect();
+        assert!(run(&book, &places, &mut ChaCha8Rng::seed_from_u64(1)).is_empty());
     }
 }

@@ -1,0 +1,168 @@
+{"stories": [
+{"key":"c_neighbours_1","title":"Moving Day Tea","series":"c_neighbours","episode":1,"finale":"gift","gift":"minecraft:cookie","steps":[
+ {"kind":"talk","roles":["any"],"npc":"Ada Okafor","line":"We just moved here! Grandma won't unpack a thing until she's had tea, and her lucky spoon bounced out of the van near {next}."},
+ {"kind":"search","roles":["park","any"],"thing":"Grandma's Lucky Spoon","item":"minecraft:iron_nugget","line":"Found it, a bit grassy but lucky as ever. Tomi ran ahead to set up the kitchen at {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Tomi Okafor","line":"Grandma says the spoon only goes in the yellow cup with the chipped handle, she's had it forty years. I'll go tell her, meet us at {next}."},
+ {"kind":"choice","roles":["civic","any"],"npc":"Grandma Nneka","line":"Ah, my spoon! Now, children of the new street, which cup do I take my tea in?","options":["The blue mug with the cat on it","The tall glass with the straw","The yellow cup with the chipped handle"],"answer":2,"wrong":"Hmm, no, that's Tomi's cup. Mine has some history to it.","right":"Forty years, that cup. Come, the kettle's on at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Grandma Nneka","line":"Tea in my cup, with my spoon, in my new town. Now it's home. Take some biscuits, I baked too many on purpose."}
+]},
+{"key":"c_neighbours_2","title":"First Day Jitters","series":"c_neighbours","episode":2,"finale":"gift","gift":"minecraft:book","steps":[
+ {"kind":"talk","roles":["any"],"npc":"Tomi Okafor","line":"It's my first day at the new school tomorrow and I don't know the way! Ada says she knows, but Ada also said the moon was cheese. Start at {next}?"},
+ {"kind":"talk","roles":["station","any"],"npc":"Ada Okafor","line":"Okay I don't actually know the way. But I heard a kid say the school is the place where bells ring and nobody's in trouble for running at break."},
+ {"kind":"riddle","roles":["school","any"],"hint":"Bells, books and running at break","line":"This is it! Tomi dropped his name sticker on the walk though, it's got a rocket on it. It blew toward {next}."},
+ {"kind":"search","roles":["park","any"],"thing":"Rocket Name Sticker","item":"minecraft:paper","line":"TOMI, with a rocket. Perfect. Grandma's waiting at {next} to hear how the practice walk went."},
+ {"kind":"talk","roles":["any"],"npc":"Grandma Nneka","line":"You walked it once, so tomorrow it's an old road. Here, a notebook for the first day. Write your new friends in it."}
+]},
+{"key":"c_neighbours_3","title":"The Housewarming","series":"c_neighbours","episode":3,"finale":"surprise_party","steps":[
+ {"kind":"talk","roles":["any"],"npc":"Ada Okafor","line":"Grandma thinks nobody's coming to her housewarming. We invited the whole street! Shh. Tomi has the plan at {next}."},
+ {"kind":"choice","roles":["park","any"],"npc":"Tomi Okafor","line":"Quick test so you don't spoil it. What does Grandma think is happening tonight?","options":["A quiet evening, just family","A big party","A trip to the moon"],"answer":0,"wrong":"No! She thinks nobody's coming, that's the whole surprise.","right":"Right, she thinks it's just us. Now we need decorations, the street said to meet at {next}."},
+ {"kind":"talk","roles":["civic","any"],"npc":"Mr. Delgado from Number 9","line":"Everyone pitched in! Bring it all back here and we'll wrap the whole lot up, then off to {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Grandma Nneka","line":"What is all this? The whole street? Oh, you rascals. Come in, all of you, I'll need more cups."}
+],"hunt":{"line":"We just need three more bits: the {items}. Off you go!","items":[["Bunting String","minecraft:string"],["Welcome Banner Paper","minecraft:paper"],["Party Bell","minecraft:gold_nugget"]]}},
+{"key":"c_radio_1","title":"Caller Number Three","series":"c_radio","episode":1,"finale":"gift","gift":"minecraft:music_disc_cat","steps":[
+ {"kind":"talk","roles":["civic","any"],"npc":"DJ Rosa Ramos","line":"You're live on 98.6 The Breeze! Today's treasure hunt clue comes from a listener, head over to {next} and they'll read it out."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Phone-in Caller Gus","line":"Hi Rosa, long time listener! My clue: go where the water slides under your feet but your feet stay dry."},
+ {"kind":"riddle","roles":["bridge","water","any"],"hint":"Water under, feet stay dry","line":"Got it! Rosa says the prize is taped somewhere near {next}. Warmer, colder, she'll play along on air."},
+ {"kind":"search","roles":["park","any"],"thing":"Breeze FM Prize Ticket","item":"minecraft:paper","line":"The ticket! Bring it to Rosa's outdoor booth at {next} and claim it live."},
+ {"kind":"talk","roles":["any"],"npc":"DJ Rosa Ramos","line":"And our winners are on the line, folks! Here's your prize, a classic record. Next week's hunt is twice as tricky, stay tuned."}
+]},
+{"key":"c_radio_2","title":"The Request Line","series":"c_radio","episode":2,"finale":"gift","gift":"minecraft:jukebox","steps":[
+ {"kind":"talk","roles":["any"],"npc":"DJ Rosa Ramos","line":"Breeze FM, week two! This time three listeners each hid a piece of my studio jukebox. First caller is waiting at {next}."},
+ {"kind":"talk","roles":["culture","any"],"npc":"Phone-in Caller Mabel","line":"Rosa, dear, I hid mine years ago, I mean this morning. My grandkids helped. Rosa wants you to regroup at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"DJ Rosa Ramos","line":"You found all three! That's the record, the needle and the little crank. Bring them to the station van at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"DJ Rosa Ramos","line":"It plays! Listeners, the jukebox is fixed, and our hunters get one of their own. Next week: the grand prize."}
+],"hunt":{"line":"The callers hid the {items}. Split up and bring them back!","items":[["Old Record","minecraft:music_disc_13"],["Jukebox Needle","minecraft:iron_nugget"],["Little Brass Crank","minecraft:gold_nugget"]]}},
+{"key":"c_radio_3","title":"The Grand Prize","series":"c_radio","episode":3,"finale":"riddle_treasure","steps":[
+ {"kind":"talk","roles":["civic","any"],"npc":"DJ Rosa Ramos","line":"It's the grand prize hunt! Our oldest listener, Mr. Abara, has the first clue at {next}. He's been calling in since radio was black and white."},
+ {"kind":"talk","roles":["faith","culture","any"],"npc":"Phone-in Caller Mr. Abara","line":"Ahem. Clue one, for Rosa. The prize waits where people look far and the city looks small."},
+ {"kind":"riddle","roles":["viewpoint","landmark","any"],"hint":"Look far, the city looks small","line":"Rosa's on the phone: a second caller swears she saw the prize box colour. Talk to her at {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Phone-in Caller Priya","line":"I saw Rosa carrying it, it was green with a gold ribbon. Not the red one, that's her lunch. Rosa is at {next}."},
+ {"kind":"choice","roles":["park","any"],"npc":"DJ Rosa Ramos","line":"Three boxes, live on air! Which one holds the grand prize?","options":["The red box","The green box with a gold ribbon","The plain brown box"],"answer":1,"wrong":"That's... my lunch, actually. Listeners, they almost ate my sandwich.","right":"The green box! The grand prize is buried treasure, folks, and the map's inside. It ends at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"DJ Rosa Ramos","line":"Our hunters found it! Thank you to every caller who played along this season. This is Rosa on The Breeze, signing off happy."}
+]},
+{"key":"c_courier","title":"Parcel for Mrs. Pemberton","finale":"gift","gift":"minecraft:bundle","steps":[
+ {"kind":"talk","roles":["station","any"],"npc":"Courier Jonah","line":"I've got forty parcels and two legs. Can you take this one? The label got rained on, it just says PEMB... and 'loves tulips'. Try {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Gardener Lou","line":"Tulips? That's Mrs. Pemberton for sure, she plants them every year, the red ones. She walks her poodle near {next} about now."},
+ {"kind":"choice","roles":["civic","any"],"npc":"A man with a poodle","line":"Three Pembertons live on this street, believe it or not. Which one are you after?","options":["Mr. Pemberton who collects stamps","Mrs. Pemberton who grows red tulips","Little Pip Pemberton who likes trains"],"answer":1,"wrong":"Nice try, but that one's got nothing to do with flowers.","right":"That's my wife! She's waiting for a parcel at {next}, she's been checking the window all morning."},
+ {"kind":"talk","roles":["any"],"npc":"Mrs. Pemberton","line":"My bulbs! Next spring the whole street goes red. Here, take this bag, every good courier needs one."}
+]},
+{"key":"c_tour_guide","title":"The Accidental Tour Guide","finale":"postcard_tour","steps":[
+ {"kind":"talk","roles":["station","any"],"npc":"Visitor Henrik","line":"Excuse me, I'm visiting and my guidebook is for a different city entirely. Would you show me around? I'd love to start at {next}."},
+ {"kind":"talk","roles":["landmark","culture","any"],"npc":"Visitor Henrik","line":"Wonderful! My book says this is a cathedral in Prague. It is not. Next I want somewhere tall to see everything, like the riddle on my map: 'where the whole town fits in one look'."},
+ {"kind":"riddle","roles":["viewpoint","any"],"hint":"The whole town in one look","line":"Splendid view! Now I'm hungry. Henrik's stomach says {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Visitor Henrik","line":"Delicious. I've written postcards to everyone back home about this place. One last stop to post them, {next}?"},
+ {"kind":"talk","roles":["any"],"npc":"Visitor Henrik","line":"Best tour I ever had, and I didn't even need my wrong book. I'll send you a postcard too!"}
+]},
+{"key":"c_first_aid","title":"Plasters and Patience","finale":"gift","gift":"minecraft:golden_apple","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"First-aid Volunteer Kiko","line":"Fun run today! Someone grazed a knee on the finish line and my kit is nearly empty. Can you help? My co-volunteer Sam is at {next}."},
+ {"kind":"talk","roles":["civic","any"],"npc":"Volunteer Sam","line":"Kiko left spare supplies all over town, classic Kiko. While you're gone I'll make the runners some sweet tea. Back to {next} when you're done."},
+ {"kind":"talk","roles":["park","any"],"npc":"First-aid Volunteer Kiko","line":"All restocked! One plaster with dinosaurs, one very brave runner. Come say hi at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Runner Beatrix","line":"Dinosaur plaster, best part of the race. I came last but I came happy. Here, my lucky snack, you've earned it."}
+],"hunt":{"line":"I need the {items}. Thank you, heroes!","items":[["Roll of Gauze","minecraft:string"],["Box of Plasters","minecraft:paper"],["Kiko's Whistle","minecraft:iron_nugget"]]}},
+{"key":"c_cat_tree","title":"His Honour, Up a Tree","finale":"cat_mayor","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Firefighter Pip","line":"Morning! There's a cat on a low branch who just won't come down. Not stuck, just stubborn. His owner is at {next}."},
+ {"kind":"talk","roles":["civic","any"],"npc":"Owner Mrs. Ilsa","line":"Biscuit? He only comes down for the jingle of his collar bell. He shook it off near {next} this morning, cheeky thing."},
+ {"kind":"search","roles":["park","any"],"thing":"Biscuit's Collar Bell","item":"minecraft:gold_nugget","line":"Jingle jingle. Pip is waiting with the short ladder at {next}."},
+ {"kind":"choice","roles":["any"],"npc":"Firefighter Pip","line":"Right, ladder's up. How do we get Biscuit down?","options":["Shout his name very loudly","Jingle his collar bell","Climb up and grab him"],"answer":1,"wrong":"Biscuit gives you a long, unimpressed look. Mrs. Ilsa said what he likes.","right":"He's coming! Down the ladder like a little king. Mrs. Ilsa says he has somewhere important to be, {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Firefighter Pip","line":"Turns out Biscuit is sort of the local mayor. Everyone on the street feeds him. He just wanted a better view of his town."}
+]},
+{"key":"c_dog_walk","title":"Six Leads, One Walker","finale":"lost_dog","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Dog Walker Remy","line":"Six dogs, twelve ears, one of me. Waffles the dachshund slipped his lead to chase a smell. He loves cheese. Try {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Shopkeeper Odette","line":"A tiny long dog? He sat here staring at the cheese counter for ten minutes, then trotted toward {next}. He left a little bandana behind."},
+ {"kind":"search","roles":["park","any"],"thing":"Waffles' Spotty Bandana","item":"minecraft:white_wool","line":"Smells very much like cheese. Remy is waiting with the other five at {next}."},
+ {"kind":"choice","roles":["any"],"npc":"Dog Walker Remy","line":"I've got a treat bag here. Which treat will bring Waffles running?","options":["A carrot","A cube of cheese","A tennis ball"],"answer":1,"wrong":"Waffles is not interested. You know his weakness.","right":"Cheese! That got his attention. I hear tiny feet heading to {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Dog Walker Remy","line":"Waffles! Six dogs, all present. Waffles wants you to know he was never lost, he was investigating."}
+]},
+{"key":"c_bike_parts","title":"Chain Reaction","finale":"gift","gift":"minecraft:compass","steps":[
+ {"kind":"talk","roles":["bridge","any"],"npc":"Cyclist Tomasz","line":"My bike gave up halfway across town. Chain off, bell gone, tyre flat. The repair lady at {next} might have parts."},
+ {"kind":"talk","roles":["civic","any"],"npc":"Mechanic Hattie","line":"I don't have parts, but I know who does. Bring them back to {next} and Tomasz can fix it himself, I'll supervise."},
+ {"kind":"talk","roles":["park","any"],"npc":"Cyclist Tomasz","line":"Chain on, bell on, tyre patched! Ding ding. Ride with me to {next}, I owe you."},
+ {"kind":"talk","roles":["any"],"npc":"Cyclist Tomasz","line":"I was lost and broken down, now I'm just lost. Here, my old compass, maybe it'll work better for you."}
+],"hunt":{"line":"Get the {items}. Tell them Hattie sent you!","items":[["Spare Chain Link","minecraft:iron_nugget"],["Shiny Bike Bell","minecraft:gold_nugget"],["Tyre Patch","minecraft:leather"]]}},
+{"key":"c_wedding_rings","title":"Something Misplaced","finale":"gift","gift":"minecraft:poppy","steps":[
+ {"kind":"talk","roles":["faith","civic","any"],"npc":"Wedding Planner Fenella","line":"The wedding starts at noon and the rings are... somewhere. Little Leo, the ring bearer, was practising walking with them. He went to feed ducks."},
+ {"kind":"riddle","roles":["water","park","any"],"hint":"Where the ducks get fed","line":"There's Leo, covered in breadcrumbs. He says he put the ring box down by {next} so it wouldn't fall in."},
+ {"kind":"search","roles":["park","any"],"thing":"Velvet Ring Box","item":"minecraft:gold_ingot","line":"Two rings, safe and sound. Leo wants to carry them back himself. The groom is pacing at {next}."},
+ {"kind":"choice","roles":["any"],"npc":"The Groom","line":"You found them! Fenella's in a flap. Who was holding them all morning?","options":["The bride's aunt","The wedding planner","Little Leo, the ring bearer"],"answer":2,"wrong":"Hmm, no, they gave them to someone small and serious.","right":"Leo! Good lad, he was being careful. Let's get everyone to {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Wedding Planner Fenella","line":"Rings, ring bearer, couple, cake. Everything's here. Have a flower from the bouquet, you saved my whole day."}
+]},
+{"key":"c_lost_kid","title":"Where's My Dad?","finale":"gift","gift":"minecraft:cookie","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Little Maya","line":"I can't find my dad. He's got a big orange hat and he laughs like a goose. We were going to {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Baker Joss","line":"Orange hat? He bought two buns and asked if anyone had seen a girl with a dino backpack. He went to {next}."},
+ {"kind":"choice","roles":["civic","any"],"npc":"A helpful lady","line":"There are three men waiting around here. Which one is Maya's dad?","options":["The tall man in a blue cap","The man with an orange hat, laughing like a goose","The man in a green scarf reading a paper"],"answer":1,"wrong":"Maya shakes her head. Not him, his hat's all wrong.","right":"DAD! Honk honk, there's the laugh. He says to meet him at {next}, he's buying everyone a treat."},
+ {"kind":"talk","roles":["any"],"npc":"Maya's Dad","line":"I turned round for one second to look at a pigeon. Thank you both. Here, one of the buns is yours."}
+]},
+{"key":"c_wallet","title":"The Returned Wallet","finale":"picnic_bakeoff","steps":[
+ {"kind":"search","roles":["park","any"],"thing":"Brown Leather Wallet","item":"minecraft:leather","line":"Inside: a library card, a punch card for a bakery and a photo of a parrot in a tiny hat. Ask at {next}."},
+ {"kind":"talk","roles":["culture","school","any"],"npc":"Librarian Ines","line":"That's Mr. Osei's card. He reads only parrot books, I am not exaggerating. He goes to the bakery at {next} every day."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Baker Florin","line":"Mr. Osei? Nine stamps, one more for a free cake! He sits with his parrot at {next} after lunch."},
+ {"kind":"choice","roles":["park","any"],"npc":"An old man on a bench","line":"A wallet? Several of us lost things today. What's in it, so I know it's mine?","options":["A parrot photo and a library card","A bus pass and a lucky coin","Nothing, it's empty"],"answer":0,"wrong":"That's not mine, I'm afraid. Mine's got my bird in it.","right":"That's Captain, my parrot! Thank you. Come with me to {next}, cake is on me."},
+ {"kind":"talk","roles":["any"],"npc":"Mr. Osei","line":"The tenth stamp! Free cake for everyone. Captain says thank you too. Well, he says 'hello sailor', but he means thank you."}
+]},
+{"key":"c_song_sheet","title":"The Missing Chorus","finale":"band_reunion","steps":[
+ {"kind":"talk","roles":["station","landmark","any"],"npc":"Busker Delphine","line":"A gust took my song sheets! I wrote that song for my old band and I can't remember the chorus. My friend at {next} saw where they went."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Coffee Seller Raf","line":"Three pages, flying three directions. I'll save Delphine a coffee. Bring them back to {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Busker Delphine","line":"Verse, verse, chorus! I've texted the old band, they're coming to {next} to play it together."},
+ {"kind":"talk","roles":["any"],"npc":"Busker Delphine","line":"Ten years since we played this together. Same song, sore fingers, big smiles. This one's for you."}
+],"hunt":{"line":"The pages landed far apart: the {items}.","items":[["First Verse Page","minecraft:paper"],["Second Verse Page","minecraft:paper"],["Chorus Page","minecraft:paper"]]}},
+{"key":"c_marathon","title":"Water Station Seven","finale":"gift","gift":"minecraft:melon_slice","steps":[
+ {"kind":"talk","roles":["park","bridge","any"],"npc":"Volunteer Captain Gwen","line":"Marathon day! Water station seven is out of cups. The supply cart left a box at {next}, could you fetch it?"},
+ {"kind":"search","roles":["civic","any"],"thing":"Box of Paper Cups","item":"minecraft:paper","line":"Cups! Runner number 42 asked for squash, not water, she was very clear. Take them back to {next}."},
+ {"kind":"choice","roles":["park","any"],"npc":"Runner 42","line":"Hello again! Did you remember what I wanted?","options":["Plain water","Orange squash","Hot tea"],"answer":1,"wrong":"She laughs and keeps jogging on the spot. Not quite, it was fruity.","right":"Squash, perfect! She runs off waving. Gwen says the finish line party is at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Volunteer Captain Gwen","line":"Every runner made it and every cup got used. Best station on the course. Have some melon, volunteers' privilege."}
+]},
+{"key":"c_market","title":"Market Morning","finale":"picnic_bakeoff","steps":[
+ {"kind":"talk","roles":["park","civic","any"],"npc":"Farmer Agnes","line":"The farmers' market opens in an hour and I'm missing half my stall! My neighbour Basil is at {next}, he'll know."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Farmer Basil","line":"Agnes leaves things everywhere. Last week she left a goose. When you've got them, set up at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Farmer Agnes","line":"Bunting up, sign written, bell ringing! The market's open. The pie stall is at {next}, come taste."},
+ {"kind":"talk","roles":["any"],"npc":"Farmer Agnes","line":"First pie of the morning goes to my helpers. Apple, still warm. Don't tell the goose."}
+],"hunt":{"line":"Fetch the {items}. Then we're in business!","items":[["Bunting String","minecraft:string"],["Chalk Price Sign","minecraft:paper"],["Opening Bell","minecraft:gold_nugget"]]}},
+{"key":"c_directions","title":"Which Way to the Station?","finale":"gift","gift":"minecraft:clock","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Mr. Fitzgerald","line":"My granddaughter's train comes in this afternoon and I've gone the wrong way twice. She said meet at the place where trains rest and people wave."},
+ {"kind":"riddle","roles":["station","any"],"hint":"Where trains rest and people wave","line":"Here we are, and early! He wants flowers for her. A seller near {next} has some."},
+ {"kind":"talk","roles":["food_shop","park","any"],"npc":"Flower Seller Nan","line":"Sunflowers for a granddaughter, lovely. She told him on the phone they're her favourite. Back to {next}, quick, I hear a whistle."},
+ {"kind":"choice","roles":["station","any"],"npc":"Mr. Fitzgerald","line":"Oh dear, I've got roses, tulips and sunflowers. Which ones did she say she liked?","options":["Roses","Tulips","Sunflowers"],"answer":2,"wrong":"Hmm, Nan said something about her favourite. Big and yellow, I think.","right":"Sunflowers, of course. There she is! They're walking home together via {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Mr. Fitzgerald","line":"Never once late, thanks to you. Take my old pocket clock, I won't need it, I've got a granddaughter to tell me the time."}
+]},
+{"key":"c_cake_delivery","title":"Handle With Care","finale":"surprise_party","steps":[
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Baker Ottilie","line":"A birthday cake needs delivering and my van's a bike with one pedal. It's for someone called Rosie. Her brother is waiting at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Rosie's Brother Kai","line":"Shh, it's a surprise! Rosie's turning eight and loves anything purple. I lost the candles though, they rolled under something near {next}."},
+ {"kind":"search","roles":["civic","any"],"thing":"Box of Birthday Candles","item":"minecraft:stick","line":"Eight candles, all accounted for. Kai's mum is at {next} with the decorations."},
+ {"kind":"choice","roles":["any"],"npc":"Rosie's Mum","line":"Help me pick the balloons. Which colour will Rosie love?","options":["Purple","Grey","Brown"],"answer":0,"wrong":"Kai pulls a face. Rosie likes one colour above all.","right":"Purple everything! Everyone hide at {next}, she's coming!"},
+ {"kind":"talk","roles":["any"],"npc":"Rosie","line":"SURPRISE? For me? Purple balloons AND cake? This is the best birthday in the whole history of birthdays."}
+]},
+{"key":"c_photo_walk","title":"Say Cheese","finale":"gift","gift":"minecraft:painting","steps":[
+ {"kind":"talk","roles":["landmark","culture","any"],"npc":"Photographer Bram","line":"I'm making a calendar of the town and need helpers in the photos! Twelve months, three helpers, lots of pulling faces. First shot at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Photographer Bram","line":"Lovely, that's spring. For summer I want water in the background, and you looking very relaxed."},
+ {"kind":"riddle","roles":["water","bridge","any"],"hint":"Water in the background","line":"Perfect summer! Oh no, I dropped my lens cap near {next}. It's tiny and black."},
+ {"kind":"search","roles":["park","any"],"thing":"Bram's Lens Cap","item":"minecraft:coal","line":"Thank you! Last shot is winter, and Bram wants a cosy spot. Meet at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Photographer Bram","line":"That's the year done! You're Miss April, Mr. July and the whole of December. Have this print, a thank-you from the calendar."}
+]},
+{"key":"c_grocery_riddles","title":"Mrs. Haddad's List","finale":"gift","gift":"minecraft:honey_bottle","steps":[
+ {"kind":"talk","roles":["any"],"npc":"Mrs. Haddad","line":"My knee's being silly today, would you do my errands? I write my lists as riddles, it keeps the mind sharp. First, go where the bread wakes up early."},
+ {"kind":"riddle","roles":["food_shop","any"],"hint":"Where the bread wakes up early","line":"One loaf, warm. Next on her list: 'return the book about the moon'. The book is overdue at {next}."},
+ {"kind":"talk","roles":["culture","school","any"],"npc":"Librarian Teodor","line":"The moon book! Mrs. Haddad's had it three months, she says it was a long moon. Tell her the sequel's in. Back to {next}."},
+ {"kind":"choice","roles":["any"],"npc":"Mrs. Haddad","line":"You're quick! Last test: what did I ask you to return?","options":["A book about the sea","A book about the moon","A cookbook"],"answer":1,"wrong":"Ha! No, look up at night and you'll remember.","right":"The moon! My brain is sharp and my errands are done. Come round to {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Mrs. Haddad","line":"Bread, books and good company. Here, honey from my sister's bees. Same time next week?"}
+]},
+{"key":"c_balloon","title":"The Great Balloon Escape","finale":"gift","gift":"minecraft:string","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Party Shop Clem","line":"A bouquet of ten balloons got away from me! They're red and floating low. Someone at {next} might've seen them."},
+ {"kind":"talk","roles":["station","civic","any"],"npc":"Window Cleaner Ray","line":"Red balloons, yes! Drifted past my ladder an hour ago. One popped on a weathervane, the rest headed for {next}."},
+ {"kind":"search","roles":["park","any"],"thing":"Balloon Bundle Ribbon","item":"minecraft:string","line":"Nine balloons, tangled but happy. Clem's customer is waiting at {next}."},
+ {"kind":"choice","roles":["any"],"npc":"Customer Wendell","line":"I ordered ten balloons for my mum's party. How many are left?","options":["Ten","Nine","Two"],"answer":1,"wrong":"Count again, Ray saw one meet a weathervane.","right":"Nine is perfect, she's ninety, one for each decade! Party's at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Customer Wendell","line":"Mum loved them. She says the tenth one is on an adventure. Keep this ribbon, for luck."}
+]},
+{"key":"c_ice_cream","title":"The Jingle Is Broken","finale":"gift","gift":"minecraft:note_block","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Ice Cream Man Giorgio","line":"My van's jingle has gone silent, and without it nobody knows I'm here. The tune's written on a card I keep at {next}."},
+ {"kind":"search","roles":["food_shop","civic","any"],"thing":"Jingle Music Card","item":"minecraft:paper","line":"The card says the jingle starts with three high notes and one low. A music teacher at {next} could help."},
+ {"kind":"choice","roles":["school","culture","any"],"npc":"Music Teacher Ms. Lund","line":"Lovely, I'll hum it for you. How does Giorgio's jingle begin?","options":["One low note and three high","Three high notes and one low","Just one long note"],"answer":1,"wrong":"That sounds like a doorbell, not ice cream. Check the card again.","right":"Ding ding ding, dong! That's the one. Run it back to {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Ice Cream Man Giorgio","line":"The jingle is back and so are the children! Have a little music box, so you never forget the tune."}
+]},
+{"key":"c_tortoise_race","title":"The Slowest Race in Town","finale":"gift","gift":"minecraft:turtle_scute","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Race Organiser Dot","line":"Welcome to the annual tortoise race! I need a marshal. The champion, Sir Plod, eats only dandelions. His owner is at {next}."},
+ {"kind":"talk","roles":["civic","any"],"npc":"Owner Barnaby","line":"Sir Plod refuses to race without his lucky ribbon. I think it's tucked somewhere near {next}, he likes to hide it."},
+ {"kind":"search","roles":["park","any"],"thing":"Sir Plod's Lucky Ribbon","item":"minecraft:red_wool","line":"Lucky ribbon on! Now Dot needs a treat at the finish to keep the racers moving. Head to {next}."},
+ {"kind":"choice","roles":["any"],"npc":"Race Organiser Dot","line":"What do we put at the finish line to tempt Sir Plod?","options":["A tomato","A lettuce leaf","A dandelion"],"answer":2,"wrong":"Sir Plod turns away slowly. Very slowly. He's a picky eater.","right":"A dandelion! He's moving. Very slightly. Come watch the finish at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Race Organiser Dot","line":"Forty minutes for two metres, a new record! Sir Plod is champion again. A shell-shaped thank you, from the club."}
+]}
+]}

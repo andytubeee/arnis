@@ -1,0 +1,228 @@
+{"stories": [
+{"key": "a_lost_dog", "title": "The Lost Dog", "finale": "lost_dog",
+ "steps": [
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Mrs. Okafor", "line": "My dog Biscuit slipped his lead! He's scruffy and brown with one floppy ear. Someone saw him heading for {next}."},
+  {"kind": "choice", "roles": ["food_shop", "any"], "npc": "Sam the baker", "line": "Three dogs begged for crusts here this morning. Which one's yours?", "options": ["A sleek grey one with pointy ears", "A scruffy brown one with one floppy ear", "A fluffy white one in a tiny jumper"], "answer": 1, "wrong": "That one went home with its owner. Yours sounded scruffier.", "right": "That's him! He took a crust and ran off towards {next}."},
+  {"kind": "search", "roles": ["school", "civic", "any"], "thing": "Chewed Glove", "item": "minecraft:leather", "line": "A chewed glove in a dug-up flower bed, with Biscuit-sized tooth marks. Muddy paw prints lead to {next}."},
+  {"kind": "talk", "roles": ["water", "bridge", "park", "any"], "npc": "A fisher", "line": "Got all his things? Good, he wouldn't budge without them. Last I saw he was trotting off to {next}."},
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Biscuit", "line": "There he is, tail going like mad. Mrs. Okafor says he picked you, so he's yours now."}],
+ "hunt": {"line": "Wet paws, muddy nose, happy as anything. Biscuit won't go home without his things: {items}. Split up, then meet me back here!", "items": [["Biscuit's Lead", "minecraft:lead"], ["Squeaky Ball", "minecraft:slime_ball"], ["Favourite Blanket", "minecraft:white_wool"]]}},
+
+{"key": "a_time_capsule", "title": "Time Capsule", "finale": "time_capsule",
+ "steps": [
+  {"kind": "talk", "roles": ["culture", "civic", "any"], "npc": "The librarian", "line": "This old map fell out of a 1985 yearbook, signed by a class called the Comets. The first mark is at {next}."},
+  {"kind": "talk", "roles": ["school", "any"], "npc": "A retired teacher", "line": "My Comets buried a capsule! After, they argued for an hour somewhere that smelled of fresh bread. Start there."},
+  {"kind": "riddle", "roles": ["food_shop", "any"], "hint": "Where the Comets argued over bread", "line": "The owner laughs: those kids argued here about where to bury it, then marched off to {next}."},
+  {"kind": "choice", "roles": ["park", "landmark", "any"], "npc": "A dog walker", "line": "There are three old marker posts along here. Which one does your map mean?", "options": ["The one with a star painted on", "The one with a comet scratched on", "The one with a fish carved in"], "answer": 1, "wrong": "Hmm. What did that class call themselves again?", "right": "The comet post! Its little arrow points straight at {next}."},
+  {"kind": "talk", "roles": ["landmark", "civic", "any"], "npc": "A groundskeeper", "line": "Key, photo and the combination, all here. I put the tin back at {next} where it was buried, go open it!"},
+  {"kind": "talk", "roles": ["landmark", "park", "any"], "npc": "The capsule", "line": "A rusty tin full of letters from 1985. Everyone takes one to read."}],
+ "hunt": {"line": "I dug the capsule up, but it's locked, and the class hid what opens it: {items}. Split up and meet me back here.", "items": [["Brass Key", "minecraft:tripwire_hook"], ["Class Photo", "minecraft:paper"], ["Combination Note", "minecraft:paper"]]}},
+
+{"key": "a_surprise_party", "title": "Surprise Party", "finale": "surprise_party",
+ "steps": [
+  {"kind": "talk", "roles": ["civic", "any"], "npc": "Priya", "line": "It's Grandpa Lou's 90th and nothing's ready! He loves lemon and can't stand chocolate. Can you get the cake from {next}?"},
+  {"kind": "choice", "roles": ["food_shop", "any"], "npc": "The baker", "line": "I baked three party cakes today and lost all the labels. Which one is Lou's?", "options": ["Triple chocolate fudge", "Lemon drizzle with sprinkles", "Coffee and walnut"], "answer": 1, "wrong": "Hmm, didn't Priya say what Lou likes?", "right": "Lemon drizzle, done. Priya also wanted music, try the busker at {next}."},
+  {"kind": "talk", "roles": ["station", "park", "any"], "npc": "A busker", "line": "A party? I'm in. My cousin Dee has fireworks, find her at the spot every postcard of this town shows."},
+  {"kind": "riddle", "roles": ["landmark", "civic", "any"], "hint": "The spot every postcard shows", "line": "Cousin Dee waves a box of fireworks. Lou's friend Mabel is doing decorations at {next}, she sounds stressed."},
+  {"kind": "talk", "roles": ["park", "civic", "any"], "npc": "Mabel", "line": "Bunting, candles, guest book, perfect. Lou loves the view, so the party is at {next}."},
+  {"kind": "talk", "roles": ["viewpoint", "park", "landmark", "any"], "npc": "Grandpa Lou", "line": "SURPRISE! Lou nearly drops his hat. The whole street came to watch the fireworks."}],
+ "hunt": {"line": "Lou's party still needs {items}. Split up, grab them, and meet me back here!", "items": [["Bunting", "minecraft:red_banner"], ["Birthday Candles", "minecraft:candle"], ["Guest Book", "minecraft:writable_book"]]}},
+
+{"key": "a_band_reunion", "title": "Band Reunion", "finale": "band_reunion",
+ "steps": [
+  {"kind": "talk", "roles": ["culture", "any"], "npc": "Old Ray", "line": "The Night Owls haven't played in 30 years. Our drummer Dot works at {next}, she drums on everything in reach."},
+  {"kind": "choice", "roles": ["station", "any"], "npc": "A station guard", "line": "Dot? Three of us are on shift. Which one do you mean?", "options": ["The one whistling a tune", "The one drumming on the ticket machine", "The one reading a paperback"], "answer": 1, "wrong": "Nope. Didn't Ray say something about her hands?", "right": "Dot spins a pen like a drumstick: a reunion? About time. Lenny busks wherever people wait for trains."},
+  {"kind": "riddle", "roles": ["station", "park", "any"], "hint": "Where Lenny busks for waiting folk", "line": "Lenny plays a riff without looking up. Still got it. Our singer Marisol runs a little place at {next}."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "Marisol", "line": "Sticks, strings and my lyrics, we're a band again. Fine, one show! Tell everyone to meet at {next}."},
+  {"kind": "talk", "roles": ["park", "civic", "landmark", "any"], "npc": "The Night Owls", "line": "Count it in! The Night Owls play their comeback show, and the crowd sings along."}],
+ "hunt": {"line": "We can't play without our gear: {items}. Split up and meet me back here.", "items": [["Lucky Drumsticks", "minecraft:stick"], ["Old Bass Strings", "minecraft:string"], ["Lyric Sheet", "minecraft:paper"]]}},
+
+{"key": "a_riddle_treasure", "title": "Riddle Treasure", "finale": "riddle_treasure",
+ "steps": [
+  {"kind": "talk", "roles": ["culture", "landmark", "any"], "npc": "A note in a bottle", "line": "\"Where old things sleep and new eyes wake, you found me. Now seek the place of bells and quiet stones.\""},
+  {"kind": "riddle", "roles": ["faith", "landmark", "any"], "hint": "Bells and quiet stones", "line": "A chalk mark on the step: \"Green and wide where children play, a clue lies hid at {next}, go that way.\""},
+  {"kind": "search", "roles": ["park", "any"], "thing": "Folded Riddle", "item": "minecraft:paper", "line": "Under a bench, a folded note: \"The river knows where treasure goes. Ask at {next}.\""},
+  {"kind": "talk", "roles": ["water", "station", "any"], "npc": "A soggy riddle", "line": "\"Three torn pieces, one whole map. The X sits under {next}, so off you tap.\""},
+  {"kind": "talk", "roles": ["bridge", "water", "landmark", "any"], "npc": "The treasure", "line": "Tucked under the span, an old chest full of gold and diamonds. Not bad."}],
+ "hunt": {"line": "\"Three torn pieces, scattered wide: {items}. Bring them here and set them side by side.\"", "items": [["Map Corner", "minecraft:paper"], ["Map Middle", "minecraft:paper"], ["Map Edge", "minecraft:paper"]]}},
+
+{"key": "a_friendly_ghost", "title": "The Friendly Ghost", "finale": "friendly_ghost",
+ "steps": [
+  {"kind": "talk", "roles": ["landmark", "culture", "any"], "npc": "A faint voice", "line": "Psst. I'm Edith, the ghost in the lavender coat, don't scream. I never sent my letters. The first goes where every letter in town is sorted."},
+  {"kind": "riddle", "roles": ["civic", "any"], "hint": "Where every letter is sorted", "line": "The postmaster reads the envelope: Edith! She was my grandmother's friend. Her sister's family lives near {next}."},
+  {"kind": "choice", "roles": ["park", "any"], "npc": "Edith's grand-niece", "line": "A letter from Aunt Edith's ghost? Prove it. What colour did she always wear?", "options": ["Lavender", "Bright red", "Navy blue"], "answer": 0, "wrong": "Not her. Edith told you herself, remember?", "right": "Lavender, always. Thank you. She had tea every Sunday at {next}, they'll remember her."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "An old waiter", "line": "Her rose, her watch, her teacup. Edith had tea here every Sunday, and she said she'd rest at {next}."},
+  {"kind": "talk", "roles": ["faith", "landmark", "park", "any"], "npc": "Edith", "line": "All my letters delivered. Thank you, friends. Edith smiles and fades into the light."}],
+ "hunt": {"line": "Edith left three keepsakes for her goodbye: {items}. Split up, fetch them, and meet back here.", "items": [["Pressed Rose", "minecraft:poppy"], ["Pocket Watch", "minecraft:clock"], ["Edith's Teacup", "minecraft:flower_pot"]]}},
+
+{"key": "a_stargazer", "title": "Stargazer", "finale": "stargazer",
+ "steps": [
+  {"kind": "talk", "roles": ["culture", "school", "any"], "npc": "Dr. Lin", "line": "A meteor shower tonight, but the town's too bright to see it. Light my first beacon at the highest spot you can get to."},
+  {"kind": "riddle", "roles": ["viewpoint", "landmark", "any"], "hint": "The highest spot around", "line": "Beacon one, lit! A night owl up here says Dr. Lin wants the next one at {next}."},
+  {"kind": "search", "roles": ["viewpoint", "park", "any"], "thing": "Crystal Lens", "item": "minecraft:amethyst_shard", "line": "The beacon's crystal lens, dropped in the grass. Beacon two glows. The last one's at {next}."},
+  {"kind": "talk", "roles": ["viewpoint", "landmark", "any"], "npc": "Dr. Lin's assistant", "line": "All lit, and the kit's here! Dr. Lin is setting up at {next}. Hurry, it's starting."},
+  {"kind": "talk", "roles": ["viewpoint", "park", "landmark", "any"], "npc": "Dr. Lin", "line": "Look up! The sky fills with falling stars. Make a wish."}],
+ "hunt": {"line": "Dr. Lin forgot half her kit: {items}. Split up and meet back here before the sky starts!", "items": [["Brass Telescope", "minecraft:spyglass"], ["Star Chart", "minecraft:paper"], ["Thermos of Cocoa", "minecraft:honey_bottle"]]}},
+
+{"key": "a_cat_mayor", "title": "The Cat Mayor", "finale": "cat_mayor",
+ "steps": [
+  {"kind": "talk", "roles": ["civic", "any"], "npc": "The town clerk", "line": "Mayor Whiskers is missing before the ceremony! She's ginger with a white tip on her tail. She was last seen near {next}."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "The fishmonger", "line": "Her Honour took a sardine and strolled off to nap somewhere green, with flowers to roll in."},
+  {"kind": "riddle", "roles": ["park", "any"], "hint": "Green, with flowers to roll in", "line": "Squashed tulips and ginger fur. A gardener points: the mayor wandered off to {next}."},
+  {"kind": "choice", "roles": ["faith", "culture", "any"], "npc": "A sleepy caretaker", "line": "Three cats napped on my steps today. Which was the mayor?", "options": ["The black cat with a bell", "The grey cat with a bow", "The ginger cat with a white-tipped tail"], "answer": 2, "wrong": "That one's just a regular cat. What did the clerk say she looks like?", "right": "That's Her Honour. She's off to the ceremony, but the usher at {next} says her regalia's gone."},
+  {"kind": "talk", "roles": ["civic", "landmark", "any"], "npc": "The ceremony usher", "line": "Crown, sash and golden sardine, all present. The mayor's waiting at {next}, go crown her!"},
+  {"kind": "talk", "roles": ["civic", "landmark", "any"], "npc": "Mayor Whiskers", "line": "Found her! Mayor Whiskers is crowned for another term, purring the whole time."}],
+ "hunt": {"line": "The ceremony needs the mayor's regalia: {items}. Split up and meet me back here.", "items": [["Tiny Crown", "minecraft:gold_nugget"], ["Ceremonial Sash", "minecraft:red_wool"], ["Golden Sardine", "minecraft:gold_ingot"]]}},
+
+{"key": "a_message_bottle", "title": "Message in a Bottle", "finale": "message_bottle",
+ "steps": [
+  {"kind": "talk", "roles": ["water", "bridge", "any"], "npc": "A beachcomber", "line": "This bottle washed up: \"To Arthur, from Rose, 1962.\" Whoever keeps the town's old records might know them."},
+  {"kind": "riddle", "roles": ["civic", "culture", "any"], "hint": "Where the old records are kept", "line": "An archivist blows dust off a file: Rose Bell! Arthur still lives near {next}. He never goes out without his flat cap."},
+  {"kind": "choice", "roles": ["park", "any"], "npc": "A park regular", "line": "Arthur? Three old gents come here every day. Which one do you want?", "options": ["The one in the flat cap", "The one with the umbrella", "The one doing a crossword"], "answer": 0, "wrong": "That's Harold. The archivist said something about a hat, didn't she?", "right": "Arthur reads the letter twice. Rose? She always loved {next}. Could you find her?"},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "Rose", "line": "Our letter, our photo, the shell from our first day out. Tell Arthur to meet me at {next}."},
+  {"kind": "talk", "roles": ["bridge", "water", "viewpoint", "any"], "npc": "Rose and Arthur", "line": "Two old friends meet again on the bridge, laughing like it was 1962."}],
+ "hunt": {"line": "Arthur kept my letter? Before I see him I want to bring {items}. Split up, and meet me back here?", "items": [["Old Love Letter", "minecraft:paper"], ["Faded Photograph", "minecraft:paper"], ["Seashell", "minecraft:nautilus_shell"]]}},
+
+{"key": "a_allay_courier", "title": "The Allay Courier", "finale": "allay_courier",
+ "steps": [
+  {"kind": "talk", "roles": ["park", "any"], "npc": "A tiny blue allay", "line": "La-la! I dropped my shiny things all over town. The first is at {next}!"},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "A shopkeeper", "line": "A little blue thing took a cookie and left a bell. It flew off to where the trains come and go."},
+  {"kind": "riddle", "roles": ["station", "any"], "hint": "Where the trains come and go", "line": "A conductor holds up a ribbon from platform two. The allay went humming towards {next}."},
+  {"kind": "search", "roles": ["culture", "park", "any"], "thing": "Dropped Music Disc", "item": "minecraft:music_disc_cat", "line": "A music disc, still warm from the allay's pocket, if allays have pockets. Singing drifts over from {next}."},
+  {"kind": "talk", "roles": ["school", "culture", "any"], "npc": "A student", "line": "It sang in our class all morning! Now everything's back, and it's waiting for you at {next}."},
+  {"kind": "talk", "roles": ["park", "landmark", "any"], "npc": "The allay", "line": "All its shiny things back! The allay twirls around you and decides to stay."}],
+ "hunt": {"line": "The allay's last shiny things are scattered: {items}. Split up and meet me back here!", "items": [["Shiny Bell", "minecraft:bell"], ["Tiny Note Block", "minecraft:note_block"], ["Jar of Glitter", "minecraft:glowstone_dust"]]}},
+
+{"key": "a_founders_festival", "title": "Founders' Festival", "finale": "founders_festival",
+ "steps": [
+  {"kind": "talk", "roles": ["civic", "any"], "npc": "The festival planner", "line": "The Founders' Festival is tonight and the banners aren't up! The founders' colours are green and gold. Start at {next}."},
+  {"kind": "choice", "roles": ["culture", "faith", "any"], "npc": "A volunteer", "line": "Three boxes of banners got delivered. Which ones are ours?", "options": ["Red and white stripes", "Green and gold", "Blue with silver stars"], "answer": 1, "wrong": "Those are for the football club. The planner told you the colours.", "right": "Green and gold, up they go. The art club kids at {next} have the lanterns."},
+  {"kind": "talk", "roles": ["school", "any"], "npc": "Kids from the art club", "line": "We painted lanterns! Hang them where everyone passes on the way in by train."},
+  {"kind": "riddle", "roles": ["station", "landmark", "any"], "hint": "Where everyone arrives by train", "line": "A busy conductor helps hang the lanterns, beaming. The planner's waiting at {next}, she sounds worried."},
+  {"kind": "talk", "roles": ["civic", "landmark", "any"], "npc": "The festival planner", "line": "Lanterns, flag, drum, we're ready. Everyone's gathering at {next}!"},
+  {"kind": "talk", "roles": ["park", "civic", "landmark", "any"], "npc": "The whole town", "line": "Lanterns glow, music plays and the Founders' Festival begins. You made it happen."}],
+ "hunt": {"line": "We're short on festival things: {items}. Split up and meet me back here!", "items": [["Paper Lantern", "minecraft:lantern"], ["Founders' Flag", "minecraft:white_banner"], ["Festival Drum", "minecraft:note_block"]]}},
+
+{"key": "a_secret_garden", "title": "The Secret Garden", "finale": "secret_garden",
+ "steps": [
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Old Mrs. Greene", "line": "My secret garden needs sunflower, poppy and cornflower seeds, one from every park. Start at {next}."},
+  {"kind": "search", "roles": ["park", "any"], "thing": "Sunflower Seed Packet", "item": "minecraft:paper", "line": "A packet of sunflower seeds, with a ranger's note: poppies grow best at {next}."},
+  {"kind": "talk", "roles": ["park", "water", "any"], "npc": "A birdwatcher", "line": "Poppy seeds, here, the sparrows can spare them. For the last kind ask the florist at {next}."},
+  {"kind": "choice", "roles": ["food_shop", "school", "any"], "npc": "A florist", "line": "Mrs. Greene sent you? Then you know which seeds she's still missing.", "options": ["Sunflower", "Poppy", "Cornflower"], "answer": 2, "wrong": "You've got those already, check your pockets.", "right": "Cornflowers, and a little extra. Her old tools are with her neighbour at {next}."},
+  {"kind": "talk", "roles": ["park", "civic", "any"], "npc": "Mrs. Greene's neighbour", "line": "Shears, trowel and the magic stuff. Her garden's hidden at {next}, don't tell a soul."},
+  {"kind": "talk", "roles": ["park", "landmark", "any"], "npc": "Mrs. Greene", "line": "You plant the seeds and the whole garden bursts into bloom."}],
+ "hunt": {"line": "Mrs. Greene needs her old tools too: {items}. Split up and meet me back here.", "items": [["Garden Shears", "minecraft:shears"], ["Old Trowel", "minecraft:iron_shovel"], ["Magic Fertiliser", "minecraft:bone_meal"]]}},
+
+{"key": "a_golems_heart", "title": "The Golem's Heart", "finale": "golems_heart",
+ "steps": [
+  {"kind": "talk", "roles": ["landmark", "civic", "any"], "npc": "An old engineer", "line": "This town once had an iron guardian, and its parts got scattered. One ended up in the lost and found where trains stop."},
+  {"kind": "riddle", "roles": ["station", "any"], "hint": "A lost and found where trains stop", "line": "A rail worker drags out a huge iron arm. Funny, the other arm turned up near {next}."},
+  {"kind": "search", "roles": ["bridge", "civic", "any"], "thing": "Second Iron Arm", "item": "minecraft:iron_ingot", "line": "There it is, the second iron arm, heavy as a piano. The heart was kept safe at {next}."},
+  {"kind": "talk", "roles": ["culture", "faith", "any"], "npc": "A curator", "line": "The golem's heart, still warm, and now all its parts. Rebuild it at {next}."},
+  {"kind": "talk", "roles": ["civic", "landmark", "park", "any"], "npc": "The iron golem", "line": "Clank by clank, the guardian stands again and gives you a poppy."}],
+ "hunt": {"line": "The golem needs three more things to wake: {items}. Split up and meet me back here.", "items": [["Iron Bolt", "minecraft:iron_nugget"], ["Copper Spring", "minecraft:copper_ingot"], ["Spark of Redstone", "minecraft:redstone"]]}},
+
+{"key": "a_picnic_bakeoff", "title": "Picnic Bake-off", "finale": "picnic_bakeoff",
+ "steps": [
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "Chef Amara", "line": "The great picnic bake-off is today and I'm out of everything, even my recipe card! Wheat first, from {next}."},
+  {"kind": "talk", "roles": ["food_shop", "park", "any"], "npc": "A farmer", "line": "Wheat, freshly cut. Amara dropped a card on her way past {next}, have a look around there."},
+  {"kind": "search", "roles": ["park", "school", "any"], "thing": "Recipe Card", "item": "minecraft:paper", "line": "The recipe card: honey and cinnamon sponge, underlined twice. The cafe at {next} has spices."},
+  {"kind": "choice", "roles": ["food_shop", "school", "any"], "npc": "A cafe owner", "line": "I've got three jars open. Which spice does Amara's recipe want?", "options": ["Nutmeg", "Cinnamon", "Ginger"], "answer": 1, "wrong": "Close, but check that recipe card again.", "right": "Cinnamon, a whole jar. Eggs next, the grocer at {next} keeps the best."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "A grocer", "line": "Blanket, honey, berries, and a dozen eggs from me. Careful now. The picnic is at {next}!"},
+  {"kind": "talk", "roles": ["park", "water", "any"], "npc": "Chef Amara", "line": "Everyone shares cake on the grass. Amara declares it a tie, so everyone wins."}],
+ "hunt": {"line": "Amara phoned, the picnic needs {items}. Split up and meet me back here!", "items": [["Picnic Blanket", "minecraft:red_wool"], ["Jar of Honey", "minecraft:honeycomb"], ["Basket of Berries", "minecraft:sweet_berries"]]}},
+
+{"key": "a_postcard_tour", "title": "The Postcard Tour", "finale": "postcard_tour",
+ "steps": [
+  {"kind": "talk", "roles": ["any"], "npc": "A lost tourist", "line": "I dropped all my postcards around town! The first one shows {next}."},
+  {"kind": "search", "roles": ["any"], "thing": "Trodden Postcard", "item": "minecraft:paper", "line": "A postcard with a footprint on it. The picture on the front is {next}."},
+  {"kind": "talk", "roles": ["any"], "npc": "A street sweeper", "line": "Found another one in my bin. It shows the spot where you'd stand for the best photo in town."},
+  {"kind": "riddle", "roles": ["viewpoint", "landmark", "any"], "hint": "The best photo spot in town", "line": "A cyclist hands you a postcard of this very view. The last one shows {next}, not far."},
+  {"kind": "talk", "roles": ["any"], "npc": "A photographer", "line": "Last postcard, and the suitcase stuff too. The tourist is waiting at {next}."},
+  {"kind": "talk", "roles": ["any"], "npc": "The tourist", "line": "All my postcards! Here, take this painting of the town. Sign it, it's yours."}],
+ "hunt": {"line": "Wait, the tourist's suitcase burst open too! Help find {items}. Split up and meet me back here.", "items": [["Lost Passport", "minecraft:book"], ["Travel Camera", "minecraft:spyglass"], ["Snow Globe", "minecraft:heart_of_the_sea"]]}},
+
+{"key": "a_biscuit_1", "title": "Biscuit's Big Walk", "series": "a_biscuit", "episode": 1, "finale": "gift", "gift": "minecraft:bone",
+ "steps": [
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Mrs. Okafor", "line": "Biscuit! Remember me? He's yours now, but he still drags everyone to his old haunts. He's sniffing towards {next}."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "Sam the baker", "line": "Same as last time, a crust for the good boy. He buried his tennis ball near {next} once, he's off to check."},
+  {"kind": "search", "roles": ["park", "school", "any"], "thing": "Old Tennis Ball", "item": "minecraft:slime_ball", "line": "His old tennis ball, chewed and proud. Now he's tugging towards where that fisher let him get his paws wet."},
+  {"kind": "riddle", "roles": ["water", "bridge", "any"], "hint": "Where Biscuit got his paws wet", "line": "The fisher from last time waves: you muddy legend. She reckons he'll want a nap at {next}."},
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Biscuit", "line": "Biscuit flops in the shade with his ball between his paws and snores. Best walk ever, apparently."}]},
+
+{"key": "a_biscuit_2", "title": "Best in Show", "series": "a_biscuit", "episode": 2, "finale": "gift", "gift": "minecraft:cookie",
+ "steps": [
+  {"kind": "talk", "roles": ["school", "civic", "any"], "npc": "The school janitor", "line": "Is that Biscuit? He dug up my flower bed, remember! Kidding, all forgiven. He's in the pet show, sign him in at {next}."},
+  {"kind": "talk", "roles": ["school", "culture", "any"], "npc": "Ms. Patel", "line": "Biscuit's in! He needs a trick. Sam says he learned one for crusts, ask at the place Biscuit begged for crusts."},
+  {"kind": "riddle", "roles": ["food_shop", "any"], "hint": "Where Biscuit begged for crusts", "line": "Sam laughs: his trick? He sits, spins twice, then sneezes. Every time. The show's judge is at {next}."},
+  {"kind": "choice", "roles": ["park", "any"], "npc": "A pet show judge", "line": "Final round! What's Biscuit's trick, then?", "options": ["He plays dead", "He sits, spins twice, then sneezes", "He balances a biscuit on his nose"], "answer": 1, "wrong": "Biscuit looks at you, puzzled. That's not his trick, ask yourself what Sam said.", "right": "Spin, spin, achoo! The crowd loses it. Prizes are handed out at {next}."},
+  {"kind": "talk", "roles": ["school", "park", "any"], "npc": "Ms. Patel", "line": "Biscuit wins Best Sneeze, a prize we made up on the spot. He wears the rosette all day and won't let anyone touch it."}]},
+
+{"key": "a_biscuit_3", "title": "Biscuit's Birthday", "series": "a_biscuit", "episode": 3, "finale": "gift", "gift": "minecraft:cake",
+ "steps": [
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Mrs. Okafor", "line": "It's Biscuit's birthday! Same day I found him as a pup. Everyone from his adventures is coming. Sam's baking at {next}."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "Sam the baker", "line": "One dog cake, carrot, no chocolate, dogs can't have chocolate. The fisher has his present, she's at {next}."},
+  {"kind": "search", "roles": ["water", "bridge", "any"], "thing": "Squeaky Bone", "item": "minecraft:bone", "line": "A brand new squeaky bone with a bow, hidden for Biscuit to sniff out. Ms. Patel has party hats at {next}."},
+  {"kind": "choice", "roles": ["school", "park", "any"], "npc": "Ms. Patel", "line": "Hats on! Quick, before the cake comes out: what must Biscuit never eat?", "options": ["Carrots", "Chocolate", "Rice"], "answer": 1, "wrong": "That one's fine for him. Sam warned you about one thing.", "right": "Right, no chocolate, and Sam's cake is safe. Bring the birthday boy to {next}!"},
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Biscuit", "line": "Everyone sings. Biscuit eats his cake in one bite, spins twice and sneezes, for old times' sake."}]},
+
+{"key": "a_night_owls_1", "title": "Night Owls on Tour", "series": "a_night_owls", "episode": 1, "finale": "gift", "gift": "minecraft:music_disc_cat",
+ "steps": [
+  {"kind": "talk", "roles": ["culture", "any"], "npc": "Old Ray", "line": "Remember our comeback show? Now we're doing a little tour! Every gig opens with Moonlight on the Ring Road. Dot has posters at {next}."},
+  {"kind": "talk", "roles": ["station", "any"], "npc": "Dot the drummer", "line": "Posters, fresh off the printer, but I dropped the pins. Stick one up at {next}, everyone reads the board there."},
+  {"kind": "search", "roles": ["civic", "culture", "any"], "thing": "Box of Pins", "item": "minecraft:iron_nugget", "line": "The box of pins! Poster up, a bit wonky. Lenny's warming up at {next} for tonight."},
+  {"kind": "choice", "roles": ["park", "station", "any"], "npc": "Lenny on bass", "line": "I'm so nervous I forgot the set list. What do we open with?", "options": ["Moonlight on the Ring Road", "Owl Be Seeing You", "Tuesday Again"], "answer": 0, "wrong": "No, that's the encore. Ray told you, didn't he?", "right": "That's the one! Gig one's at {next}, Marisol's waiting."},
+  {"kind": "talk", "roles": ["food_shop", "park", "any"], "npc": "Marisol", "line": "Gig one of the tour, and a full crowd of twelve. Marisol calls them the best twelve people in the world."}]},
+
+{"key": "a_night_owls_2", "title": "Marisol's Lost Voice", "series": "a_night_owls", "episode": 2, "finale": "gift", "gift": "minecraft:honey_bottle",
+ "steps": [
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "Marisol", "line": "Gig two is tonight and my voice is gone, listen, croak. Ray says his gran's cure fixes anything, he's at {next}."},
+  {"kind": "talk", "roles": ["culture", "civic", "any"], "npc": "Old Ray", "line": "Gran's cure: warm honey, a lemon and a woolly scarf. Never fails, she sang till 96. Honey's sold at {next}."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "A shopkeeper", "line": "Last jar of honey, it's yours. No lemons, but Lenny bought one, he's busking near the trains again."},
+  {"kind": "riddle", "roles": ["station", "any"], "hint": "Lenny busks near the trains", "line": "Lenny hands over a slightly squashed lemon. Dot's been knitting something at {next}."},
+  {"kind": "choice", "roles": ["park", "any"], "npc": "Dot the drummer", "line": "One scarf, done. Before you go, do you have all of Gran's cure?", "options": ["Honey, lemon and a scarf", "Tea, toast and a nap", "Ginger, mint and a song"], "answer": 0, "wrong": "Ha, that's my cure for Mondays. What did Ray say?", "right": "All three, then. Marisol's warming up at {next}, go!"},
+  {"kind": "talk", "roles": ["park", "civic", "landmark", "any"], "npc": "Marisol", "line": "Honey, lemon, scarf, and her voice comes back mid-song. Gig two's a hit, and Lenny's glad he didn't have to sing."}]},
+
+{"key": "a_night_owls_3", "title": "The Last Gig", "series": "a_night_owls", "episode": 3, "finale": "gift", "gift": "minecraft:jukebox",
+ "steps": [
+  {"kind": "talk", "roles": ["station", "any"], "npc": "Dot the drummer", "line": "Last gig of the tour, and I've lost my lucky drumsticks again, the ones you found at the reunion. I had them at {next}."},
+  {"kind": "search", "roles": ["culture", "park", "any"], "thing": "Lucky Drumsticks", "item": "minecraft:stick", "line": "The lucky drumsticks, right where she left them. Lenny's pacing at {next}."},
+  {"kind": "talk", "roles": ["park", "station", "any"], "npc": "Lenny on bass", "line": "Last gig, I'm a wreck. Ray wants to play where the whole town is in view, he's up there now."},
+  {"kind": "riddle", "roles": ["viewpoint", "landmark", "any"], "hint": "Where the whole town is in view", "line": "Ray admits it's far too windy up here for the amps. We'll play at {next} and come back up after for the view."},
+  {"kind": "talk", "roles": ["park", "civic", "landmark", "any"], "npc": "The Night Owls", "line": "The last gig, and the whole town turns up. Ray says it's not goodbye, the Night Owls just need a nap."}]},
+
+{"key": "a_pigeon_census", "title": "The Pigeon Census", "finale": "gift", "gift": "minecraft:feather",
+ "steps": [
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Gerald Plum, pigeon counter", "line": "Every year I count the town's pigeons and every year they refuse to sit still. Start at {next}, they love the crumbs."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "The shop owner", "line": "Fourteen out back, and Duchess, the one with the white wing. She's the boss. She sits on the most famous spot in town."},
+  {"kind": "riddle", "roles": ["landmark", "any"], "hint": "The most famous spot in town", "line": "There's Duchess, white wing and all, looking very important. Gerald dropped his tally sheet near {next}."},
+  {"kind": "search", "roles": ["station", "civic", "any"], "thing": "Gerald's Tally Sheet", "item": "minecraft:paper", "line": "The tally sheet, all little ticks and one doodle of a pigeon in a hat. Bring it to Gerald at {next}."},
+  {"kind": "choice", "roles": ["park", "any"], "npc": "Gerald Plum, pigeon counter", "line": "Before I write it in the book: which bird runs the flock?", "options": ["Duchess, the white-winged one", "Steve, who only has one foot", "Admiral Puff, the fat one"], "answer": 0, "wrong": "Steve wishes. Who did the shop owner say was the boss?", "right": "Duchess, of course. Fifteen pigeons, a record year! Celebrate with me at {next}."},
+  {"kind": "talk", "roles": ["viewpoint", "park", "any"], "npc": "Gerald Plum, pigeon counter", "line": "Gerald reads out the final count to nobody but you, and the pigeons coo along. You're now honorary census takers."}]},
+
+{"key": "a_puzzle_box", "title": "The Puzzle Box", "finale": "gift", "gift": "minecraft:rabbit_foot",
+ "steps": [
+  {"kind": "talk", "roles": ["culture", "any"], "npc": "The Great Fennimore", "line": "I locked my best trick in a puzzle box and forgot the code, ta-da. I hid the first number with a friend at {next}."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "Fennimore's friend, the cook", "line": "He paid me in card tricks for years. The first number is 3. The second is hidden where people wait for trains."},
+  {"kind": "riddle", "roles": ["station", "any"], "hint": "Where people wait for trains", "line": "Scratched under a bench: a tiny top hat and the number 7. The last number is with the kids at {next}."},
+  {"kind": "talk", "roles": ["school", "any"], "npc": "A student", "line": "Fennimore did a show here once and left a card. The number on the back is 1! His assistant Gwen has the box at {next}."},
+  {"kind": "choice", "roles": ["civic", "park", "any"], "npc": "Gwen, the assistant", "line": "The box clicks politely. The three numbers, in order, please?", "options": ["7, 3, 1", "3, 7, 1", "1, 3, 7"], "answer": 1, "wrong": "The box makes a sad little buzz. Try them in the order you found them.", "right": "Click! The box opens and Gwen gasps. Fennimore wants the big reveal at {next}."},
+  {"kind": "talk", "roles": ["park", "landmark", "any"], "npc": "The Great Fennimore", "line": "Out of the box flutters a paper dove, and that's the whole trick. Fennimore bows like it's the best night of his life."}]},
+
+{"key": "a_long_game", "title": "The Long Game", "finale": "gift", "gift": "minecraft:writable_book",
+ "steps": [
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Bernard", "line": "Yusuf and I have played one chess game for 40 years, by note. My move: knight to F3. Take it to him at {next}."},
+  {"kind": "talk", "roles": ["food_shop", "any"], "npc": "Yusuf", "line": "Knight to F3? The cheek. My reply is tucked in a chess book, at the place in town that lends books for free."},
+  {"kind": "riddle", "roles": ["culture", "civic", "any"], "hint": "Where books are lent for free", "line": "Inside the chess book, a note: bishop takes knight. Bernard's granddaughter Ana is at {next}."},
+  {"kind": "choice", "roles": ["school", "any"], "npc": "Ana", "line": "Grandpa will want to know what Yusuf played before he even says hello. What was it?", "options": ["Queen takes pawn", "Rook to E1", "Bishop takes knight"], "answer": 2, "wrong": "Hmm, that's not what the note in the book said.", "right": "Bishop takes his knight? Grandpa will groan for a week. He's waiting at {next}."},
+  {"kind": "talk", "roles": ["park", "any"], "npc": "Bernard", "line": "Bernard groans, then laughs and calls Yusuf over. For the first time in 40 years they finish the game face to face. It's a draw."}]},
+
+{"key": "a_duck_race", "title": "The Great Duck Race", "finale": "gift", "gift": "minecraft:lily_pad",
+ "steps": [
+  {"kind": "talk", "roles": ["water", "bridge", "any"], "npc": "Councillor Bea", "line": "The charity duck race starts soon and my box of rubber ducks fell off my bike! Number 42, the one with a crown, is the favourite. Start at {next}."},
+  {"kind": "search", "roles": ["park", "any"], "thing": "Rubber Duck No. 7", "item": "minecraft:yellow_dye", "line": "Rubber duck number 7, dusty but still smiling. A kid says more ducks bounced towards {next}."},
+  {"kind": "choice", "roles": ["food_shop", "any"], "npc": "The shop owner", "line": "Ducks rolled in here all morning. I kept three, which one's the race favourite?", "options": ["The one in a sailor hat", "The one with a little crown", "Plain old number 3"], "answer": 1, "wrong": "That one's cute, but Bea told you what the favourite wears.", "right": "Number 42, the champion. Bea's helper at {next} is rounding up the rest."},
+  {"kind": "talk", "roles": ["bridge", "water", "any"], "npc": "Tomasz, Bea's helper", "line": "Every duck accounted for! Bea's starting the race at {next}, let's go."},
+  {"kind": "talk", "roles": ["water", "bridge", "park", "any"], "npc": "Councillor Bea", "line": "The ducks bob off downstream and number 42 wins by a beak. The race raises enough for a new park bench."}],
+ "hunt": {"line": "Three ducks are still loose: {items}. Split up, grab them and meet me back here!", "items": [["Duck No. 13", "minecraft:yellow_dye"], ["Duck No. 99", "minecraft:yellow_dye"], ["The Golden Duck", "minecraft:gold_nugget"]]}}
+]}

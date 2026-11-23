@@ -5,3 +5,4 @@ execute if score #i arnis.story >= #steps arnis.story run scoreboard players rem
 execute store result storage arnis:story i.i int 1 run scoreboard players get #i arnis.story
 function arnis:story/current_at with storage arnis:story i
 data modify storage arnis:story cur.finale set from storage arnis:story finale
+data modify storage arnis:story cur.gift set from storage arnis:story now.gift

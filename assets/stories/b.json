@@ -1,0 +1,172 @@
+{"stories": [
+{"key":"b_pigeons","title":"The Pigeon Accord","finale":"gift","gift":"minecraft:wheat_seeds","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Gus Feather","line":"The pigeons are organised. They meet every morning by {next}, I've seen them nodding. Go and listen in, quietly, act like a bench."},
+ {"kind":"search","roles":["landmark","park","any"],"thing":"Tiny Pigeon Memo","item":"minecraft:paper","line":"A tiny memo: 'Agenda. 1, crumbs. 2, more crumbs. 3, that man with the notebook.' Show it to Gus's sister at {next}."},
+ {"kind":"choice","roles":["food_shop","any"],"npc":"Mabel Feather","line":"Gus thinks it's a plot. What's item three on the pigeons' agenda?","options":["The price of bread","That man with the notebook","Statue maintenance"],"answer":1,"wrong":"Read the memo again, love. Number three is the interesting one.","right":"Ha! They're watching him because he feeds them. Tell him to meet me at {next} with a bag of seeds."},
+ {"kind":"talk","roles":["park","any"],"npc":"Gus Feather","line":"So the pigeons aren't plotting, they're a fan club, and I'm the celebrity. Honestly that's nicer. Have some seeds, they'll want to meet you too."}
+]},
+{"key":"b_comeback","title":"The Comeback Tour","finale":"gift","gift":"minecraft:music_disc_cat","steps":[
+ {"kind":"talk","roles":["culture","any"],"npc":"Dolores Vane","line":"Darling! I sang the Sleepwell Mattress jingle in 1987. It's time for my comeback. My old manager Benny hangs about near {next}, fetch him."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Benny Oduya","line":"Dolores wants a comeback? She'll need her lucky sequin. It popped off during a high note at {next} in '94 and she's never sung since."},
+ {"kind":"search","roles":["landmark","park","any"],"thing":"Lucky Sequin","item":"minecraft:gold_nugget","line":"Still sparkly after thirty years. Benny says the comeback show is at {next}, and she'll need an audience, so that's you."},
+ {"kind":"choice","roles":["civic","park","any"],"npc":"Dolores Vane","line":"Quick, before I go on: what did I sing in 1987? I want to open with it.","options":["A song about the weather","The Sleepwell Mattress jingle","The national anthem, backwards"],"answer":1,"wrong":"Close, darling, but it was about a bed. Think comfort.","right":"Sleep well, sleep deep! Oh, it still works. Meet me at {next} after, for the encore."},
+ {"kind":"talk","roles":["park","any"],"npc":"Dolores Vane","line":"Four people clapped and one dog howled along. Best show of my career. Take this, every star should own a record."}
+]},
+{"key":"b_guru","title":"Seven Steps to Inner Calm","finale":"gift","gift":"minecraft:book","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Brook Sunwell","line":"Welcome, seekers. Step one: breathe. Step two: go where the water sits very still and thinks about life. You'll know it."},
+ {"kind":"riddle","roles":["water","any"],"hint":"Where water sits and thinks","line":"Very calm. A note on a post says 'Step three: eat a snack. Calm is easier with a snack.' The snacks are at {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Rosie Tran","line":"Brook sent you? He's sent forty people today and he's never once finished his own steps. He's stuck on step five, over at {next}."},
+ {"kind":"choice","roles":["viewpoint","any"],"npc":"Brook Sunwell","line":"I'm stuck. Remind me, what was step three? I wrote it at four in the morning.","options":["Sit by still water","Eat a snack","Hug a tree"],"answer":1,"wrong":"No, that was step two. Step three was tastier.","right":"A snack! That's why I'm stuck, I skipped it. Let's do step seven together at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Brook Sunwell","line":"Step seven: tell someone they did well today. You did well today. That's the whole book, honestly. Here, it's a bit thin."}
+]},
+{"key":"b_inventor","title":"The Self-Stirring Teacup","finale":"gift","gift":"minecraft:bell","steps":[
+ {"kind":"talk","roles":["culture","any"],"npc":"Nadia Sprockett","line":"My self-stirring teacup is nearly done! It stirs, and it rings when the tea's ready. My old teacher at {next} kept my blueprints."},
+ {"kind":"choice","roles":["school","any"],"npc":"Mr. Albrecht","line":"Nadia's blueprints are in one of these drawers. Which one, do you think?","options":["Drawer marked Volcano Models","Drawer marked Tea Things","Drawer marked Socks"],"answer":1,"wrong":"She was a very literal student. Think about what she's building.","right":"Tea Things, of course. It says she left the parts around town. Her brother Pip at {next} will send you off."},
+ {"kind":"talk","roles":["park","any"],"npc":"Pip Sprockett","line":"That's all three! The bell goes on top, obviously, that's the ringing bit. Take them to Nadia at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Nadia Sprockett","line":"It stirs! It rings! It also spun the tea onto the ceiling, but that's a version two problem. Have the bell, I've got spares."}
+],"hunt":{"line":"Nadia hides things like a squirrel hides nuts. Go and find {items}, then come back here.","items":[["Copper Coil","minecraft:copper_ingot"],["Brass Gear","minecraft:gold_nugget"],["Tiny Bell","minecraft:bell"]]}},
+{"key":"b_birdwatch","title":"The Big Twitch","finale":"gift","gift":"minecraft:spyglass","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Harriet Plume","line":"Clive Pennywhistle has spotted 312 birds this year. I have 311. Someone saw a rare blue-tailed warbler near {next}. Go, quietly!"},
+ {"kind":"search","roles":["water","park","any"],"thing":"Blue Tail Feather","item":"minecraft:feather","line":"A bright blue feather, the warbler was here! A dog walker says it flew up to the spot where you can see the whole town at once."},
+ {"kind":"riddle","roles":["viewpoint","any"],"hint":"Where the whole town fits in view","line":"There it is, singing! And there's Clive, also watching it, with very fancy binoculars. He waves you over to {next}."},
+ {"kind":"choice","roles":["food_shop","any"],"npc":"Clive Pennywhistle","line":"Harriet sent you? Then prove you saw it. What colour was its tail?","options":["Red","Blue","Green"],"answer":1,"wrong":"Hmm, that's not what I saw. Think about that feather.","right":"Blue. You're real witnesses. Let's tell Harriet together at {next}. It's a tie, and a tie means cake."},
+ {"kind":"talk","roles":["park","any"],"npc":"Harriet Plume","line":"312 each! Clive and I have agreed to share the title, and a bench. Here, a little something for my favourite spotters."}
+]},
+{"key":"b_ghost","title":"The Very Polite Ghost Tour","finale":"friendly_ghost","steps":[
+ {"kind":"talk","roles":["landmark","any"],"npc":"Mortimer Gloom","line":"Gather round! Tonight's tour has three stops. The first is {next}, where a ghost once returned a library book 80 years late."},
+ {"kind":"talk","roles":["culture","faith","any"],"npc":"Edna Marsh","line":"That ghost was my grandad, he just ran very late. Mortimer's next story is where you cross the water and don't get wet."},
+ {"kind":"riddle","roles":["bridge","any"],"hint":"Cross water without getting wet","line":"Mortimer says a ghost here whistles at midnight. It's the wind in a gap, but he's selling whistles. His last stop is {next}."},
+ {"kind":"choice","roles":["park","any"],"npc":"Mortimer Gloom","line":"Final question for my brave group: what did the library ghost really bring back?","options":["A cursed scroll","A library book, 80 years late","A teacup"],"answer":1,"wrong":"Spooky guess, but no. Think back to the very first stop.","right":"Correct! Not spooky, just very overdue. For the grand finale, follow me to {next}. Bring your courage, or a snack."},
+ {"kind":"talk","roles":["faith","park","any"],"npc":"Mortimer Gloom","line":"And here, at last, a real ghost. She's lovely, she just wants someone to say goodnight to. Say goodnight, everyone."}
+]},
+{"key":"b_magician","title":"The Great Zambini's Last Trick","finale":"gift","gift":"minecraft:cake","steps":[
+ {"kind":"talk","roles":["culture","any"],"npc":"The Great Zambini","line":"I'm retiring, and I want one last show. Trouble is, my props are everywhere. My wand was last seen near {next}."},
+ {"kind":"search","roles":["park","any"],"thing":"Zambini's Wand","item":"minecraft:stick","line":"His wand! It's a stick with a ribbon on it, honestly. The tag says 'If found, return to Lottie at {next}.'"},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Lottie Sharpe","line":"Coin, cards, ribbon and wand. That's the whole act. He's waiting at {next}, pretending he isn't nervous."},
+ {"kind":"talk","roles":["civic","park","any"],"npc":"The Great Zambini","line":"Is this your card? It is? After fifty years it finally worked! Thank you. Every good assistant gets cake."}
+],"hunt":{"line":"I was his assistant for thirty years, he sheds props like a dog sheds fur. Bring back {items}.","items":[["Lucky Coin","minecraft:gold_nugget"],["Deck of Cards","minecraft:paper"],["Silk Ribbon","minecraft:string"]]}},
+{"key":"b_critic","title":"The Critic in Disguise","finale":"gift","gift":"minecraft:honey_bottle","steps":[
+ {"kind":"talk","roles":["food_shop","any"],"npc":"A man in a fake moustache","line":"Shh. I'm Basil Thorne, food critic, in disguise. Please taste the town for me, I'm too recognisable. Start at {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Maria Costa","line":"Is that Basil in a moustache? Bless him. Tell him our scones are made with honey, his favourite. Then try the soup at {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Gerald Pike","line":"Soup today is pumpkin, it's always pumpkin. Basil once wrote it was orange in spirit. He's hiding behind a newspaper at {next}."},
+ {"kind":"choice","roles":["park","any"],"npc":"Basil Thorne","line":"Report! Which place uses honey, my favourite thing in the world?","options":["The soup place","The scone place","Neither, sadly"],"answer":1,"wrong":"No, that was the pumpkin soup. Think about what Maria told you.","right":"Honey scones! Five stars. Let me peel off this moustache and meet you at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Basil Thorne","line":"My review: this town is delicious, and very kind to strangers in moustaches. Here, share this, critic's orders."}
+]},
+{"key":"b_timetraveller","title":"Not From Around Here, or Now","finale":"gift","gift":"minecraft:clock","steps":[
+ {"kind":"talk","roles":["station","any"],"npc":"Professor Tock","line":"Greetings from the year 2186! My time machine needs a part only found in your era: a decent cup of tea. Try {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Ivy Moss","line":"Him again? He's been from the future every Tuesday since 1998. Here's his tea. He dropped his watch near {next}, by the way."},
+ {"kind":"search","roles":["landmark","park","any"],"thing":"Pocket Watch","item":"minecraft:clock","line":"A pocket watch, set exactly one hour fast. Engraved: 'To Tock, who is always early.' He's waiting at {next}."},
+ {"kind":"choice","roles":["viewpoint","any"],"npc":"Professor Tock","line":"My chronometer! Tell me, is it set to the past, the present or the future?","options":["The past","Exactly now","The future, an hour ahead"],"answer":2,"wrong":"Look again, it's ahead of everyone else's.","right":"The future! Only an hour, but still. I am a time traveller, just a slow one. Walk with me to {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Professor Tock","line":"We all travel through time, one minute per minute, I'm just a bit ahead. Keep a clock of your own, so you're never late either."}
+]},
+{"key":"b_superfan","title":"Number One Fan","finale":"band_reunion","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Kiki Lark","line":"I'm the number one fan of The Soggy Biscuits, who split up in 2003 over a sandwich. I want them back together! The drummer works at {next}."},
+ {"kind":"choice","roles":["food_shop","any"],"npc":"Dez Okafor","line":"A reunion? Only if they've forgiven me. Do you even know what we argued about?","options":["Who sings loudest","A sandwich","The band name"],"answer":1,"wrong":"Kiki tells everyone the story. Think about lunch.","right":"A sandwich. Ham, I think. It's silly now. Our singer teaches at {next}, go ask her."},
+ {"kind":"talk","roles":["school","any"],"npc":"Ruth Lane","line":"Pick, lyrics and drumsticks, we're a band again. Tell Kiki to bring everyone to {next}, and maybe a sandwich to share."},
+ {"kind":"talk","roles":["park","any"],"npc":"Kiki Lark","line":"They're playing! All four of them! And they're sharing a sandwich on stage! This is the best day of my life."}
+],"hunt":{"line":"If we're doing this, we need our old gear. It's scattered all over town. Fetch {items}.","items":[["Guitar Pick","minecraft:flint"],["Lyric Sheet","minecraft:paper"],["Drumstick","minecraft:stick"]]}},
+{"key":"b_ufo_1","title":"Lights Over the Park","series":"b_ufo","episode":1,"finale":"gift","gift":"minecraft:glow_ink_sac","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Orla Starling","line":"Three nights running, lights over the park! Blinking, gliding, very un-plane-like. A witness saw them from {next}, let's interview him."},
+ {"kind":"talk","roles":["landmark","any"],"npc":"Frank Hollis","line":"Green and red lights, blinking, low over the trees around nine. And a buzzing, like a very small bee with a very big job. Look around {next}."},
+ {"kind":"search","roles":["park","any"],"thing":"Tiny Metal Part","item":"minecraft:iron_nugget","line":"A tiny metal bit with a screw hole. Alien technology? Orla wants it shown to someone who knows machines, at {next}."},
+ {"kind":"choice","roles":["school","any"],"npc":"Mr. Patel","line":"Interesting part. And Frank said the lights were what colours?","options":["Green and red","Purple and gold","Just white"],"answer":0,"wrong":"That's not what Frank told you. Think back.","right":"Green and red, blinking. That rings a bell, but I won't spoil it. Tell Orla, she's at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Orla Starling","line":"Green and red, buzzing, and a metal part! The evidence is piling up. Same time next week, partners. Glow in the dark, so they can find us."}
+]},
+{"key":"b_ufo_2","title":"The Landing Site","series":"b_ufo","episode":2,"finale":"gift","gift":"minecraft:cookie","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Orla Starling","line":"Big news, the lights came back and something landed! Well, bumped into a hedge. Near {next}. Bring notebooks."},
+ {"kind":"search","roles":["park","landmark","any"],"thing":"Crumpled Note","item":"minecraft:paper","line":"A note: 'Practice H, then A, then P, then P...' Orla thinks it's an alien alphabet. A gardener at {next} might have seen something."},
+ {"kind":"talk","roles":["park","any"],"npc":"Bea Fennel","line":"It bumped my roses and said sorry in a tiny old man voice, I think. Then it buzzed up toward the spot with the best view of town."},
+ {"kind":"riddle","roles":["viewpoint","any"],"hint":"Where you can see it all","line":"From up here: a blinking light in a window nearby, practising little loops. Orla is beside herself. Report to her at {next}."},
+ {"kind":"choice","roles":["any"],"npc":"Orla Starling","line":"The note said H, A, P, P. What do you think it's trying to spell?","options":["HAPPY","HELLO","HOME"],"answer":0,"wrong":"Check the letters on the note again, the first four.","right":"HAPPY! The aliens are happy! Or someone is. Next week, we find out who. Meet me at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Orla Starling","line":"A window, a note and a happy alien. One more night and we'll know everything. Take a cookie, it might be a long stakeout."}
+]},
+{"key":"b_ufo_3","title":"Close Encounter","series":"b_ufo","episode":3,"finale":"stargazer","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Orla Starling","line":"Tonight we meet the pilot. Remember: green and red lights, spelling HAPP-something. The blinking window is by {next}. Knock politely, like ambassadors."},
+ {"kind":"choice","roles":["any"],"npc":"Wilf Ambrose","line":"Lights? Blinking? Go on then, what colours were they, if you're so sure it's me?","options":["Green and red","Blue and yellow","All the rainbow"],"answer":0,"wrong":"Nope, not mine. Orla told you the colours, didn't she?","right":"Fine, it's me! It's my toy plane with fairy lights, spelling HAPPY 50TH for my wife. Help? My grandson's at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Sam Ambrose","line":"All fixed! Grandad's launching from {next}, and Gran's coming out to look at the stars. Shh, act casual."},
+ {"kind":"talk","roles":["viewpoint","park","any"],"npc":"Orla Starling","line":"HAPPY 50TH, in green and red, right across the sky. It wasn't aliens. It was better. I'm still keeping my tinfoil hat, though."}
+],"hunt":{"line":"Grandad's plane has been dropping bits all week. Find {items} and it'll fly perfectly.","items":[["Spare Propeller","minecraft:stick"],["Fairy Light Bulb","minecraft:glowstone_dust"],["Tiny Screw","minecraft:iron_nugget"]]}},
+{"key":"b_film_1","title":"Mildly Surprised Extras","series":"b_film","episode":1,"finale":"gift","gift":"minecraft:bread","steps":[
+ {"kind":"talk","roles":["landmark","any"],"npc":"Juno Reel","line":"I'm shooting a tiny film about a lost umbrella and I need extras! Wardrobe is at {next}, tell them Juno sent you."},
+ {"kind":"talk","roles":["culture","any"],"npc":"Ffion Hale","line":"Extras for Juno? Here's the brief: walk past slowly and look mildly surprised. That's it, that's the acting. Scene one is at {next}."},
+ {"kind":"choice","roles":["station","park","any"],"npc":"Juno Reel","line":"Places, everyone! Remind me what wardrobe told you. How do my extras walk?","options":["Run and shout","Slowly, mildly surprised","Dancing in the back"],"answer":1,"wrong":"Lovely energy, but wardrobe gave you the brief. Think back.","right":"Perfectly surprised, print it! Oh no, page one of my script blew away, toward {next}."},
+ {"kind":"search","roles":["park","any"],"thing":"Script Page One","item":"minecraft:paper","line":"Page one, damp but readable: 'Scene: an umbrella is lost.' Very meta. Take it back to Juno at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Juno Reel","line":"Day one, done. You were the best mildly surprised people I've ever filmed. Here's your extra's pay, I'm afraid it's bread."}
+]},
+{"key":"b_film_2","title":"The Big Scene","series":"b_film","episode":2,"finale":"gift","gift":"minecraft:pumpkin_pie","steps":[
+ {"kind":"talk","roles":["landmark","any"],"npc":"Juno Reel","line":"Big scene today, but my lead Harold has stage fright and forgot his only line. The writer, Priya, is at {next}. Ask her."},
+ {"kind":"talk","roles":["culture","school","any"],"npc":"Priya Shah","line":"His line is 'At last, it's stopped raining.' Five words, he's practised since March. He's hiding at {next}, poor dear."},
+ {"kind":"choice","roles":["park","any"],"npc":"Harold Finch","line":"I can't remember it. Something about the weather? Which one is it?","options":["At last, it's stopped raining","What a lovely sunny day","Is it Tuesday?"],"answer":0,"wrong":"No, that's not it. Priya said it had rain in it.","right":"That's it! I can do this. But the crew lost their gear, and the gaffer at {next} needs a hand."},
+ {"kind":"talk","roles":["any"],"npc":"Dot the gaffer","line":"All here! Harold's ready, and Juno is shouting action at {next}. Go, go, quietly!"},
+ {"kind":"talk","roles":["landmark","park","any"],"npc":"Juno Reel","line":"He said it! Five words, perfect, and then he bowed, which wasn't in the script. I kept it. Here, a little wrap gift."}
+],"hunt":{"line":"Gear everywhere, like a parade went through. Find {items} and we can roll.","items":[["Script Pages","minecraft:paper"],["Lucky Ribbon","minecraft:string"],["Lens Cap","minecraft:iron_nugget"]]}},
+{"key":"b_film_3","title":"The Premiere","series":"b_film","episode":3,"finale":"surprise_party","steps":[
+ {"kind":"talk","roles":["landmark","any"],"npc":"Juno Reel","line":"The film's done! Eleven minutes, three of them are the umbrella. The premiere's tonight, but I forgot posters. Lenny prints things at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Lenny Cho","line":"Posters, sure, but which title? Her napkin says The Lost Umbrella, Wet Tuesday and Brolly, and the last two are crossed out. Ask Harold at {next}."},
+ {"kind":"choice","roles":["park","any"],"npc":"Harold Finch","line":"I'm the star and nobody told me the title. Which one made the cut?","options":["Wet Tuesday","The Lost Umbrella","Brolly"],"answer":1,"wrong":"That one's crossed out, Lenny said so.","right":"The Lost Umbrella. Classic. Now Juno wants to screen it where the town meets to make its big decisions. Go find it."},
+ {"kind":"riddle","roles":["civic","any"],"hint":"Where the town decides things","line":"A big blank wall, perfect for a screen. Juno says to gather the whole cast at {next} for the red carpet."},
+ {"kind":"talk","roles":["park","landmark","any"],"npc":"Juno Reel","line":"Eleven minutes, and everyone clapped for all of them. Even the umbrella took a bow. Thank you, my wonderful extras. Party time!"}
+]},
+{"key":"b_mime","title":"The Mime's First Word","finale":"gift","gift":"minecraft:cornflower","steps":[
+ {"kind":"talk","roles":["culture","any"],"npc":"Marcel the mime","line":"(Marcel holds up a card: 'Silent for 30 years. My granddaughter graduates today. Help me pick my first word.' He points at {next}.)"},
+ {"kind":"talk","roles":["school","any"],"npc":"Amelie","line":"Grandpa wants to talk? He mimed proud at me every day since I was six, chest out, thumbs up. His old partner is at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Silent Sue","line":"(Sue mimes being stuck in a box, steps out, and hands you a note: 'He practised one word in the mirror for years. It starts with P. He's at {next}.')"},
+ {"kind":"choice","roles":["any"],"npc":"Marcel the mime","line":"(Marcel holds up three cards and raises his eyebrows very high. Which should be his first word?)","options":["Pancakes","Proud","Please"],"answer":1,"wrong":"(Marcel shakes his head kindly, mimes a small girl, then a thumbs up. Think of Amelie.)","right":"(Marcel nods, takes a huge breath, and marches you toward {next}, chest out, thumbs up.)"},
+ {"kind":"talk","roles":["school","any"],"npc":"Marcel the mime","line":"Proud. (He said it! His voice is very squeaky. Amelie is crying. Marcel mimes handing you a flower, then really does.)"}
+]},
+{"key":"b_bench","title":"The Bench Inspector","finale":"gift","gift":"minecraft:oak_sign","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Ida Grant","line":"I'm the town's unofficial bench inspector. Forty years, 212 benches. Today, the bench by {next}. Sit on it, report back, be honest."},
+ {"kind":"search","roles":["viewpoint","park","any"],"thing":"Little Brass Plaque","item":"minecraft:gold_nugget","line":"A plaque fell off the bench: 'For Walter, who likes the view and a good sandwich.' Ida's friend Pearl at {next} might know Walter."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Pearl Okoye","line":"Walter! Cheese and pickle every lunch for twenty years. Ida's sweet on him, she just rated him four stars. He's feeding ducks by {next}."},
+ {"kind":"choice","roles":["water","any"],"npc":"Walter Briggs","line":"Ida sent you? What does my plaque say I like, besides the view?","options":["A good sandwich","A long nap","Loud music"],"answer":0,"wrong":"Not quite, have another look at that plaque.","right":"A good sandwich, yes. Tell Ida I'll bring two to {next}, and that it's a five star bench now."},
+ {"kind":"talk","roles":["park","any"],"npc":"Ida Grant","line":"He's bringing two sandwiches? Well. That bench is five stars, and maybe Walter too. Here, make a sign for the next good bench you find."}
+]},
+{"key":"b_dowser","title":"Doug and the Divining Stick","finale":"gift","gift":"minecraft:stick","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Doug Rumbold","line":"This stick finds water, it's never wrong, mostly. Today it's twitching toward somewhere wet where the ducks hang about. Follow the stick!"},
+ {"kind":"riddle","roles":["water","any"],"hint":"Where the ducks hang about","line":"Water! Doug is thrilled. Now the stick twitches again and he says it means lost and shiny. Search around {next}."},
+ {"kind":"search","roles":["park","any"],"thing":"Gold Ring","item":"minecraft:gold_nugget","line":"A gold ring in the grass, engraved 'D and M, 1979'. Doug's wife Marion is at {next}, she's been hoping for this."},
+ {"kind":"choice","roles":["food_shop","any"],"npc":"Marion Rumbold","line":"Our ring! Doug lost it dowsing last spring. Go on, what's engraved inside?","options":["D and M, 1979","Forever Doug","Property of the stick"],"answer":0,"wrong":"Ha! No, look again, it's our initials.","right":"D and M. Let's give the stick the credit, he'll love that. Find Doug at {next}, I'm right behind you."},
+ {"kind":"talk","roles":["park","any"],"npc":"Doug Rumbold","line":"My ring! The stick did it! (Marion winks at you.) Here, every dowser needs a stick. Don't let it go to your head."}
+]},
+{"key":"b_psychic","title":"Madame Woof Sees All","finale":"lost_dog","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Madame Woof","line":"I am Madame Woof, pet psychic. A little dog called Biscuit is missing, and I sense... bread. A strong smell of bread. Try {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Tom the baker","line":"Biscuit? Scruffy little thing, one ear up? He had his usual crust, then trotted off toward {next}, very pleased with himself."},
+ {"kind":"search","roles":["park","any"],"thing":"Little Dog Tag","item":"minecraft:iron_nugget","line":"A tag: 'BISCUIT. If found, he's probably nearby being adored.' Madame Woof is at {next}, having a vision."},
+ {"kind":"choice","roles":["any"],"npc":"Madame Woof","line":"My visions are cloudy. Remind my spirit guides, what does Biscuit look like?","options":["Big and spotty","Scruffy, one ear up","Fluffy and white"],"answer":1,"wrong":"The spirits say no. What did the baker tell you?","right":"Scruffy, one ear up. I see him! He's being adored by {next}. Go!"},
+ {"kind":"talk","roles":["park","any"],"npc":"Madame Woof","line":"Biscuit! Exactly where my visions said, roughly. Fine, the baker helped. But I felt it in my heart. Good dog."}
+]},
+{"key":"b_catmayor","title":"Vote Whiskers","finale":"cat_mayor","steps":[
+ {"kind":"talk","roles":["civic","any"],"npc":"Reggie Bloom","line":"I'm campaigning to make Whiskers the cat our honorary mayor. We need signatures! Start with the regulars at {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Nora Quill","line":"Whiskers? She naps on my windowsill every day at noon, like clockwork. Of course I'll sign. The kids at {next} adore her too."},
+ {"kind":"talk","roles":["school","any"],"npc":"Leo, age eight","line":"We drew forty posters. Whiskers sat on one and licked another, which counts as yes. Reggie's practising his speech at {next}."},
+ {"kind":"choice","roles":["landmark","any"],"npc":"Reggie Bloom","line":"One last fact for my speech: when does Whiskers nap at Nora's window?","options":["Midnight","Noon","Teatime"],"answer":1,"wrong":"Nora told you, think lunchtime.","right":"Noon! A mayor with a schedule. The ceremony's at {next}, bring everyone."},
+ {"kind":"talk","roles":["civic","park","any"],"npc":"Reggie Bloom","line":"By the power of 300 signatures and one licked poster, I give you Mayor Whiskers! She's asleep. Very mayoral."}
+]},
+{"key":"b_capsule","title":"The Forgetful Historian","finale":"time_capsule","steps":[
+ {"kind":"talk","roles":["culture","any"],"npc":"Dr. Agatha Penn","line":"I buried a time capsule in 1985 and wrote the clues in rhyme so I'd remember. I don't. Clue one: start where the whole town waits for a ride."},
+ {"kind":"riddle","roles":["station","any"],"hint":"Where the town waits for a ride","line":"Clue two, scratched on a post: 'Next, where the bread smells best.' Agatha admits she was very hungry in 1985."},
+ {"kind":"riddle","roles":["food_shop","any"],"hint":"Where the bread smells best","line":"The baker remembers! 'Dr. Penn bought a bun and walked off with a shovel.' She went toward {next}."},
+ {"kind":"search","roles":["park","any"],"thing":"Old Map Scrap","item":"minecraft:paper","line":"A scrap of map with an X: 'Under the third tree from the left, you clever thing.' Take it to Agatha at {next}."},
+ {"kind":"talk","roles":["park","any"],"npc":"Dr. Agatha Penn","line":"The third tree! Let's open it. My 1985 self left a note: 'Hope you found this, you clever thing.' I did, with help."}
+]},
+{"key":"b_record","title":"Barry Attempts a Record","finale":"gift","gift":"minecraft:gold_ingot","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Barry Long","line":"I've attempted 41 world records and failed all 41. Today: most hellos in one afternoon! The first hello is at {next}. Bring a smile."},
+ {"kind":"talk","roles":["any"],"npc":"Gloria Penny","line":"A hello record? Lovely. Hello! That's one. Barry's tally keeper is waiting at {next}, he'll want the count."},
+ {"kind":"choice","roles":["station","any"],"npc":"Sid the tally keeper","line":"For the certificate, how many records has Barry failed before today?","options":["None at all","Forty-one","Twelve"],"answer":1,"wrong":"Less lucky than that, sadly. Barry told you himself.","right":"Forty-one. This could be his first win! Barry's waiting at {next} with the next bit."},
+ {"kind":"talk","roles":["park","any"],"npc":"Barry Long","line":"Three neighbours, three hellos, all proven! The official judge, my mum, is at {next}."},
+ {"kind":"talk","roles":["civic","any"],"npc":"Barry's mum","line":"Most hellos in one afternoon, a record! Nobody else tried, but it counts. Barry's first win. Here, it's a medal, roughly."}
+],"hunt":{"line":"The judges need proof. Each neighbour left a hello token. Collect {items}.","items":[["Hello Card","minecraft:paper"],["Friendship Bracelet","minecraft:string"],["Shiny Button","minecraft:iron_nugget"]]}},
+{"key":"b_gnome","title":"Gnomes on Holiday","finale":"postcard_tour","steps":[
+ {"kind":"talk","roles":["any"],"npc":"Mrs. Thistle","line":"My garden gnomes go on holiday every summer and send postcards. Three haven't come home this year. The last postcard came from near {next}."},
+ {"kind":"search","roles":["park","any"],"thing":"Gnome Postcard","item":"minecraft:paper","line":"Tiny writing: 'Having a lovely time. Back soon. P.S. The other two are with Kofi.' Kofi is at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Kofi Mensah","line":"Souvenirs found, and all three gnomes asleep in my shed. Carry them home to Mrs. Thistle at {next}."},
+ {"kind":"talk","roles":["any"],"npc":"Mrs. Thistle","line":"All home! And look at all the postcards from their travels. Next year, I'm going with them."}
+],"hunt":{"line":"Those gnomes left souvenirs all over town, terrible tourists. Collect {items}.","items":[["Pebble Souvenir","minecraft:flint"],["Tiny Postcard","minecraft:paper"],["Seashell Souvenir","minecraft:nautilus_shell"]]}},
+{"key":"b_yarn","title":"Granny Purl's Secret Stitches","finale":"gift","gift":"minecraft:red_wool","steps":[
+ {"kind":"talk","roles":["park","any"],"npc":"Granny Purl","line":"Someone's been knitting cosy jumpers for lamp posts all over town. It's me. I'm 84. Help me with my biggest project? Start at {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Hal Brennan","line":"Granny Purl? She knitted my teapot a hat. She'll need more wool, she hides a stash near {next} so her daughter won't find it."},
+ {"kind":"search","roles":["park","any"],"thing":"Secret Wool Stash","item":"minecraft:string","line":"A tin of wool, every colour, and a note: 'Do not tell Linda.' Linda, her daughter, is at {next}. Act natural."},
+ {"kind":"choice","roles":["any"],"npc":"Linda Purl","line":"Mum's knitting again, isn't she? Be honest. What did she knit for Hal's teapot?","options":["A scarf","A hat","Tiny socks"],"answer":1,"wrong":"No, Hal told you. Think about what keeps your head warm.","right":"A hat. Of course. Tell her I'm not cross, I'm proud, and I'll meet you both at {next}."},
+ {"kind":"talk","roles":["bridge","park","any"],"npc":"Granny Purl","line":"Linda's helping? Then the bridge jumper will be done by Friday. Take this, everyone in the knitting club gets some."}
+]}
+]}
