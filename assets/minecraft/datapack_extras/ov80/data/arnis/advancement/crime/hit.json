@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "hit": {
+      "trigger": "minecraft:player_hurt_entity",
+      "conditions": {
+        "entity": {
+          "type": "minecraft:skeleton",
+          "nbt": "{Tags:[\"arnis.cop\"]}"
+        }
+      }
+    }
+  },
+  "rewards": {
+    "function": "arnis:crime/hit"
+  }
+}

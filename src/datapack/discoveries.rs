@@ -193,6 +193,32 @@ const STREET_SLACK: i32 = 6;
 impl Place {
     /// Moves the travel anchor off buildings and water to the nearest open cell, or to a
     /// street a few blocks further out, and records the ground height there.
+    /// For a story: the nearest cell within reach where `walkable` holds, so its person
+    /// stands where players can walk to; false, leaving the place as it is, when none does.
+    pub fn settle_on(
+        &mut self,
+        walkable: impl Fn(i32, i32) -> bool,
+        ground_y: impl Fn(i32, i32) -> i32,
+    ) -> bool {
+        let (cx, cz) = self.anchor;
+        let found = (0..=SETTLE_RADIUS).find_map(|r| {
+            (-r..=r)
+                .flat_map(|d| {
+                    [
+                        (cx + d, cz - r),
+                        (cx + d, cz + r),
+                        (cx - r, cz + d),
+                        (cx + r, cz + d),
+                    ]
+                })
+                .find(|&(x, z)| walkable(x, z))
+        });
+        let Some(at) = found else { return false };
+        self.anchor = at;
+        self.ground_y = Some(ground_y(at.0, at.1));
+        true
+    }
+
     pub fn settle(
         &mut self,
         open: impl Fn(i32, i32) -> bool,

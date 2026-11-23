@@ -1,2 +1,2 @@
-scoreboard players set @s arnis.cr.kill 0
+advancement revoke @s only arnis:crime/kill
 function arnis:crime/spotted

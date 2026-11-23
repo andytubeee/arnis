@@ -1,3 +1,4 @@
+scoreboard players set #moved arnis.story 1
 function arnis:story/hunt/stop
 function arnis:story/current
 scoreboard players operation #last arnis.story = #steps arnis.story
@@ -5,7 +6,7 @@ scoreboard players remove #last arnis.story 1
 # A right answer's reply, which says where to go next.
 execute if data storage arnis:story cur{kind:"choice"} run tellraw @a [{"storage":"arnis:story","nbt":"cur.npc","color":"aqua"},{"text":": ","color":"aqua"},{"storage":"arnis:story","nbt":"cur.after","color":"white"}]
 # The finale plays where its person stands on the ground, or at the place if nobody is there.
-execute as @e[type=minecraft:villager,tag=arnis.story_npc] if score @s arnis.story = #step arnis.story run tag @s add arnis.story_here
+execute as @e[type=minecraft:villager,tag=arnis.story_npc] if score @s arnis.story = #sid arnis.story run tag @s add arnis.story_here
 execute if score #step arnis.story = #last arnis.story at @e[tag=arnis.story_here,limit=1] run function arnis:story/finish_at with storage arnis:story cur
 execute if score #step arnis.story = #last arnis.story unless entity @e[tag=arnis.story_here] run function arnis:story/finish with storage arnis:story cur
 execute as @e[type=minecraft:villager,tag=arnis.story_here] at @s run function arnis:story/leave

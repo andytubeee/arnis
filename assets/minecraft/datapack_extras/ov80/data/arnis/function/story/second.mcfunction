@@ -4,10 +4,12 @@ execute as @a unless score @s arnis.story.seen matches 0.. run function arnis:st
 function arnis:story/errand/second
 execute if score #step arnis.story >= #steps arnis.story run return run function arnis:story/between
 function arnis:story/current
+execute unless data storage arnis:story cur{kind:"search"} run kill @e[type=minecraft:item,tag=arnis.search]
+execute unless score #hunt arnis.story matches 1 run kill @e[type=minecraft:item,tag=arnis.hunt]
 execute if score #step arnis.story = #hunt_step arnis.story if score #hunt arnis.story matches 1.. run function arnis:story/hunt/second
 execute if data storage arnis:story cur{kind:"riddle"} run return run function arnis:story/beat/riddle with storage arnis:story cur
 execute if data storage arnis:story cur{kind:"search"} run return run function arnis:story/beat/search with storage arnis:story cur
 # Whoever waits at the current stop is there while a player is near, glowing to be found.
-execute as @e[type=minecraft:villager,tag=arnis.story_npc] unless score @s arnis.story = #step arnis.story run kill @s
+execute as @e[type=minecraft:villager,tag=arnis.story_npc] unless score @s arnis.story = #sid arnis.story run kill @s
 execute unless entity @e[type=minecraft:villager,tag=arnis.story_npc] run function arnis:story/spawn with storage arnis:story cur
 execute as @e[type=minecraft:villager,tag=arnis.story_npc] at @s unless entity @a[distance=..64] run kill @s

@@ -9,5 +9,5 @@ execute if score #r arnis.story matches 4 run give @a minecraft:music_disc_cat
 execute if score #r arnis.story matches 5 run give @a minecraft:emerald 2
 execute if score #r arnis.story matches 6 run give @a minecraft:cake
 tellraw @a {"text":"Errand done! Someone's day just got better, and there's a little thank-you in your pocket.","color":"green"}
-playsound minecraft:entity.player.levelup master @a ~ ~ ~ 0.6 1.4
+execute as @a at @s run playsound minecraft:entity.player.levelup master @s ~ ~ ~ 0.6 1.4
 function arnis:story/errand/reset

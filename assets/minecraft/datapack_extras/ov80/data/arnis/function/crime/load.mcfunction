@@ -7,9 +7,10 @@ scoreboard objectives add arnis.wanted dummy
 scoreboard objectives add arnis.hide dummy
 scoreboard objectives add arnis.unseen dummy
 scoreboard objectives add arnis.cr.die deathCount
-scoreboard objectives add arnis.cr.hit minecraft.custom:minecraft.damage_dealt
-# With mob spawning off, the only skeletons are police.
-scoreboard objectives add arnis.cr.kill minecraft.killed:minecraft.skeleton
+# Hurting or killing an officer is caught by advancements (crime/hit, crime/kill), which
+# see arrows too and blame only who did it; the old counters go.
+scoreboard objectives remove arnis.cr.hit
+scoreboard objectives remove arnis.cr.kill
 # Mobs leave alone whoever shares their team, so calm police and the law-abiding share one.
 # Friendly fire stays on, as it is by default, so hitting an officer still lands.
 team add arnis.law

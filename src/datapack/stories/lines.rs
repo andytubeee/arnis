@@ -368,6 +368,11 @@ pub(crate) mod tests {
                     "{k}: hunt"
                 );
                 assert!(h.line.contains("{items}"), "{k}: hunt line");
+                // {items} already reads "the Label at Place, ...".
+                assert!(
+                    !h.line.to_lowercase().contains("the {items}"),
+                    "{k}: the the"
+                );
                 assert!(
                     h.items.iter().all(|(l, i)| label(l) && item(i)),
                     "{k}: hunt items"

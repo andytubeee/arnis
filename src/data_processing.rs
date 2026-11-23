@@ -2014,9 +2014,17 @@ pub fn generate_world_with_options(
     });
     let roads =
         (extras.stories || extras.crime).then(|| crate::datapack::roads::Graph::build(&elements));
+    // A story's person stands on a street or path, off any bridge deck (where the ground
+    // is far below), and places with none near are left out, so no step is out of reach.
     let story_places = extras.stories.then(|| {
+        let open = |x, z| {
+            xzbbox.contains(&crate::coordinate_system::cartesian::XZPoint::new(x, z))
+                && !building_footprints.contains(x, z)
+                && ground.cover_class(rel(x, z)) != crate::land_cover::LC_WATER
+        };
+        let walkable = |x, z| road_mask.contains(x, z) && !bridge_surface.contains(x, z);
         let mut places = crate::datapack::stories::places::collect(&elements, &xzbbox);
-        places.iter_mut().for_each(|p| settle(&mut p.place));
+        places.retain_mut(|p| p.settle(open, walkable, |x, z| ground.level(rel(x, z))));
         places
     });
 

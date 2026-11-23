@@ -438,6 +438,8 @@ const CRIME: &[(&str, &[u8])] = static_files![
     "ov80/data/arnis/function/crime/difficulty.mcfunction",
     "ov80/data/arnis/function/crime/dress.mcfunction",
     "ov80/data/arnis/function/crime/heat.mcfunction",
+    "ov80/data/arnis/advancement/crime/hit.json",
+    "ov80/data/arnis/advancement/crime/kill.json",
     "ov80/data/arnis/function/crime/hit.mcfunction",
     "ov80/data/arnis/function/crime/hud.mcfunction",
     "ov80/data/arnis/function/crime/intro.mcfunction",
@@ -1550,6 +1552,33 @@ mod tests {
     }
 
     #[test]
+    fn every_menu_button_the_menu_offers_is_defined() {
+        let out = files(&ctx(all()));
+        let f = |p: &str| {
+            text_of(
+                &out,
+                &format!("ov80/data/arnis/function/npc/{p}.mcfunction"),
+            )
+            .unwrap()
+        };
+        let lines = f("lines");
+        let defined = lines
+            .lines()
+            .find(|l| l.contains("storage arnis:npc buttons set value"))
+            .expect("the buttons are set");
+        for key in f("open").split("buttons.").skip(1).map(|r| {
+            r.split(|c: char| !c.is_ascii_alphanumeric())
+                .next()
+                .unwrap()
+        }) {
+            assert!(
+                defined.contains(&format!("{key}:{{")),
+                "button {key} never defined"
+            );
+        }
+    }
+
+    #[test]
     fn the_menu_click_needs_no_version_specific_predicate() {
         // Predicates are spelled three ways across versions; the function filters instead.
         let out = files(&ctx(all()));
@@ -1561,10 +1590,10 @@ mod tests {
     fn only_the_current_steps_person_counts() {
         let out = files(&ctx(all()));
         let spawn = text_of(&out, "ov80/data/arnis/function/story/spawn.mcfunction").unwrap();
-        assert!(spawn.contains("arnis.story = #step arnis.story"), "{spawn}");
+        assert!(spawn.contains("arnis.story = #sid arnis.story"), "{spawn}");
         let second = text_of(&out, "ov80/data/arnis/function/story/second.mcfunction").unwrap();
         assert!(
-            second.contains("unless score @s arnis.story = #step arnis.story run kill @s"),
+            second.contains("unless score @s arnis.story = #sid arnis.story run kill @s"),
             "{second}"
         );
     }

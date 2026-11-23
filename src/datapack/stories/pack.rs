@@ -181,9 +181,10 @@ impl Story {
                     write!(s, ",kind:\"riddle\",hint:{}", json_text(&json!(hint))).unwrap();
                 }
                 Beat::Search { thing, item, .. } => {
+                    let (hx, hz) = self.places[i].nook;
                     write!(
                         s,
-                        ",kind:\"search\",thing:{},item:\"{item}\"",
+                        ",kind:\"search\",thing:{},item:\"{item}\",hx:{hx},hz:{hz}",
                         json_text(&json!(thing))
                     )
                     .unwrap();
@@ -343,7 +344,7 @@ mod tests {
             "{line}"
         );
         assert!(
-            line.contains("kind:\"search\",thing:\"Old Key\",item:\"minecraft:tripwire_hook\""),
+            line.contains("kind:\"search\",thing:\"Old Key\",item:\"minecraft:tripwire_hook\",hx:"),
             "{line}"
         );
         // The choice's right answer is step 3's button; the others only nudge.

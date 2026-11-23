@@ -5,7 +5,7 @@ execute if score #f0 arnis.story matches 0 run function arnis:story/hunt/thing w
 execute if score #f1 arnis.story matches 0 run function arnis:story/hunt/thing with storage arnis:story hunt[1]
 execute if score #f2 arnis.story matches 0 run function arnis:story/hunt/thing with storage arnis:story hunt[2]
 # Friends who leave mid-hunt never leave someone alone with a two-person lift.
-execute store result score #n arnis.story if entity @a[gamemode=!spectator]
+execute in minecraft:overworld store result score #n arnis.story if entity @a[gamemode=!spectator,distance=0..]
 execute if score #n arnis.story matches ..1 run scoreboard players set #duo arnis.story 0
 execute as @e[type=minecraft:item,tag=arnis.heavy] at @s run function arnis:story/hunt/lift
 execute at @e[type=minecraft:item,tag=arnis.hunt] run particle minecraft:end_rod ~ ~2 ~ 0.1 2 0.1 0.01 6 force

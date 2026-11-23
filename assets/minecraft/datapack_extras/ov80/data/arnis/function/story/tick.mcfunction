@@ -1,3 +1,4 @@
+scoreboard players set #moved arnis.story 0
 scoreboard players enable @a arnis.story.ctl
 execute as @a[scores={arnis.story.ctl=1..}] at @s run function arnis:story/control
 scoreboard players add #story_t arnis.story 1

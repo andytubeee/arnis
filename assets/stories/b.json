@@ -103,8 +103,8 @@
 {"key":"b_film_3","title":"The Premiere","series":"b_film","episode":3,"finale":"surprise_party","steps":[
  {"kind":"talk","roles":["landmark","any"],"npc":"Juno Reel","line":"The film's done! Eleven minutes, three of them are the umbrella. The premiere's tonight, but I forgot posters. Lenny prints things at {next}."},
  {"kind":"talk","roles":["any"],"npc":"Lenny Cho","line":"Posters, sure, but which title? Her napkin says The Lost Umbrella, Wet Tuesday and Brolly, and the last two are crossed out. Ask Harold at {next}."},
- {"kind":"choice","roles":["park","any"],"npc":"Harold Finch","line":"I'm the star and nobody told me the title. Which one made the cut?","options":["Wet Tuesday","The Lost Umbrella","Brolly"],"answer":1,"wrong":"That one's crossed out, Lenny said so.","right":"The Lost Umbrella. Classic. Now Juno wants to screen it where the town meets to make its big decisions. Go find it."},
- {"kind":"riddle","roles":["civic","any"],"hint":"Where the town decides things","line":"A big blank wall, perfect for a screen. Juno says to gather the whole cast at {next} for the red carpet."},
+ {"kind":"choice","roles":["park","any"],"npc":"Harold Finch","line":"I'm the star and nobody told me the title. Which one made the cut?","options":["Wet Tuesday","The Lost Umbrella","Brolly"],"answer":1,"wrong":"That one's crossed out, Lenny said so.","right":"The Lost Umbrella. Classic. Now Juno wants to screen it at one of the town's public buildings, go find one."},
+ {"kind":"riddle","roles":["civic","any"],"hint":"A public building","line":"A big blank wall, perfect for a screen. Juno says to gather the whole cast at {next} for the red carpet."},
  {"kind":"talk","roles":["park","landmark","any"],"npc":"Juno Reel","line":"Eleven minutes, and everyone clapped for all of them. Even the umbrella took a bow. Thank you, my wonderful extras. Party time!"}
 ]},
 {"key":"b_mime","title":"The Mime's First Word","finale":"gift","gift":"minecraft:cornflower","steps":[
@@ -129,23 +129,23 @@
  {"kind":"talk","roles":["park","any"],"npc":"Doug Rumbold","line":"My ring! The stick did it! (Marion winks at you.) Here, every dowser needs a stick. Don't let it go to your head."}
 ]},
 {"key":"b_psychic","title":"Madame Woof Sees All","finale":"lost_dog","steps":[
- {"kind":"talk","roles":["park","any"],"npc":"Madame Woof","line":"I am Madame Woof, pet psychic. A little dog called Biscuit is missing, and I sense... bread. A strong smell of bread. Try {next}."},
- {"kind":"talk","roles":["food_shop","any"],"npc":"Tom the baker","line":"Biscuit? Scruffy little thing, one ear up? He had his usual crust, then trotted off toward {next}, very pleased with himself."},
- {"kind":"search","roles":["park","any"],"thing":"Little Dog Tag","item":"minecraft:iron_nugget","line":"A tag: 'BISCUIT. If found, he's probably nearby being adored.' Madame Woof is at {next}, having a vision."},
- {"kind":"choice","roles":["any"],"npc":"Madame Woof","line":"My visions are cloudy. Remind my spirit guides, what does Biscuit look like?","options":["Big and spotty","Scruffy, one ear up","Fluffy and white"],"answer":1,"wrong":"The spirits say no. What did the baker tell you?","right":"Scruffy, one ear up. I see him! He's being adored by {next}. Go!"},
- {"kind":"talk","roles":["park","any"],"npc":"Madame Woof","line":"Biscuit! Exactly where my visions said, roughly. Fine, the baker helped. But I felt it in my heart. Good dog."}
+ {"kind":"talk","roles":["park","any"],"npc":"Madame Woof","line":"I am Madame Woof, pet psychic. A little dog called Pickle is missing, and I sense... bread. A strong smell of bread. Try {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Tom the baker","line":"Pickle? Scruffy little thing, one ear up? He had his usual crust, then trotted off toward {next}, very pleased with himself."},
+ {"kind":"search","roles":["park","any"],"thing":"Little Dog Tag","item":"minecraft:iron_nugget","line":"A tag: 'PICKLE. If found, he's probably nearby being adored.' Madame Woof is at {next}, having a vision."},
+ {"kind":"choice","roles":["any"],"npc":"Madame Woof","line":"My visions are cloudy. Remind my spirit guides, what does Pickle look like?","options":["Big and spotty","Scruffy, one ear up","Fluffy and white"],"answer":1,"wrong":"The spirits say no. What did the baker tell you?","right":"Scruffy, one ear up. I see him! He's being adored by {next}. Go!"},
+ {"kind":"talk","roles":["park","any"],"npc":"Madame Woof","line":"Pickle! Exactly where my visions said, roughly. Fine, the baker helped. But I felt it in my heart. Good dog."}
 ]},
-{"key":"b_catmayor","title":"Vote Whiskers","finale":"cat_mayor","steps":[
- {"kind":"talk","roles":["civic","any"],"npc":"Reggie Bloom","line":"I'm campaigning to make Whiskers the cat our honorary mayor. We need signatures! Start with the regulars at {next}."},
- {"kind":"talk","roles":["food_shop","any"],"npc":"Nora Quill","line":"Whiskers? She naps on my windowsill every day at noon, like clockwork. Of course I'll sign. The kids at {next} adore her too."},
- {"kind":"talk","roles":["school","any"],"npc":"Leo, age eight","line":"We drew forty posters. Whiskers sat on one and licked another, which counts as yes. Reggie's practising his speech at {next}."},
- {"kind":"choice","roles":["landmark","any"],"npc":"Reggie Bloom","line":"One last fact for my speech: when does Whiskers nap at Nora's window?","options":["Midnight","Noon","Teatime"],"answer":1,"wrong":"Nora told you, think lunchtime.","right":"Noon! A mayor with a schedule. The ceremony's at {next}, bring everyone."},
- {"kind":"talk","roles":["civic","park","any"],"npc":"Reggie Bloom","line":"By the power of 300 signatures and one licked poster, I give you Mayor Whiskers! She's asleep. Very mayoral."}
+{"key":"b_catmayor","title":"Vote Mittens","finale":"cat_mayor","steps":[
+ {"kind":"talk","roles":["civic","any"],"npc":"Reggie Bloom","line":"I'm campaigning to make Mittens the cat our honorary mayor. We need signatures! Start with the regulars at {next}."},
+ {"kind":"talk","roles":["food_shop","any"],"npc":"Nora Quill","line":"Mittens? She naps on my windowsill every day at noon, like clockwork. Of course I'll sign. The kids at {next} adore her too."},
+ {"kind":"talk","roles":["school","any"],"npc":"Leo, age eight","line":"We drew forty posters. Mittens sat on one and licked another, which counts as yes. Reggie's practising his speech at {next}."},
+ {"kind":"choice","roles":["landmark","any"],"npc":"Reggie Bloom","line":"One last fact for my speech: when does Mittens nap at Nora's window?","options":["Midnight","Noon","Teatime"],"answer":1,"wrong":"Nora told you, think lunchtime.","right":"Noon! A mayor with a schedule. The ceremony's at {next}, bring everyone."},
+ {"kind":"talk","roles":["civic","park","any"],"npc":"Reggie Bloom","line":"By the power of 300 signatures and one licked poster, I give you Mayor Mittens! She's asleep. Very mayoral."}
 ]},
 {"key":"b_capsule","title":"The Forgetful Historian","finale":"time_capsule","steps":[
  {"kind":"talk","roles":["culture","any"],"npc":"Dr. Agatha Penn","line":"I buried a time capsule in 1985 and wrote the clues in rhyme so I'd remember. I don't. Clue one: start where the whole town waits for a ride."},
- {"kind":"riddle","roles":["station","any"],"hint":"Where the town waits for a ride","line":"Clue two, scratched on a post: 'Next, where the bread smells best.' Agatha admits she was very hungry in 1985."},
- {"kind":"riddle","roles":["food_shop","any"],"hint":"Where the bread smells best","line":"The baker remembers! 'Dr. Penn bought a bun and walked off with a shovel.' She went toward {next}."},
+ {"kind":"riddle","roles":["station","any"],"hint":"Where the town waits for a ride","line":"Clue two, scratched on a post: 'Next, where the town buys its food.' Agatha admits she was very hungry in 1985."},
+ {"kind":"riddle","roles":["food_shop","any"],"hint":"Where food is sold","line":"The owner remembers! 'Dr. Penn bought a bun and walked off with a shovel.' She went toward {next}."},
  {"kind":"search","roles":["park","any"],"thing":"Old Map Scrap","item":"minecraft:paper","line":"A scrap of map with an X: 'Under the third tree from the left, you clever thing.' Take it to Agatha at {next}."},
  {"kind":"talk","roles":["park","any"],"npc":"Dr. Agatha Penn","line":"The third tree! Let's open it. My 1985 self left a note: 'Hope you found this, you clever thing.' I did, with help."}
 ]},
@@ -167,6 +167,6 @@
  {"kind":"talk","roles":["food_shop","any"],"npc":"Hal Brennan","line":"Granny Purl? She knitted my teapot a hat. She'll need more wool, she hides a stash near {next} so her daughter won't find it."},
  {"kind":"search","roles":["park","any"],"thing":"Secret Wool Stash","item":"minecraft:string","line":"A tin of wool, every colour, and a note: 'Do not tell Linda.' Linda, her daughter, is at {next}. Act natural."},
  {"kind":"choice","roles":["any"],"npc":"Linda Purl","line":"Mum's knitting again, isn't she? Be honest. What did she knit for Hal's teapot?","options":["A scarf","A hat","Tiny socks"],"answer":1,"wrong":"No, Hal told you. Think about what keeps your head warm.","right":"A hat. Of course. Tell her I'm not cross, I'm proud, and I'll meet you both at {next}."},
- {"kind":"talk","roles":["bridge","park","any"],"npc":"Granny Purl","line":"Linda's helping? Then the bridge jumper will be done by Friday. Take this, everyone in the knitting club gets some."}
+ {"kind":"talk","roles":["bridge","park","any"],"npc":"Granny Purl","line":"Linda's helping? Then the big jumper will be done by Friday. Take this, everyone in the knitting club gets some."}
 ]}
 ]}

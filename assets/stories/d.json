@@ -84,7 +84,7 @@
       "any"
      ],
      "npc": "Curator Odile Pemberton",
-     "line": "Wall two tonight: a flood, a festival and a fountain. The first card is somewhere that runs all day but never gets tired, and has a bed but never sleeps."
+     "line": "Wall two tonight: a flood, a festival and a fountain. The first card is somewhere wet, where ducks would feel at home."
     },
     {
      "kind": "riddle",
@@ -92,7 +92,7 @@
       "water",
       "any"
      ],
-     "hint": "Runs all day, has a bed",
+     "hint": "Where ducks feel at home",
      "line": "Tucked by the water: 'Exhibit 3. The river rose one spring and everyone carried their chickens uphill.' The next card is near {next}."
     },
     {
@@ -464,8 +464,8 @@
       "food_shop",
       "any"
      ],
-     "hint": "Costs a coin, comes warm",
-     "line": "The baker grins. 'Rosa left me three numbers: her birthday month 4, then her lucky 7, then her 3 grandkids.' Take them to {next}."
+     "hint": "Where food is sold",
+     "line": "The owner grins. 'Rosa left me three numbers: her birthday month 4, then her lucky 7, then her 3 grandkids.' Take them to {next}."
     },
     {
      "kind": "choice",
@@ -482,7 +482,7 @@
       "7-4-3"
      ],
      "answer": 1,
-     "wrong": "Nope. The baker said them in a particular order, try that one.",
+     "wrong": "Nope. The owner said them in a particular order, try that one.",
      "right": "Click! Inside are three tags that say 'one for each of you.' Lucia's waiting at {next}."
     },
     {
@@ -719,7 +719,7 @@
   },
   {
    "key": "d_puzzle_box",
-   "title": "The Puzzle Box",
+   "title": "The Carver's Box",
    "finale": "gift",
    "gift": "minecraft:amethyst_shard",
    "steps": [
@@ -993,7 +993,6 @@
      "kind": "riddle",
      "roles": [
       "water",
-      "park",
       "any"
      ],
      "hint": "Where the water is still",
@@ -1121,7 +1120,6 @@
      "kind": "riddle",
      "roles": [
       "faith",
-      "landmark",
       "any"
      ],
      "hint": "Where the bells ring",
@@ -1614,7 +1612,7 @@
      ],
      "thing": "Second Corked Note",
      "item": "minecraft:paper",
-     "line": "It says 'If found, write back,' and at the bottom, in code: 8-9. The postmaster at {next} loves this sort of thing."
+     "line": "It says 'If found, write back,' and at the bottom, in code: 8-9. Code fan Quentin, who loves this sort of thing, is at {next}."
     },
     {
      "kind": "choice",
@@ -1623,7 +1621,7 @@
       "culture",
       "any"
      ],
-     "npc": "Postmaster Quentin Arbuckle",
+     "npc": "Code fan Quentin Arbuckle",
      "line": "With 1 as A and 2 as B, what does 8-9 spell?",
      "options": [
       "HI",
