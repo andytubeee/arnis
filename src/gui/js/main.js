@@ -637,7 +637,7 @@ function noteGenerationDone() {
   }, 1000);
 }
 
-const MODPACK_URL = "https://github.com/andytubeee/arnis/releases/download/v3.4.0-andytubeee/arnis-map.mrpack";
+const MODPACK_URL = "https://github.com/andytubeee/arnis/releases/latest/download/arnis-map.mrpack";
 const MODPACK_PROMPT_KEY = "modpack-prompt-never";
 
 // After a world with City Stories or Crime Spree, offers the modpack with the map and GPS,
