@@ -59,6 +59,8 @@ pub struct Launch<'a> {
     pub rcon_password: &'a str,
     pub view_distance: u32,
     pub rules: &'a WorldRules,
+    /// The world's resource pack: where players fetch it, and its SHA-1.
+    pub pack: Option<(&'a str, &'a str)>,
 }
 
 pub struct Server {
@@ -98,9 +100,9 @@ pub fn motd(world_name: &str) -> String {
     format!("Arnis Live \u{00b7} {world_name}")
 }
 
-fn write_properties(dir: &Path, l: &Launch) -> Result<(), String> {
+fn properties(l: &Launch) -> String {
     let r = l.rules;
-    let props = [
+    let mut props = vec![
         ("server-ip", "127.0.0.1".to_string()),
         ("server-port", l.port.to_string()),
         ("level-name", l.world_name.to_string()),
@@ -129,10 +131,21 @@ fn write_properties(dir: &Path, l: &Launch) -> Result<(), String> {
         ("log-ips", "false".to_string()),
         ("sync-chunk-writes", "true".to_string()),
     ];
+    if let Some((url, sha1)) = l.pack {
+        // Police uniforms, vehicle models and the map's streets; a player may still say no.
+        props.push(("resource-pack", url.to_string()));
+        props.push(("resource-pack-sha1", sha1.to_string()));
+        props.push(("require-resource-pack", "false".to_string()));
+    }
     let mut text = String::from("# Written by Arnis for live mode on every start.\n");
     for (k, v) in props {
         text.push_str(&format!("{k}={v}\n"));
     }
+    text
+}
+
+fn write_properties(dir: &Path, l: &Launch) -> Result<(), String> {
+    let text = properties(l);
     let path = dir.join("server.properties");
     crate::world_utils::replace_file_atomically(&path, text.as_bytes())?;
     keep_private(&path);
@@ -360,6 +373,35 @@ pub fn detach(cmd: &mut Command) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_world_pack_goes_into_the_properties_when_there_is_one() {
+        let rules = WorldRules {
+            gamemode: "creative",
+            difficulty: "peaceful",
+            hardcore: false,
+        };
+        let mut l = Launch {
+            java: Path::new("java"),
+            jar: Path::new("server.jar"),
+            saves_dir: Path::new("."),
+            world_name: "w",
+            port: 25565,
+            rcon_port: 25575,
+            rcon_password: "p",
+            view_distance: 10,
+            rules: &rules,
+            pack: None,
+        };
+        assert!(!properties(&l).contains("resource-pack"));
+        l.pack = Some(("http://127.0.0.1:1/a/resources.zip", "abc"));
+        let text = properties(&l);
+        assert!(
+            text.contains("\nresource-pack=http://127.0.0.1:1/a/resources.zip\n"),
+            "{text}"
+        );
+        assert!(text.contains("\nresource-pack-sha1=abc\n"), "{text}");
+    }
 
     #[test]
     fn the_second_port_differs_from_the_first() {

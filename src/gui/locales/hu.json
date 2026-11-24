@@ -348,6 +348,7 @@
   "live_stage_starting": "Indítás",
   "live_stage_checking": "A világ ellenőrzése",
   "live_stage_start_area": "A kezdőpont körüli terep generálása: {done}/{total}",
+  "live_stage_game_zone": "Játékzóna építése a kezdőpont körül: {percent}%",
   "live_stage_server": "A Minecraft {version} szerver indítása",
   "live_stage_teleport": "A kiválasztott hely generálása",
   "live_teleport_failed": "A kiválasztott helyet nem sikerült létrehozni",

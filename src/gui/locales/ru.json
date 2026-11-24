@@ -348,6 +348,7 @@
   "live_stage_starting": "Запуск",
   "live_stage_checking": "Проверка мира",
   "live_stage_start_area": "Генерация местности вокруг старта: {done} из {total}",
+  "live_stage_game_zone": "Создаётся игровая зона вокруг старта: {percent}%",
   "live_stage_server": "Запуск сервера Minecraft {version}",
   "live_stage_teleport": "Генерация выбранного места",
   "live_teleport_failed": "Не удалось сгенерировать выбранное место",

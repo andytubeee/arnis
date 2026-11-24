@@ -824,6 +824,15 @@ fn resolve(
         None => existing_chunks(world_dir, &xzbbox),
     };
     let extending = !manifest.areas.is_empty();
+    // The world has one data pack, which the area that starts it writes.
+    if let Some((_, flag)) = crate::args::pack_extras(args)
+        .into_iter()
+        .find(|(on, _)| *on && extending)
+    {
+        return Err(format!(
+            "{flag} can only be set on the first area of a One World, which holds its one data pack."
+        ));
+    }
     let area_id = unit.map_or(manifest.next_area_id, |u| u.area_id);
 
     args.one_world_run = Some(RunContext {
@@ -1881,6 +1890,23 @@ mod tests {
         assert_eq!(run2.origin_lat, run.origin_lat);
         assert_eq!(run2.origin_lon, run.origin_lon);
         assert_eq!(run2.replaced_chunks, 0, "nothing was written yet");
+    }
+
+    #[test]
+    fn only_the_first_area_sets_the_game_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let world = dir.path().join("w");
+        let req = LLBBox::from_str(MUNICH).unwrap();
+        let mut args = args_for(MUNICH, &["--city-stories", "--crime-spree"]);
+        let session = prepare(&world, &req, &mut args).unwrap();
+        record(&args, &session, None);
+        drop(session);
+
+        let mut plain = args_for(MUNICH, &[]);
+        drop(prepare(&world, &req, &mut plain).unwrap());
+        let mut more = args_for(MUNICH, &["--pedestrians"]);
+        let err = prepare(&world, &req, &mut more).err().unwrap();
+        assert!(err.contains("--pedestrians"), "{err}");
     }
 
     #[test]

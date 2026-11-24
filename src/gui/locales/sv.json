@@ -348,6 +348,7 @@
   "live_stage_starting": "Startar",
   "live_stage_checking": "Kontrollerar världen",
   "live_stage_start_area": "Genererar terrängen runt starten: {done} av {total}",
+  "live_stage_game_zone": "Bygger spelzonen runt starten: {percent}%",
   "live_stage_server": "Startar Minecraft {version}-servern",
   "live_stage_teleport": "Genererar platsen du valde",
   "live_teleport_failed": "Platsen du valde kunde inte genereras",

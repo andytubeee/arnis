@@ -348,6 +348,7 @@
   "live_stage_starting": "Wird gestartet",
   "live_stage_checking": "Welt wird geprüft",
   "live_stage_start_area": "Land um den Start wird generiert: {done} von {total}",
+  "live_stage_game_zone": "Spielzone um den Start wird gebaut: {percent}%",
   "live_stage_server": "Minecraft-{version}-Server wird gestartet",
   "live_stage_teleport": "Der gewählte Ort wird generiert",
   "live_teleport_failed": "Der gewählte Ort konnte nicht generiert werden",

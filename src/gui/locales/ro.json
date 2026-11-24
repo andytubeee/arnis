@@ -348,6 +348,7 @@
   "live_stage_starting": "Se pornește",
   "live_stage_checking": "Se verifică lumea",
   "live_stage_start_area": "Se generează terenul din jurul startului: {done} din {total}",
+  "live_stage_game_zone": "Se construiește zona de joc în jurul startului: {percent}%",
   "live_stage_server": "Se pornește serverul Minecraft {version}",
   "live_stage_teleport": "Se generează locul ales",
   "live_teleport_failed": "Locul ales nu a putut fi generat",

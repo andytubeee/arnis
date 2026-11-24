@@ -6,12 +6,14 @@
 
 pub mod lan;
 pub mod mojang;
+pub mod pack;
 pub mod plan;
 pub mod rcon;
 pub mod region;
 pub mod server;
 pub mod servers_dat;
 pub mod tiles;
+pub mod zone;
 
 use crate::args::Args;
 use crate::world_utils::{SessionLock, WorldLayout};
@@ -1316,8 +1318,43 @@ fn run(cfg: Config, mut args: Args, reporter: &Reporter) -> Result<(), String> {
         }
         return Err(e);
     }
-    let manifest =
-        crate::one_world::Manifest::load(&world_dir)?.ok_or("The One World manifest is missing")?;
+    let load = || {
+        crate::one_world::Manifest::load(&world_dir)?
+            .ok_or_else(|| "The One World manifest is missing".to_string())
+    };
+    let mut manifest = load()?;
+    // Game modes need a world with nothing in it yet, which builds their zone first.
+    let zone_flags = manifest
+        .areas
+        .is_empty()
+        .then(|| zone::flags(&args, &manifest))
+        .flatten();
+    if let Some(flags) = zone_flags {
+        let (lat, lon) = cfg
+            .start
+            .unwrap_or((manifest.origin_lat, manifest.origin_lon));
+        let say = |p| {
+            reporter.say(
+                "game_zone",
+                "Building the game zone around the start",
+                Some(p),
+            )
+        };
+        say(0.0);
+        // The zone is an ordinary One World run, which takes the world's lock itself.
+        drop(lock.take());
+        let built = zone::build(
+            &cfg.saves_dir,
+            &cfg.world_name,
+            &zone::bbox(lat, lon)?,
+            &flags,
+            &say,
+            &|| controls.stopping(),
+        );
+        built?;
+        lock = Some(lock_world(&world_dir)?);
+        manifest = load()?;
+    }
     let proj = manifest.projection();
     let start_xz = cfg
         .start
@@ -1506,6 +1543,8 @@ fn play(
         format!("Starting the Minecraft {} server", provisioned.version),
         None,
     );
+    // Kept up for the whole session, so players joining later fetch it too.
+    let pack = pack::serve(&world_dir.join("resources.zip"), lan.is_some())?;
     let launch = server::Launch {
         java: &provisioned.java,
         jar: &provisioned.jar,
@@ -1516,6 +1555,7 @@ fn play(
         rcon_password: &password,
         view_distance: cfg.view_distance.clamp(4, 32),
         rules: &rules,
+        pack: pack.as_ref().map(|p| (p.url.as_str(), p.sha1.as_str())),
     };
     // The server takes the lock itself.
     drop(lock.take());

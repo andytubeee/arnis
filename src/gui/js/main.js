@@ -2306,12 +2306,17 @@ function refreshGameplayRows(format) {
   setTimeout(refreshAdvancedRows, 0);
   // The effective state: a ticked One World is off on the Moon and Mars, and greyed out there.
   const current = format || selectedWorldFormat;
-  const pack = current === 'java' && !isOneWorldEnabled();
+  // A new Live world builds its game zone whole, as its first area, with the world's one pack.
+  // A world whose zone failed has no areas yet and builds it on the next start.
+  const liveNew = isLiveMode() && !(oneWorldInfo && oneWorldInfo.exists && oneWorldInfo.area_count > 0);
+  const packArea = !isOneWorldEnabled() || liveNew;
+  const packAreaWhy = isLiveMode() ? 'reason_world_set' : 'reason_not_one_world';
+  const pack = current === 'java' && packArea;
   const vehicles = pack || current === 'bedrock';
   const earth = selectedCelestialBody === 'earth';
   const mode = document.getElementById('generation-mode-select');
   const blueprint = !!mode && mode.value === 'blueprint';
-  const packWhy = [[current === 'java', 'reason_java'], [!isOneWorldEnabled(), 'reason_not_one_world']];
+  const packWhy = [[current === 'java', 'reason_java'], [packArea, packAreaWhy]];
   const gate = (id, ...more) => {
     const reason = why(...packWhy, ...more);
     setSettingsRowAvailable(id, !reason, reason);
@@ -2324,10 +2329,13 @@ function refreshGameplayRows(format) {
   gate('discoveries-toggle', [earth, 'reason_earth']);
   gate('traffic-lights-toggle', [earth, 'reason_earth'], [!blueprint, 'reason_blueprint']);
   const carsWhy = why([current === 'java' || current === 'bedrock', 'reason_java_bedrock'],
-    [vehicles, 'reason_not_one_world'], [earth, 'reason_earth']);
+    [vehicles, packAreaWhy], [earth, 'reason_earth']);
   setSettingsRowAvailable('moving-cars-toggle', !carsWhy, carsWhy);
   gate('pedestrians-toggle', [earth, 'reason_earth']);
-  gate('supply-crates-toggle', [earth, 'reason_earth']);
+  // Chosen building by building, so every Live tile builds them too.
+  const cratesWhy = why([current === 'java', 'reason_java'], [packArea || isLiveMode(), 'reason_not_one_world'],
+    [earth, 'reason_earth']);
+  setSettingsRowAvailable('supply-crates-toggle', !cratesWhy, cratesWhy);
   const gravityWhy = why([!earth, 'reason_moon_mars'], ...packWhy);
   setSettingsRowAvailable('body-gravity-toggle', !gravityWhy, gravityWhy);
   // Last, as it reads whether the outbreak and the disasters are still available.
@@ -4318,6 +4326,7 @@ async function refreshOneWorldState() {
   oneWorldInfo = info;
   applyOneWorldPins(info);
   refreshWorldRulesRows();
+  refreshGameplayRows();
   if (!isWorldNameEditing()) refreshWorldNameEditUI();
   renderOneWorldStatus();
   // An existing world takes no size estimate, a new one does; the rest of the line stays as it is.
@@ -4567,6 +4576,9 @@ function liveStageText(status) {
         ? oneWorldText('live_stage_start_area', 'Generating the land around the start: {done} of {total}',
           { done: status.step[0], total: status.step[1] })
         : oneWorldText('live_stage_starting', 'Starting');
+    case 'game_zone':
+      return oneWorldText('live_stage_game_zone', 'Building the game zone around the start: {percent}%',
+        { percent: Math.round((status.progress || 0) * 100) });
     case 'server_starting':
       return oneWorldText('live_stage_server', 'Starting the Minecraft {version} server', { version: status.version || '' });
     case 'running':
@@ -4816,6 +4828,16 @@ async function startLive() {
     gamemode: settings.gamemode,
     worldTime: settings.worldTime,
     mobSpawning: settings.mobSpawning,
+    pauseMenu: gameplayToggle('pause-menu-toggle'),
+    discoveries: gameplayToggle('discoveries-toggle'),
+    trafficLights: gameplayToggle('traffic-lights-toggle'),
+    movingVehicles: gameplayToggle('moving-cars-toggle'),
+    pedestrians: gameplayToggle('pedestrians-toggle'),
+    supplyCrates: gameplayToggle('supply-crates-toggle'),
+    zombieOutbreak: gameplayToggle('zombie-outbreak-toggle'),
+    crimeSpree: gameplayToggle('crime-spree-toggle'),
+    cityStories: gameplayToggle('city-stories-toggle'),
+    disasters: gameplayToggle('disasters-toggle'),
     messages: liveGameMessages()
   };
   liveStatus = { phase: 'starting', stage: 'starting' };

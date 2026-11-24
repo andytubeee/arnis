@@ -348,6 +348,7 @@
   "live_stage_starting": "Zaganjanje",
   "live_stage_checking": "Preverjanje sveta",
   "live_stage_start_area": "Generiranje terena okoli začetka: {done} od {total}",
+  "live_stage_game_zone": "Gradnja igralnega območja okoli začetka: {percent}%",
   "live_stage_server": "Zaganjanje strežnika Minecraft {version}",
   "live_stage_teleport": "Generiranje izbranega kraja",
   "live_teleport_failed": "Izbranega kraja ni bilo mogoče ustvariti",

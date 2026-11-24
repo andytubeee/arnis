@@ -348,6 +348,7 @@
   "live_stage_starting": "Paleidžiama",
   "live_stage_checking": "Tikrinamas pasaulis",
   "live_stage_start_area": "Generuojama vietovė aplink pradžią: {done} iš {total}",
+  "live_stage_game_zone": "Kuriama žaidimo zona aplink pradžią: {percent}%",
   "live_stage_server": "Paleidžiamas Minecraft {version} serveris",
   "live_stage_teleport": "Generuojama pasirinkta vieta",
   "live_teleport_failed": "Pasirinktos vietos sugeneruoti nepavyko",

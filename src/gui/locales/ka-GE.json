@@ -348,6 +348,7 @@
   "live_stage_starting": "იწყება",
   "live_stage_checking": "სამყარო მოწმდება",
   "live_stage_start_area": "საწყისი ადგილის გარშემო რელიეფი იქმნება: {done} / {total}",
+  "live_stage_game_zone": "სათამაშო ზონის აგება საწყისი წერტილის გარშემო: {percent}%",
   "live_stage_server": "Minecraft {version}-ის სერვერი ეშვება",
   "live_stage_teleport": "არჩეული ადგილი იქმნება",
   "live_teleport_failed": "არჩეული ადგილის გენერირება ვერ მოხერხდა",

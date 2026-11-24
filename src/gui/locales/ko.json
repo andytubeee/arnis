@@ -348,6 +348,7 @@
   "live_stage_starting": "시작하는 중",
   "live_stage_checking": "월드 확인 중",
   "live_stage_start_area": "시작 지점 주변 지형 생성 중: {done}/{total}",
+  "live_stage_game_zone": "시작 지점 주변의 게임 구역을 만드는 중: {percent}%",
   "live_stage_server": "Minecraft {version} 서버 시작 중",
   "live_stage_teleport": "선택한 장소를 생성하는 중",
   "live_teleport_failed": "선택한 장소를 생성하지 못했습니다",

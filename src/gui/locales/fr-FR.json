@@ -348,6 +348,7 @@
   "live_stage_starting": "Démarrage",
   "live_stage_checking": "Vérification du monde",
   "live_stage_start_area": "Génération du terrain autour du départ : {done} sur {total}",
+  "live_stage_game_zone": "Construction de la zone de jeu autour du départ : {percent}%",
   "live_stage_server": "Démarrage du serveur Minecraft {version}",
   "live_stage_teleport": "Génération du lieu choisi",
   "live_teleport_failed": "Le lieu choisi n’a pas pu être généré",

@@ -363,7 +363,7 @@ fn login_name(buf: &[u8]) -> Sniff {
 }
 
 /// This computer's address on the network the announcement goes out on.
-fn lan_ip() -> Option<Ipv4Addr> {
+pub(super) fn lan_ip() -> Option<Ipv4Addr> {
     let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).ok()?;
     socket.connect(GROUP).ok()?;
     match socket.local_addr().ok()?.ip() {

@@ -348,6 +348,7 @@
   "live_stage_starting": "正在启动",
   "live_stage_checking": "正在检查世界",
   "live_stage_start_area": "正在生成起点周围的地形：{done} / {total}",
+  "live_stage_game_zone": "正在构建起点周围的游戏区域：{percent}%",
   "live_stage_server": "正在启动 Minecraft {version} 服务器",
   "live_stage_teleport": "正在生成你选择的地点",
   "live_teleport_failed": "无法生成你选择的地点",

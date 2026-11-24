@@ -19,7 +19,7 @@ const TILE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(600);
 /// Map ids each staging world may hand out in one session.
 const MAP_IDS_PER_WORKER: i32 = 200_000;
 
-fn value_name<T: ValueEnum>(v: &T) -> String {
+pub(super) fn value_name<T: ValueEnum>(v: &T) -> String {
     v.to_possible_value()
         .map(|p| p.get_name().to_string())
         .unwrap_or_default()
@@ -69,6 +69,7 @@ pub fn tile_flags(a: &Args, manifest: &crate::one_world::Manifest) -> Vec<String
         (a.no_tile_archive, "--no-tile-archive"),
         (manifest.aws_only_elevation, "--aws-only-elevation"),
         (a.bake_lighting, "--bake-lighting"),
+        (a.supply_crates, "--supply-crates"),
     ] {
         if on {
             f.push(name.to_string());
@@ -485,6 +486,7 @@ mod tests {
             "--signage=full",
             "--mode=terrain-only",
             "--no-3d",
+            "--supply-crates",
         ]);
         let manifest: crate::one_world::Manifest = serde_json::from_value(serde_json::json!({
             "version": 3, "created_with": "test", "created_at": 0, "origin_lat": 52.5,
@@ -501,6 +503,7 @@ mod tests {
         argv.extend(tile_flags(&args, &manifest));
         let back = Args::try_parse_from(argv).unwrap();
         assert!(back.winter && back.caves && !back.use_3d && back.live.tile && !back.map_item);
+        assert!(back.supply_crates, "crates are chosen building by building");
         assert_eq!(back.scale, 1.5);
         assert_eq!(back.signage, crate::args::SignageLevel::Full);
         assert_eq!(back.mode, crate::args::GenerationMode::TerrainOnly);

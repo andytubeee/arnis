@@ -348,6 +348,7 @@
   "live_stage_starting": "Notiek palaišana",
   "live_stage_checking": "Notiek pasaules pārbaude",
   "live_stage_start_area": "Ģenerē apvidu ap sākumu: {done} no {total}",
+  "live_stage_game_zone": "Tiek veidota spēles zona ap sākumu: {percent}%",
   "live_stage_server": "Palaiž Minecraft {version} serveri",
   "live_stage_teleport": "Ģenerē izvēlēto vietu",
   "live_teleport_failed": "Izvēlēto vietu neizdevās ģenerēt",

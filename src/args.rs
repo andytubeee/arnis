@@ -1664,6 +1664,22 @@ fn parse_props_min_scale(s: &str) -> Result<f64, String> {
     }
 }
 
+/// The settings the world's one data pack carries, with their flags.
+pub fn pack_extras(args: &Args) -> [(bool, &'static str); 10] {
+    [
+        (args.pause_menu, "--pause-menu"),
+        (args.discoveries, "--discoveries"),
+        (args.traffic_lights, "--traffic-lights"),
+        (args.zombie_outbreak, "--zombie-outbreak"),
+        (args.disasters, "--disasters"),
+        (args.body_gravity, "--body-gravity"),
+        (args.moving_vehicles, "--moving-vehicles"),
+        (args.pedestrians, "--pedestrians"),
+        (args.crime_spree, "--crime-spree"),
+        (args.city_stories, "--city-stories"),
+    ]
+}
+
 /// Validates CLI arguments after parsing.
 /// For Java Edition: `--path` is required. If the directory doesn't exist, it will be created.
 /// For Bedrock Edition (`--bedrock`): `--path` is optional (defaults to Desktop output).
@@ -1887,18 +1903,7 @@ pub fn validate_args(args: &Args) -> Result<(), String> {
         );
     }
 
-    let extras = [
-        (args.pause_menu, "--pause-menu"),
-        (args.discoveries, "--discoveries"),
-        (args.traffic_lights, "--traffic-lights"),
-        (args.zombie_outbreak, "--zombie-outbreak"),
-        (args.disasters, "--disasters"),
-        (args.body_gravity, "--body-gravity"),
-        (args.moving_vehicles, "--moving-vehicles"),
-        (args.pedestrians, "--pedestrians"),
-        (args.crime_spree, "--crime-spree"),
-        (args.city_stories, "--city-stories"),
-    ];
+    let extras = pack_extras(args);
     if !args.java() {
         // Bedrock runs the vehicles from an add-on of its own.
         let java_only = |flag: &str| args.sandbox() || flag != "--moving-vehicles";
@@ -1908,10 +1913,14 @@ pub fn validate_args(args: &Args) -> Result<(), String> {
             ));
         }
     }
-    // Each area would write its pack over the last one's.
-    if args.one_world {
+    // Each piece would write its pack over the last one's. A later area is refused in its prepare.
+    let u = &args.units;
+    let pieces = u.coordinates() || u.one_world_unit.is_some() || u.plan_units.is_some();
+    if args.one_world && pieces {
         if let Some((_, flag)) = extras.iter().find(|(on, _)| *on) {
-            return Err(format!("{flag} is not available with --one-world yet."));
+            return Err(format!(
+                "{flag} is not available when One World builds in cells."
+            ));
         }
     }
     if args.body_gravity && args.body.is_earth() {
@@ -2431,8 +2440,16 @@ mod tests {
         assert!(lights.contains("--traffic-lights"), "{lights}");
         assert!(validate_args(&parse(&["--body-gravity"])).is_err());
         assert!(validate_args(&parse(&["--body", "moon", "--body-gravity"])).is_ok());
-        let one_world = validate_args(&parse(&["--one-world", "--pause-menu"])).unwrap_err();
-        assert!(one_world.contains("--pause-menu"), "{one_world}");
+        // The area that starts a One World may set them; its prepare refuses the rest.
+        assert!(validate_args(&parse(&["--one-world", "--pause-menu"])).is_ok());
+        let cells = validate_args(&parse(&[
+            "--one-world",
+            "--one-world-workers",
+            "2",
+            "--crime-spree",
+        ]))
+        .unwrap_err();
+        assert!(cells.contains("--crime-spree"), "{cells}");
     }
 
     #[test]

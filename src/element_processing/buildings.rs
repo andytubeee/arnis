@@ -16114,7 +16114,7 @@ pub fn generate_buildings(
         }
 
         // One building in three gets a supply crate a step in from its front door.
-        if args.supply_crates && config.is_ground_level && group_seed % 3 == 0 {
+        if args.supply_crates && config.is_ground_level && group_seed.is_multiple_of(3) {
             if let Some(door) = entrance_plans.first() {
                 let x = door.x - door.normal.0 * 2;
                 let z = door.z - door.normal.1 * 2;

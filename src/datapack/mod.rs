@@ -728,10 +728,7 @@ pub struct Extras {
 
 impl Extras {
     pub fn from_args(args: &Args) -> Self {
-        // Each One World area would write its pack over the last one's.
-        if args.one_world {
-            return Self::default();
-        }
+        // One World takes these on its first area only, which its prepare checks.
         Self {
             gravity: args.body_gravity && gravity_ratio(args.body).is_some(),
             traffic_lights: args.traffic_lights,

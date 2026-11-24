@@ -348,6 +348,7 @@
   "live_stage_starting": "Đang khởi động",
   "live_stage_checking": "Đang kiểm tra thế giới",
   "live_stage_start_area": "Đang tạo vùng đất quanh điểm xuất phát: {done}/{total}",
+  "live_stage_game_zone": "Đang xây khu vực chơi quanh điểm bắt đầu: {percent}%",
   "live_stage_server": "Đang khởi động máy chủ Minecraft {version}",
   "live_stage_teleport": "Đang tạo nơi bạn đã chọn",
   "live_teleport_failed": "Không thể tạo nơi bạn đã chọn",

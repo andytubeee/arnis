@@ -348,6 +348,7 @@
   "live_stage_starting": "起動中",
   "live_stage_checking": "ワールドを確認中",
   "live_stage_start_area": "開始地点の周りを生成中: {done} / {total}",
+  "live_stage_game_zone": "スタート地点の周りにゲームゾーンを作成中: {percent}%",
   "live_stage_server": "Minecraft {version} サーバーを起動中",
   "live_stage_teleport": "選んだ場所を生成中",
   "live_teleport_failed": "選んだ場所を生成できませんでした",

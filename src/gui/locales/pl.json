@@ -348,6 +348,7 @@
   "live_stage_starting": "Uruchamianie",
   "live_stage_checking": "Sprawdzanie świata",
   "live_stage_start_area": "Generowanie terenu wokół startu: {done} z {total}",
+  "live_stage_game_zone": "Budowanie strefy gry wokół startu: {percent}%",
   "live_stage_server": "Uruchamianie serwera Minecraft {version}",
   "live_stage_teleport": "Generowanie wybranego miejsca",
   "live_teleport_failed": "Nie udało się wygenerować wybranego miejsca",

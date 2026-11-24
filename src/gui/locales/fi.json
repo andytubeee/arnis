@@ -348,6 +348,7 @@
   "live_stage_starting": "Käynnistetään",
   "live_stage_checking": "Tarkistetaan maailmaa",
   "live_stage_start_area": "Generoidaan maastoa aloituskohdan ympärille: {done}/{total}",
+  "live_stage_game_zone": "Rakennetaan pelialuetta aloituspaikan ympärille: {percent}%",
   "live_stage_server": "Käynnistetään Minecraft {version} -palvelinta",
   "live_stage_teleport": "Generoidaan valitsemaasi paikkaa",
   "live_teleport_failed": "Valitsemaasi paikkaa ei voitu luoda",

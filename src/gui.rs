@@ -430,6 +430,27 @@ struct LiveStartOptions {
     gamemode: String,
     world_time: i64,
     mob_spawning: String,
+    /// Built into the game zone of a new world; supply crates go into every tile.
+    #[serde(default)]
+    pause_menu: bool,
+    #[serde(default)]
+    discoveries: bool,
+    #[serde(default)]
+    traffic_lights: bool,
+    #[serde(default)]
+    moving_vehicles: bool,
+    #[serde(default)]
+    pedestrians: bool,
+    #[serde(default)]
+    supply_crates: bool,
+    #[serde(default)]
+    zombie_outbreak: bool,
+    #[serde(default)]
+    crime_spree: bool,
+    #[serde(default)]
+    city_stories: bool,
+    #[serde(default)]
+    disasters: bool,
     #[serde(default)]
     messages: crate::live::Messages,
 }
@@ -530,6 +551,16 @@ fn gui_live_start(options: LiveStartOptions) -> Result<(), String> {
     args.world_time = options.world_time.clamp(0, 23999);
     args.mob_spawning = crate::args::MobSpawning::from_str_lossy(&options.mob_spawning);
     args.timeout = Some(std::time::Duration::from_secs(40));
+    args.pause_menu = options.pause_menu;
+    args.discoveries = options.discoveries;
+    args.traffic_lights = options.traffic_lights;
+    args.moving_vehicles = options.moving_vehicles;
+    args.pedestrians = options.pedestrians;
+    args.supply_crates = options.supply_crates;
+    args.zombie_outbreak = options.zombie_outbreak;
+    args.crime_spree = options.crime_spree;
+    args.city_stories = options.city_stories;
+    args.disasters = options.disasters;
     crate::args::apply_body_defaults(&mut args);
     crate::args::apply_feature_needs(&mut args);
     crate::args::validate_args(&args)?;

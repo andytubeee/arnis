@@ -348,6 +348,7 @@
   "live_stage_starting": "جارٍ البدء",
   "live_stage_checking": "جارٍ فحص العالم",
   "live_stage_start_area": "جارٍ توليد الأرض حول نقطة البداية: {done} من {total}",
+  "live_stage_game_zone": "جارٍ بناء منطقة اللعب حول نقطة البداية: {percent}%",
   "live_stage_server": "جارٍ تشغيل خادم Minecraft {version}",
   "live_stage_teleport": "جارٍ توليد المكان الذي اخترته",
   "live_teleport_failed": "تعذّر توليد المكان الذي اخترته",
