@@ -765,6 +765,7 @@
   "plan_state_room": "Espaço para crescer: você pode construir aqui depois",
   "plan_stretch": "Esticamento aqui: {pct} · recomendado até 5%",
   "plan_soft_top": "Terreno acima de {m} m é achatado",
+  "plan_soft_bottom": "Terreno abaixo de {m} m é achatado",
   "plan_resume": "Retomar ({n} de {m})",
   "plan_hours": "{h} h {m} min",
   "plan_hours_only": "{h} h",

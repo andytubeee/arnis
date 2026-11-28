@@ -765,6 +765,7 @@
   "plan_state_room": "Prostor za širitev: tu lahko gradite pozneje",
   "plan_stretch": "Raztegnjenost tukaj: {pct} · priporočeno do 5%",
   "plan_soft_top": "Kopno nad {m} m je stisnjeno",
+  "plan_soft_bottom": "Kopno pod {m} m je stisnjeno",
   "plan_resume": "Nadaljuj ({n} od {m})",
   "plan_hours": "{h} h {m} min",
   "plan_hours_only": "{h} h",

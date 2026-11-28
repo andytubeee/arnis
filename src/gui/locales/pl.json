@@ -765,6 +765,7 @@
   "plan_state_room": "Miejsce na rozbudowę: możesz tu zbudować później",
   "plan_stretch": "Rozciągnięcie tutaj: {pct} · zalecane do 5%",
   "plan_soft_top": "Teren powyżej {m} m jest spłaszczony",
+  "plan_soft_bottom": "Teren poniżej {m} m jest spłaszczony",
   "plan_resume": "Wznów ({n} z {m})",
   "plan_hours": "{h} h {m} min",
   "plan_hours_only": "{h} h",

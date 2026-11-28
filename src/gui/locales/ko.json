@@ -765,6 +765,7 @@
   "plan_state_room": "확장 공간: 나중에 여기에 지을 수 있음",
   "plan_stretch": "이곳의 늘어남: {pct} · 5%까지 권장",
   "plan_soft_top": "{m} m 이상의 지형은 압축됨",
+  "plan_soft_bottom": "{m} m 이하의 지형은 압축됨",
   "plan_resume": "이어서 하기 ({m}개 중 {n}개)",
   "plan_hours": "{h}시간 {m}분",
   "plan_hours_only": "{h}시간",

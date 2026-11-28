@@ -765,6 +765,7 @@
   "plan_state_room": "Bővítési hely: később itt is építhetsz",
   "plan_stretch": "Nyújtás itt: {pct} · legfeljebb 5% ajánlott",
   "plan_soft_top": "A {m} m feletti terep össze van nyomva",
+  "plan_soft_bottom": "A {m} m alatti terep össze van nyomva",
   "plan_resume": "Folytatás ({m}-ból {n})",
   "plan_hours": "{h} ó {m} perc",
   "plan_hours_only": "{h} ó",

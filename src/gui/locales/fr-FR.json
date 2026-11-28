@@ -765,6 +765,7 @@
   "plan_state_room": "Place pour s'agrandir : vous pourrez construire ici plus tard",
   "plan_stretch": "Étirement ici : {pct} · jusqu'à 5% recommandé",
   "plan_soft_top": "Le terrain au-dessus de {m} m est écrasé",
+  "plan_soft_bottom": "Le terrain en dessous de {m} m est écrasé",
   "plan_resume": "Reprendre ({n} sur {m})",
   "plan_hours": "{h} h {m} min",
   "plan_hours_only": "{h} h",

@@ -765,6 +765,7 @@
   "plan_state_room": "مساحة للتوسع: يمكنك البناء هنا لاحقًا",
   "plan_stretch": "التمدد هنا: {pct} · يُنصح بحد أقصى 5%",
   "plan_soft_top": "الأرض فوق {m} م تُضغط",
+  "plan_soft_bottom": "الأرض تحت {m} م تُضغط",
   "plan_resume": "استئناف ({n} من {m})",
   "plan_hours": "{h} س {m} د",
   "plan_hours_only": "{h} س",

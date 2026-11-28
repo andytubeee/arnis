@@ -765,6 +765,7 @@
   "plan_state_room": "拡張の余地：後でここに構築できます",
   "plan_stretch": "ここの引き伸ばし：{pct}・推奨は5%まで",
   "plan_soft_top": "{m} m を超える土地は圧縮されます",
+  "plan_soft_bottom": "{m} m を下回る土地は圧縮されます",
   "plan_resume": "再開（{m} 中 {n}）",
   "plan_hours": "{h} 時間 {m} 分",
   "plan_hours_only": "{h} 時間",

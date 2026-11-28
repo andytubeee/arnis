@@ -1168,6 +1168,11 @@ export function refreshStretch() {
         m: (Math.round(s.knee / 100) * 100).toLocaleString(interfaceLocale()),
       })));
     }
+    if (s.kneeLow != null) {
+      stretchRows.push(div('plan-stretch', t('plan_soft_bottom', 'Land below {m} m is squashed', {
+        m: (Math.round(s.kneeLow / 100) * 100).toLocaleString(interfaceLocale()),
+      })));
+    }
   }
   stretchShown = STRETCH_LEVELS.filter(([, color]) => lines.some((l) => l.color === color)).map(([level]) => level);
   postToMap({ type: 'stretchLines', lines });

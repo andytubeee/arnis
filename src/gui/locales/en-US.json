@@ -771,6 +771,7 @@
   "plan_state_room": "Room to grow: you can build here later",
   "plan_stretch": "Stretch here: {pct} · up to 5% recommended",
   "plan_soft_top": "Land above {m} m is squashed",
+  "plan_soft_bottom": "Land below {m} m is squashed",
   "plan_resume": "Resume ({n} of {m})",
   "plan_hours": "{h} h {m} min",
   "plan_hours_only": "{h} h",

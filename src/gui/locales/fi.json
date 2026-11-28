@@ -765,6 +765,7 @@
   "plan_state_room": "Tilaa kasvaa: voit rakentaa tänne myöhemmin",
   "plan_stretch": "Venymä tässä: {pct} · suositus enintään 5%",
   "plan_soft_top": "Yli {m} m:n maasto litistetään",
+  "plan_soft_bottom": "Alle {m} m:n maasto litistetään",
   "plan_resume": "Jatka ({n}/{m})",
   "plan_hours": "{h} h {m} min",
   "plan_hours_only": "{h} h",

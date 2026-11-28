@@ -765,6 +765,7 @@
   "plan_state_room": "Chỗ để mở rộng: bạn có thể dựng ở đây sau",
   "plan_stretch": "Độ giãn tại đây: {pct} · khuyên dùng tối đa 5%",
   "plan_soft_top": "Vùng đất cao hơn {m} m bị nén lại",
+  "plan_soft_bottom": "Vùng đất thấp hơn {m} m bị nén lại",
   "plan_resume": "Tiếp tục ({n}/{m})",
   "plan_hours": "{h} giờ {m} phút",
   "plan_hours_only": "{h} giờ",

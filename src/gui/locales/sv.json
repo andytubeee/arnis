@@ -765,6 +765,7 @@
   "plan_state_room": "Plats att växa: du kan bygga här senare",
   "plan_stretch": "Utsträckning här: {pct} · upp till 5% rekommenderas",
   "plan_soft_top": "Land över {m} m trycks ihop",
+  "plan_soft_bottom": "Land under {m} m trycks ihop",
   "plan_resume": "Återuppta ({n} av {m})",
   "plan_hours": "{h} h {m} min",
   "plan_hours_only": "{h} h",

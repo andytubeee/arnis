@@ -765,6 +765,7 @@
   "plan_state_room": "可扩展空间：以后可以在这里建造",
   "plan_stretch": "此处拉伸：{pct} · 建议不超过 5%",
   "plan_soft_top": "{m} 米以上的地形会被压缩",
+  "plan_soft_bottom": "{m} 米以下的地形会被压缩",
   "plan_resume": "继续（{n}/{m}）",
   "plan_hours": "{h} 小时 {m} 分钟",
   "plan_hours_only": "{h} 小时",

@@ -765,6 +765,7 @@
   "plan_state_room": "Vieta plėstis: čia galėsite statyti vėliau",
   "plan_stretch": "Ištempimas čia: {pct} · rekomenduojama iki 5%",
   "plan_soft_top": "Žemė virš {m} m suspaudžiama",
+  "plan_soft_bottom": "Žemė žemiau {m} m suspaudžiama",
   "plan_resume": "Tęsti ({n} iš {m})",
   "plan_hours": "{h} val. {m} min.",
   "plan_hours_only": "{h} val.",

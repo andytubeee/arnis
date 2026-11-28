@@ -765,6 +765,7 @@
   "plan_state_room": "Loc de extindere: poți construi aici mai târziu",
   "plan_stretch": "Întindere aici: {pct} · recomandat până la 5%",
   "plan_soft_top": "Terenul de peste {m} m este turtit",
+  "plan_soft_bottom": "Terenul sub {m} m este turtit",
   "plan_resume": "Reia ({n} din {m})",
   "plan_hours": "{h} h {m} min",
   "plan_hours_only": "{h} h",

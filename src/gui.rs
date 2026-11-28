@@ -1784,6 +1784,7 @@ struct OneWorldInfo {
     origin_lat: Option<f64>,
     /// Land above this height is squashed.
     knee_m: Option<f64>,
+    knee_low_m: Option<f64>,
     /// Changes whenever an area is recorded.
     revision: u32,
 }
@@ -1934,6 +1935,9 @@ fn one_world_info_of(
         knee_m: manifest
             .as_ref()
             .and_then(|m| m.elevation.as_ref()?.soft_top.as_ref().map(|t| t.knee_m)),
+        knee_low_m: manifest
+            .as_ref()
+            .and_then(|m| m.elevation.as_ref()?.soft_bottom.as_ref().map(|t| t.knee_m)),
         revision: manifest.as_ref().map(|m| m.next_area_id).unwrap_or(0),
     }
 }

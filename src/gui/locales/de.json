@@ -765,6 +765,7 @@
   "plan_state_room": "Platz zum Wachsen: hier kannst du später bauen",
   "plan_stretch": "Streckung hier: {pct} · bis 5% empfohlen",
   "plan_soft_top": "Land über {m} m wird gestaucht",
+  "plan_soft_bottom": "Land unter {m} m wird gestaucht",
   "plan_resume": "Fortsetzen ({n} von {m})",
   "plan_hours": "{h} h {m} min",
   "plan_hours_only": "{h} h",

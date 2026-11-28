@@ -1612,7 +1612,7 @@ function initSettings() {
       const world = oneWorldInfo && oneWorldInfo.exists ? oneWorldInfo : null;
       const typed = parseFloat(document.getElementById('meld-origin-input').value);
       const origin = world ? world.origin_lat : Number.isFinite(typed) ? typed : (a + c) / 2;
-      return { origin, knee: world ? world.knee_m : null, south: Math.min(a, c), north: Math.max(a, c), lon: (b + d) / 2 };
+      return { origin, knee: world ? world.knee_m : null, kneeLow: world ? world.knee_low_m : null, south: Math.min(a, c), north: Math.max(a, c), lon: (b + d) / 2 };
     },
   });
   // The map offers "Select this area" on a country or region, the edge handles and the size
