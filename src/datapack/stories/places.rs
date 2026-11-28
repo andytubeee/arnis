@@ -113,6 +113,18 @@ fn role(element: &ProcessedElement) -> Option<(Role, Category)> {
     if let Some(r) = everyday {
         return Some((r, Category::Civic));
     }
+    // The mountains' own stops, so a story runs where the trails lead past no town.
+    let mountain = match (get("tourism"), get("natural"), get("mountain_pass")) {
+        (Some("alpine_hut" | "wilderness_hut"), ..) => Some(Role::FoodShop),
+        // Lodges are towns' hotels too, so only somewhere to go, never an errand's shop.
+        (Some("guest_house" | "hostel"), ..) => Some(Role::Any),
+        (Some("camp_site"), ..) => Some(Role::Park),
+        (_, Some("glacier" | "saddle" | "volcano"), _) | (.., Some("yes")) => Some(Role::Viewpoint),
+        _ => None,
+    };
+    if let Some(r) = mountain {
+        return Some((r, Category::Nature));
+    }
     let (category, label) = classify(element)?;
     let r = match category {
         Category::Nature if matches!(label, "Beach" | "Lake") => Role::Water,
@@ -255,6 +267,59 @@ mod tests {
         assert_eq!(roles("Jarvis Collegiate"), vec![Role::School, Role::Any]);
         assert_eq!(roles("Nova Bakery"), vec![Role::FoodShop, Role::Any]);
         assert_eq!(roles("Grange Park"), vec![Role::Park, Role::Any]);
+    }
+
+    #[test]
+    fn mountain_huts_camps_glaciers_and_passes_are_story_stops() {
+        let elements = vec![
+            square(
+                1,
+                10,
+                10,
+                10,
+                &[("tourism", "alpine_hut"), ("name", "Hörnli Hut")],
+            ),
+            square(
+                2,
+                100,
+                100,
+                10,
+                &[("tourism", "guest_house"), ("name", "Namaste Lodge")],
+            ),
+            square(
+                3,
+                200,
+                200,
+                60,
+                &[("tourism", "camp_site"), ("name", "Base Camp")],
+            ),
+            square(
+                4,
+                400,
+                400,
+                60,
+                &[("natural", "glacier"), ("name", "Khumbu Glacier")],
+            ),
+            square(
+                5,
+                600,
+                600,
+                10,
+                &[("mountain_pass", "yes"), ("name", "Kongma La")],
+            ),
+        ];
+        let places = collect(&elements, &world());
+        let role = |n: &str| {
+            places
+                .iter()
+                .find(|p| p.place.name == n)
+                .map(|p| p.roles[0])
+        };
+        assert_eq!(role("Hörnli Hut"), Some(Role::FoodShop));
+        assert_eq!(role("Namaste Lodge"), Some(Role::Any));
+        assert_eq!(role("Base Camp"), Some(Role::Park));
+        assert_eq!(role("Khumbu Glacier"), Some(Role::Viewpoint));
+        assert_eq!(role("Kongma La"), Some(Role::Viewpoint));
     }
 
     #[test]
