@@ -331,6 +331,8 @@
   "live_last_played": "jucată ultima dată",
   "live_view_distance": "Distanța de vizualizare",
   "live_view_distance_desc": "Cât de departe trimite serverul lumea. Mai departe cere mai multă memorie și mai mult teren generat în avans.",
+  "live_zone_size": "Zona de joc",
+  "live_zone_size_desc": "Cât dintr-o lume nouă se construiește complet înainte să se deschidă, unde au loc poveștile, oamenii și poliția. Mai mare durează mai mult la început.",
   "live_chunks": "{count} chunk-uri",
   "live_lan": "Deschide în LAN",
   "live_lan_desc": "Prietenii din aceeași rețea pot intra și ei. Minecraft le arată lumea printre lumile LAN.",

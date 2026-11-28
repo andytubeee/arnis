@@ -331,6 +331,8 @@
   "live_last_played": "legutóbb játszott",
   "live_view_distance": "Látótávolság",
   "live_view_distance_desc": "Milyen messzire küldi a szerver a világot. Nagyobb távolság több memóriát és több előre generált terepet igényel.",
+  "live_zone_size": "Játékzóna",
+  "live_zone_size_desc": "Egy új világ mekkora része épül fel teljesen megnyitás előtt, ahol a történetek, az emberek és a rendőrség játszanak. A nagyobb az elején tovább tart.",
   "live_chunks": "{count} chunk",
   "live_lan": "Megnyitás LAN-on",
   "live_lan_desc": "Az ugyanazon a hálózaton lévő barátaid is csatlakozhatnak. A Minecraft a LAN-világok között mutatja nekik.",

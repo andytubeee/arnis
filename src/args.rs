@@ -1155,6 +1155,13 @@ pub struct LiveArgs {
         value_parser = clap::value_parser!(u32).range(4..=32))]
     pub view_distance: u32,
 
+    /// Side of the game zone a new live world builds first, in kilometres: where the game
+    /// modes play. Each step up takes longer to build before the world opens; 10 km is one
+    /// run of about 100 km², which already takes a few GB of memory.
+    #[arg(long = "live-zone-km", default_value_t = crate::live::zone::DEFAULT_KM,
+        value_parser = clap::value_parser!(u32).range(1..=10))]
+    pub zone_km: u32,
+
     /// Port the live server listens on (default 25565, or a free one).
     #[arg(long = "live-port")]
     pub port: Option<u16>,
@@ -1176,6 +1183,7 @@ impl Default for LiveArgs {
             accept_eula: false,
             version: None,
             view_distance: crate::live::DEFAULT_VIEW_DISTANCE,
+            zone_km: crate::live::zone::DEFAULT_KM,
             port: None,
             lan: false,
             tile: false,
@@ -2913,12 +2921,22 @@ mod tests {
             "26.3",
             "--live-view-distance",
             "16",
+            "--live-zone-km",
+            "8",
         ];
         let args = Args::try_parse_from(cmd.iter()).unwrap();
         assert!(args.live.live);
         assert_eq!(args.live.version.as_deref(), Some("26.3"));
         assert_eq!(args.live.view_distance, 16);
+        assert_eq!(args.live.zone_km, 8);
         assert!(validate_args(&args).is_ok());
+        let default = Args::try_parse_from(&cmd[..9]).unwrap();
+        assert_eq!(default.live.zone_km, 3, "the zone is 3 km unless asked");
+        for bad in ["0", "11"] {
+            let mut c = cmd.to_vec();
+            c[10] = bad;
+            assert!(Args::try_parse_from(c).is_err(), "--live-zone-km {bad}");
+        }
     }
 
     #[test]

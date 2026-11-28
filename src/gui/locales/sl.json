@@ -331,6 +331,8 @@
   "live_last_played": "nazadnje igrana",
   "live_view_distance": "Razdalja pogleda",
   "live_view_distance_desc": "Kako daleč strežnik pošilja svet. Dlje pomeni več pomnilnika in več vnaprej generiranega terena.",
+  "live_zone_size": "Igralno območje",
+  "live_zone_size_desc": "Koliko novega sveta se v celoti zgradi pred odprtjem, kjer potekajo zgodbe, ljudje in policija. Večje na začetku traja dlje.",
   "live_chunks": "{count} chunkov",
   "live_lan": "Odpri za LAN",
   "live_lan_desc": "Pridružijo se lahko tudi prijatelji v istem omrežju. Minecraft jim ga pokaže med svetovi LAN.",

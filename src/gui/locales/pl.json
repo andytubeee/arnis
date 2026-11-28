@@ -331,6 +331,8 @@
   "live_last_played": "ostatnio grana",
   "live_view_distance": "Zasięg widzenia",
   "live_view_distance_desc": "Jak daleko serwer wysyła świat. Dalej oznacza więcej pamięci i więcej terenu generowanego z wyprzedzeniem.",
+  "live_zone_size": "Strefa gry",
+  "live_zone_size_desc": "Ile nowego świata powstaje w całości przed otwarciem, gdzie toczą się historie, chodzą ludzie i działa policja. Większa dłużej się buduje na starcie.",
   "live_chunks": "{count} chunków",
   "live_lan": "Otwórz w sieci LAN",
   "live_lan_desc": "Znajomi w tej samej sieci też mogą dołączyć. Minecraft pokaże im ten świat wśród światów LAN.",

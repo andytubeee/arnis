@@ -4509,13 +4509,14 @@ function labelLiveViewDistances() {
 // The version, view distance and LAN only mean something in Live, and stay put while it runs.
 function refreshLiveRows() {
   const live = isLiveMode();
-  for (const id of ['live-version-row', 'live-view-distance-row', 'live-lan-row']) {
+  for (const id of ['live-version-row', 'live-view-distance-row', 'live-zone-row', 'live-lan-row']) {
     const row = document.getElementById(id);
     if (row) row.style.display = live ? '' : 'none';
   }
   document.getElementById('one-world-stack')?.classList.toggle('is-open', live);
   setSettingsRowAvailable('live-version-select', !liveActive(), 'reason_live_running');
   setSettingsRowAvailable('live-view-distance-select', !liveActive(), 'reason_live_running');
+  setSettingsRowAvailable('live-zone-select', !liveActive(), 'reason_live_running');
   setSettingsRowAvailable('live-lan-toggle', !liveActive(), 'reason_live_running');
   // The world the session plays is fixed until it ends.
   setSettingsRowAvailable('save-path-input', !liveActive(), 'reason_live_running');
@@ -4794,6 +4795,7 @@ async function startLive() {
     worldName: oneWorldFolderName(),
     version: (versionSelect && versionSelect.value) || null,
     viewDistance: parseInt(viewSelect && viewSelect.value, 10) || 12,
+    zoneKm: parseInt(document.getElementById('live-zone-select')?.value, 10) || 3,
     lan: !!(lanToggle && lanToggle.checked),
     acceptEula: acceptEula,
     bboxText: useSelection ? selectedBBox : null,

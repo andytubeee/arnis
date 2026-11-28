@@ -331,6 +331,8 @@
   "live_last_played": "zuletzt gespielt",
   "live_view_distance": "Sichtweite",
   "live_view_distance_desc": "Wie weit der Server die Welt schickt. Weiter braucht mehr Speicher und mehr vorab generiertes Land.",
+  "live_zone_size": "Spielzone",
+  "live_zone_size_desc": "Wie viel einer neuen Welt vor dem Öffnen vollständig gebaut wird, wo Geschichten, Menschen und Polizei spielen. Größer dauert am Anfang länger.",
   "live_chunks": "{count} Chunks",
   "live_lan": "Im LAN öffnen",
   "live_lan_desc": "Freunde im selben Netzwerk können auch beitreten. Minecraft zeigt ihnen die Welt unter den LAN-Welten.",

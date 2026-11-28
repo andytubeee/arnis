@@ -386,6 +386,10 @@ fn gui_live_info(save_path: String, world_name: String) -> LiveInfo {
     info
 }
 
+fn default_zone_km() -> u32 {
+    crate::live::zone::DEFAULT_KM
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LiveStartOptions {
@@ -393,6 +397,8 @@ struct LiveStartOptions {
     world_name: String,
     version: Option<String>,
     view_distance: u32,
+    #[serde(default = "default_zone_km")]
+    zone_km: u32,
     #[serde(default)]
     lan: bool,
     accept_eula: bool,
@@ -560,6 +566,7 @@ fn gui_live_start(options: LiveStartOptions) -> Result<(), String> {
     args.zombie_outbreak = options.zombie_outbreak;
     args.crime_spree = options.crime_spree;
     args.city_stories = options.city_stories;
+    args.live.zone_km = options.zone_km.clamp(1, 10);
     args.disasters = options.disasters;
     crate::args::apply_body_defaults(&mut args);
     crate::args::apply_feature_needs(&mut args);

@@ -331,6 +331,8 @@
   "live_last_played": "senast spelad",
   "live_view_distance": "Synavstånd",
   "live_view_distance_desc": "Hur långt servern skickar världen. Längre kräver mer minne och mer terräng som genereras i förväg.",
+  "live_zone_size": "Spelzon",
+  "live_zone_size_desc": "Hur mycket av en ny värld som byggs helt innan den öppnas, där berättelser, folk och polis spelar. Större tar längre tid i början.",
   "live_chunks": "{count} chunks",
   "live_lan": "Öppna för LAN",
   "live_lan_desc": "Vänner i samma nätverk kan också gå med. Minecraft visar den för dem bland LAN-världar.",

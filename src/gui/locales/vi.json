@@ -331,6 +331,8 @@
   "live_last_played": "chơi gần nhất",
   "live_view_distance": "Tầm nhìn",
   "live_view_distance_desc": "Khoảng cách máy chủ gửi thế giới tới bạn. Càng xa càng tốn bộ nhớ và càng phải tạo trước nhiều vùng đất hơn.",
+  "live_zone_size": "Vùng chơi",
+  "live_zone_size_desc": "Bao nhiêu phần thế giới mới được dựng đầy đủ trước khi mở, nơi diễn ra câu chuyện, người đi đường và cảnh sát. Lớn hơn thì lúc đầu lâu hơn.",
   "live_chunks": "{count} chunk",
   "live_lan": "Mở trong mạng LAN",
   "live_lan_desc": "Bạn bè trong cùng mạng cũng có thể tham gia. Minecraft hiển thị thế giới này cho họ trong mục thế giới LAN.",

@@ -331,6 +331,8 @@
   "live_last_played": "마지막으로 플레이",
   "live_view_distance": "시야 거리",
   "live_view_distance_desc": "서버가 월드를 보내는 거리입니다. 멀수록 메모리와 미리 생성할 지형이 늘어납니다.",
+  "live_zone_size": "게임 구역",
+  "live_zone_size_desc": "새 월드를 열기 전에 완전히 만드는 범위로, 스토리와 사람, 경찰이 활동하는 곳입니다. 클수록 시작이 오래 걸립니다.",
   "live_chunks": "{count}청크",
   "live_lan": "LAN에 공개",
   "live_lan_desc": "같은 네트워크의 친구도 접속할 수 있습니다. Minecraft의 LAN 월드 목록에 표시됩니다.",

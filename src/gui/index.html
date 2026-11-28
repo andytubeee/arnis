@@ -538,6 +538,24 @@
                     </div>
                   </div>
 
+                  <div class="settings-row setting-tile is-wide setting-sub" id="live-zone-row" style="display: none;">
+                    <label for="live-zone-select" class="setting-label">
+                      <svg class="icon setting-icon" aria-hidden="true"><use href="#i-eye"></use></svg>
+                      <span class="setting-text">
+                        <span class="setting-heading"><span data-localize="live_zone_size">Game zone</span></span>
+                        <span class="setting-desc" data-localize="live_zone_size_desc">How much of a new world is built in full before it opens, where stories, people and police play. Bigger takes longer at the start.</span>
+                      </span>
+                    </label>
+                    <div class="settings-control">
+                      <select id="live-zone-select" name="live-zone-select" class="settings-select">
+                        <option value="3" selected>3 km</option>
+                        <option value="5">5 km</option>
+                        <option value="8">8 km</option>
+                        <option value="10">10 km</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div class="settings-row setting-tile is-wide setting-sub" id="live-lan-row" style="display: none;">
                     <label for="live-lan-toggle" class="setting-label">
                       <svg class="icon setting-icon" aria-hidden="true"><use href="#i-users"></use></svg>

@@ -1346,7 +1346,7 @@ fn run(cfg: Config, mut args: Args, reporter: &Reporter) -> Result<(), String> {
         let built = zone::build(
             &cfg.saves_dir,
             &cfg.world_name,
-            &zone::bbox(lat, lon)?,
+            &zone::bbox(lat, lon, args.live.zone_km)?,
             &flags,
             &say,
             &|| controls.stopping(),

@@ -331,6 +331,8 @@
   "live_last_played": "paskutinė žaista",
   "live_view_distance": "Matymo atstumas",
   "live_view_distance_desc": "Kaip toli serveris siunčia pasaulį. Didesnis atstumas reikalauja daugiau atminties ir iš anksto sugeneruotos vietovės.",
+  "live_zone_size": "Žaidimo zona",
+  "live_zone_size_desc": "Kiek naujo pasaulio pastatoma visiškai prieš jį atveriant, kur vyksta istorijos, žmonės ir policija. Didesnė pradžioje užtrunka ilgiau.",
   "live_chunks": "{count} chunk'ai",
   "live_lan": "Atverti LAN tinklui",
   "live_lan_desc": "Prisijungti gali ir draugai tame pačiame tinkle. Minecraft jiems rodo jį tarp LAN pasaulių.",

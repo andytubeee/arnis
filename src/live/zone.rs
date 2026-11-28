@@ -10,8 +10,8 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-/// Half the side of the zone, in metres: room for a hundred story walks.
-const HALF_SIDE_M: f64 = 1500.0;
+/// Side of the zone unless asked otherwise, in kilometres: room for a hundred story walks.
+pub const DEFAULT_KM: u32 = 3;
 const METRES_PER_DEGREE: f64 = 111_320.0;
 
 /// The flags of a zone run, or `None` when no game mode needs one.
@@ -38,10 +38,11 @@ pub fn flags(a: &Args, manifest: &crate::one_world::Manifest) -> Option<Vec<Stri
     Some(f)
 }
 
-/// A square of `HALF_SIDE_M` each way around (`lat`, `lon`).
-pub fn bbox(lat: f64, lon: f64) -> Result<LLBBox, String> {
-    let dlat = HALF_SIDE_M / METRES_PER_DEGREE;
-    let dlon = HALF_SIDE_M / (METRES_PER_DEGREE * lat.to_radians().cos().max(0.01));
+/// A square `km` kilometres on a side around (`lat`, `lon`).
+pub fn bbox(lat: f64, lon: f64, km: u32) -> Result<LLBBox, String> {
+    let half_m = f64::from(km) * 500.0;
+    let dlat = half_m / METRES_PER_DEGREE;
+    let dlon = half_m / (METRES_PER_DEGREE * lat.to_radians().cos().max(0.01));
     LLBBox::new(lat - dlat, lon - dlon, lat + dlat, lon + dlon)
 }
 
@@ -167,16 +168,19 @@ mod tests {
     }
 
     #[test]
-    fn the_zone_is_three_kilometres_square() {
-        let z = bbox(43.45, -80.49).unwrap();
-        let (h, w) = (
-            (z.max().lat() - z.min().lat()) * METRES_PER_DEGREE,
-            (z.max().lng() - z.min().lng()) * METRES_PER_DEGREE * 43.45f64.to_radians().cos(),
-        );
-        assert!(
-            (h - 3000.0).abs() < 1.0 && (w - 3000.0).abs() < 1.0,
-            "{h} x {w}"
-        );
+    fn the_zone_is_as_many_kilometres_square_as_asked() {
+        for km in [3, 8] {
+            let z = bbox(43.45, -80.49, km).unwrap();
+            let (h, w) = (
+                (z.max().lat() - z.min().lat()) * METRES_PER_DEGREE,
+                (z.max().lng() - z.min().lng()) * METRES_PER_DEGREE * 43.45f64.to_radians().cos(),
+            );
+            let side = km as f64 * 1000.0;
+            assert!(
+                (h - side).abs() < 1.0 && (w - side).abs() < 1.0,
+                "{km} km: {h} x {w}"
+            );
+        }
     }
 
     #[test]

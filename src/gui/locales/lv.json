@@ -331,6 +331,8 @@
   "live_last_played": "pēdējā spēlētā",
   "live_view_distance": "Redzamības attālums",
   "live_view_distance_desc": "Cik tālu serveris sūta pasauli. Lielāks attālums prasa vairāk atmiņas un vairāk iepriekš ģenerēta apvidus.",
+  "live_zone_size": "Spēles zona",
+  "live_zone_size_desc": "Cik daudz jaunas pasaules tiek pilnībā uzbūvēts pirms atvēršanas, kur notiek stāsti, cilvēki un policija. Lielāka sākumā prasa ilgāk.",
   "live_chunks": "{count} gabali",
   "live_lan": "Atvērt LAN tīklam",
   "live_lan_desc": "Pievienoties var arī draugi tajā pašā tīklā. Minecraft viņiem to rāda starp LAN pasaulēm.",

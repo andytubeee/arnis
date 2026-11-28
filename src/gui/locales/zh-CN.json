@@ -331,6 +331,8 @@
   "live_last_played": "上次游玩",
   "live_view_distance": "视距",
   "live_view_distance_desc": "服务器发送世界的距离。越远，占用的内存越多，需要提前生成的地形也越多。",
+  "live_zone_size": "游戏区域",
+  "live_zone_size_desc": "新世界开放前完整生成的范围，故事、行人和警察都在这里。越大，开始时越久。",
   "live_chunks": "{count} 个区块",
   "live_lan": "对局域网开放",
   "live_lan_desc": "同一网络中的好友也能加入。Minecraft 会在局域网世界中为他们列出。",

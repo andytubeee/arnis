@@ -331,6 +331,8 @@
   "live_last_played": "viimeksi pelattu",
   "live_view_distance": "Näköetäisyys",
   "live_view_distance_desc": "Kuinka kauas palvelin lähettää maailmaa. Pidempi vie enemmän muistia ja vaatii enemmän valmiiksi generoitua maastoa.",
+  "live_zone_size": "Pelialue",
+  "live_zone_size_desc": "Kuinka paljon uudesta maailmasta rakennetaan valmiiksi ennen avaamista, missä tarinat, ihmiset ja poliisi toimivat. Isompi vie alussa kauemmin.",
   "live_chunks": "{count} chunkia",
   "live_lan": "Avaa lähiverkkoon",
   "live_lan_desc": "Samassa verkossa olevat kaverit voivat myös liittyä. Minecraft näyttää sen heille LAN-maailmoissa.",

@@ -331,6 +331,8 @@
   "live_last_played": "前回プレイ",
   "live_view_distance": "描画距離",
   "live_view_distance_desc": "サーバーがワールドを送る距離です。遠くするほどメモリと先行して生成する地形が増えます。",
+  "live_zone_size": "ゲームゾーン",
+  "live_zone_size_desc": "新しいワールドを開く前に完全に作る範囲。ストーリー、人々、警察が動く場所です。大きいほど開始に時間がかかります。",
   "live_chunks": "{count} チャンク",
   "live_lan": "LANに公開",
   "live_lan_desc": "同じネットワークのフレンドも参加できます。Minecraft では LAN ワールドとして表示されます。",
