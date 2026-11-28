@@ -80,9 +80,6 @@ gen/
 # would commit the whole library.
 /buildingfacadetextures/
 
-# Working notes for coding agents, not part of the project.
-/CLAUDE.md
-
 # Python bytecode
 __pycache__/
 
