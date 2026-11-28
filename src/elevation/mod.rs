@@ -53,6 +53,7 @@ pub struct ElevationData {
     /// needed the extended floor. Every consumer of the affine must use this, not args.
     pub(crate) ground_level: i32,
     pub(crate) soft_top: Option<SoftTop>,
+    pub(crate) soft_bottom: Option<SoftTop>,
     /// The fit used a ceiling a pack raised above vanilla's.
     pub(crate) extended_ceiling: bool,
     /// When the fit raised the build height for this area itself: the highest terrain Y and
@@ -280,24 +281,25 @@ impl ElevationData {
             blocks_per_meter: self.blocks_per_meter,
             ground_level: self.ground_level,
             soft_top: self.soft_top,
+            soft_bottom: self.soft_bottom,
         }
     }
 
-    /// How much the soft top compresses heights at `y`: 1 up to the knee, then
-    /// `cosh((y - knee_y) / width)`, the inverse slope of the curve there.
+    /// How much the soft top or bottom compresses heights at `y`: 1 between the knees,
+    /// then `cosh(distance past the knee / width)`, the inverse slope of the curve there.
     #[inline]
     pub fn soft_top_stretch(&self, y: i32) -> f64 {
-        let Some(top) = self.soft_top else {
-            return 1.0;
+        let knee_y = |knee_m: f64| {
+            self.ground_level as f64 + (knee_m - self.min_height_m) * self.blocks_per_meter
         };
-        let knee_y =
-            self.ground_level as f64 + (top.knee_m - self.min_height_m) * self.blocks_per_meter;
-        let above = f64::from(y) - knee_y;
-        if above <= 0.0 {
-            1.0
-        } else {
-            (above / top.width_blocks).cosh()
+        let y = f64::from(y);
+        if let Some(top) = self.soft_top.filter(|t| y > knee_y(t.knee_m)) {
+            return ((y - knee_y(top.knee_m)) / top.width_blocks).cosh();
         }
+        if let Some(bottom) = self.soft_bottom.filter(|b| y < knee_y(b.knee_m)) {
+            return ((knee_y(bottom.knee_m) - y) / bottom.width_blocks).cosh();
+        }
+        1.0
     }
 
     /// Lowest terrain Y in the grid, rounded down.
@@ -698,6 +700,7 @@ pub fn fetch_elevation_data(
         blocks_per_meter,
         ground_level: effective_ground_level,
         soft_top,
+        soft_bottom,
     } = affine;
     bench.mark("elev_scale_to_mc");
 
@@ -739,6 +742,7 @@ pub fn fetch_elevation_data(
         },
         ground_level: effective_ground_level,
         soft_top,
+        soft_bottom,
         extended_ceiling: band.extended_ceiling(),
         // The models stand at world scale, as in the reserve above.
         raised_for: tallest_structure_m.map(|m| RaisedFor {
@@ -752,6 +756,37 @@ pub fn fetch_elevation_data(
         }),
         halo: None,
     })
+}
+
+/// The ground at an Earth point in metres: the median of a few cells about 100 m apart,
+/// so one bad pixel does not decide it. `None` when no provider answers.
+pub fn start_metres(lat: f64, lon: f64, aws_only: bool) -> Option<f64> {
+    const HALF_DEG: f64 = 0.001;
+    let bbox = LLBBox::new(
+        lat - HALF_DEG,
+        lon - HALF_DEG,
+        lat + HALF_DEG,
+        lon + HALF_DEG,
+    )
+    .ok()?;
+    let mode = if aws_only {
+        SourceMode::AwsOnly
+    } else {
+        SourceMode::Auto
+    };
+    let mut chain: Vec<Box<dyn ElevationProvider>> = vec![select_provider(&bbox, mode)];
+    if chain[0].name() != "aws" {
+        chain.push(Box::new(providers::aws_terrain::AwsTerrain));
+    }
+    let raw = fetch_raw_with_fallback(&chain, &bbox, 3, 3).ok()?;
+    let mut cells: Vec<f64> = raw
+        .heights_meters
+        .into_iter()
+        .flatten()
+        .filter(|h| h.is_finite())
+        .collect();
+    cells.sort_by(f64::total_cmp);
+    cells.get(cells.len() / 2).copied()
 }
 
 /// Clean up old cached elevation tiles in the background, at most once per day.

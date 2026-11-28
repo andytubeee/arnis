@@ -2755,6 +2755,9 @@ pub struct ElevationAffine {
     pub ground_level: i32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub soft_top: Option<SoftTop>,
+    /// The same bend mirrored below `knee_m`, for a world that starts high up.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub soft_bottom: Option<SoftTop>,
 }
 
 /// Above `knee_m` heights are compressed more the higher they are instead of
@@ -2771,54 +2774,104 @@ const LOWEST_LAND_M: f64 = -430.0;
 const HIGHEST_LAND_M: f64 = 8849.0;
 /// Blocks under the ceiling that the soft top may use.
 const SOFT_TOP_BLOCKS: f64 = 800.0;
+/// Blocks over the floor that the soft bottom may use.
+const SOFT_BOTTOM_BLOCKS: f64 = 600.0;
+/// Metres below a high start that stay real size before the soft bottom.
+const REAL_SIZE_BELOW_START_M: f64 = 1000.0;
 
 impl ElevationAffine {
     #[inline]
     pub fn y_for_metres(&self, h_m: f64) -> f64 {
-        match self.soft_top {
-            Some(top) if h_m > top.knee_m => {
-                let knee_y = self.ground_level as f64
-                    + (top.knee_m - self.min_height_m) * self.blocks_per_meter;
+        let straight =
+            |h: f64| self.ground_level as f64 + (h - self.min_height_m) * self.blocks_per_meter;
+        match (self.soft_top, self.soft_bottom) {
+            (Some(top), _) if h_m > top.knee_m => {
                 let rise = (h_m - top.knee_m) * self.blocks_per_meter;
-                knee_y + top.width_blocks * (rise / top.width_blocks).asinh()
+                straight(top.knee_m) + top.width_blocks * (rise / top.width_blocks).asinh()
             }
-            _ => self.ground_level as f64 + (h_m - self.min_height_m) * self.blocks_per_meter,
+            (_, Some(bottom)) if h_m < bottom.knee_m => {
+                let drop = (bottom.knee_m - h_m) * self.blocks_per_meter;
+                straight(bottom.knee_m) - bottom.width_blocks * (drop / bottom.width_blocks).asinh()
+            }
+            _ => straight(h_m),
+        }
+    }
+
+    /// The lowest Y the mapping uses: where the lowest land lands.
+    pub fn floor_y(&self) -> f64 {
+        match self.soft_bottom {
+            Some(_) => self.y_for_metres(LOWEST_LAND_M),
+            None => self.ground_level as f64,
         }
     }
 
     /// One mapping for all land on Earth: `scale` blocks per metre from the
     /// Dead Sea at `floor` upwards, with a soft top if Everest would otherwise
     /// end above the ceiling.
+    #[cfg(test)]
     pub fn whole_earth(scale: f64, floor: i32, extended_max_y: i32) -> Self {
+        Self::whole_earth_around(scale, floor, extended_max_y, None)
+    }
+
+    /// [`Self::whole_earth`], but real size from a kilometre below `start_m`, the ground at
+    /// the world's start, when that is high: land further down is squeezed into the soft
+    /// bottom instead of spending the world's height on it. Nothing is ever flattened.
+    pub fn whole_earth_around(
+        scale: f64,
+        floor: i32,
+        extended_max_y: i32,
+        start_m: Option<f64>,
+    ) -> Self {
         let ceiling = terrain_ceiling(true, extended_max_y) as f64;
+        // Lower still when the room above the start reaches past Everest: unused sky is
+        // better spent on real size below.
+        let straight_room_m = (ceiling - (floor as f64 + SOFT_BOTTOM_BLOCKS)) / scale;
+        let lowest = start_m
+            .filter(|s| s.is_finite())
+            .map(|s| (s - REAL_SIZE_BELOW_START_M).min(HIGHEST_LAND_M - straight_room_m))
+            .filter(|lo| (lo - LOWEST_LAND_M) * scale > SOFT_BOTTOM_BLOCKS);
         let mut affine = Self {
             min_height_m: LOWEST_LAND_M,
             blocks_per_meter: scale,
             ground_level: floor,
             soft_top: None,
+            soft_bottom: None,
         };
+        if let Some(lo) = lowest {
+            affine.min_height_m = lo;
+            affine.ground_level = floor + SOFT_BOTTOM_BLOCKS as i32;
+            affine.soft_bottom = Some(SoftTop {
+                knee_m: lo,
+                width_blocks: bend_width((lo - LOWEST_LAND_M) * scale, SOFT_BOTTOM_BLOCKS),
+            });
+        }
+        let base = affine.ground_level as f64;
         let knee_y = ceiling - SOFT_TOP_BLOCKS;
-        if affine.y_for_metres(HIGHEST_LAND_M) <= ceiling || knee_y <= floor as f64 {
+        if affine.y_for_metres(HIGHEST_LAND_M) <= ceiling || knee_y <= base {
             return affine;
         }
-        let knee_m = LOWEST_LAND_M + (knee_y - floor as f64) / scale;
-        let rise = (HIGHEST_LAND_M - knee_m) * scale;
-        // width * asinh(rise / width) grows with the width towards `rise`.
-        let (mut lo, mut hi) = (1e-3, 1e9);
-        for _ in 0..200 {
-            let mid = (lo + hi) / 2.0;
-            if mid * (rise / mid).asinh() > SOFT_TOP_BLOCKS {
-                hi = mid;
-            } else {
-                lo = mid;
-            }
-        }
+        let knee_m = affine.min_height_m + (knee_y - base) / scale;
         affine.soft_top = Some(SoftTop {
             knee_m,
-            width_blocks: lo,
+            width_blocks: bend_width((HIGHEST_LAND_M - knee_m) * scale, SOFT_TOP_BLOCKS),
         });
         affine
     }
+}
+
+/// The width that bends `rise` blocks of straight slope into `blocks`.
+fn bend_width(rise: f64, blocks: f64) -> f64 {
+    // width * asinh(rise / width) grows with the width towards `rise`.
+    let (mut lo, mut hi) = (1e-3, 1e9);
+    for _ in 0..200 {
+        let mid = (lo + hi) / 2.0;
+        if mid * (rise / mid).asinh() > blocks {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    lo
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -3090,6 +3143,7 @@ fn derive_affine(
             blocks_per_meter,
             ground_level,
             soft_top: None,
+            soft_bottom: None,
         },
         FitRange {
             height_range,
@@ -3120,7 +3174,7 @@ fn apply_fit(heights: &mut [Vec<f64>], affine: &ElevationAffine, fit: FitRange, 
 }
 
 fn apply_affine(heights: &mut [Vec<f64>], affine: &ElevationAffine, upper_clamp: f64) {
-    let base = affine.ground_level as f64;
+    let base = affine.floor_y();
     heights.par_iter_mut().for_each(|row| {
         for h in row {
             *h = affine.y_for_metres(*h).clamp(base, upper_clamp);
@@ -3258,7 +3312,7 @@ pub fn scale_to_minecraft_in_place(
 
     // Counted on the metre heights, before they turn into block heights.
     let outside = matches!(policy, AffinePolicy::Fixed(_)).then(|| {
-        let base = affine.ground_level as f64;
+        let base = affine.floor_y();
         blurred_heights
             .par_iter()
             .map(|row| {
@@ -3289,7 +3343,7 @@ pub fn scale_to_minecraft_in_place(
             let pct = clamped as f64 * 100.0 / total as f64;
             eprintln!(
                 "Warning: {pct:.1}% of this area lies outside the world's height band (Y {} to {}) and is flattened there.{}",
-                affine.ground_level,
+                affine.floor_y() as i32,
                 upper_clamp as i32,
                 if disable_height_limit {
                     ""
@@ -4462,6 +4516,7 @@ mod affine_policy_tests {
             blocks_per_meter: 1.0,
             ground_level: -62,
             soft_top: None,
+            soft_bottom: None,
         };
         let mut grid = ramp();
         grid[0][0] = 300.0; // below the world's lowest: clamps at the base
@@ -4523,6 +4578,54 @@ mod affine_policy_tests {
         assert_eq!(mc[0][1], -1594.0);
         assert_eq!(mc[0][2], -1064.0);
         assert!(mc[1][0] < mc[1][1] && mc[1][1] < mc[1][2] && mc[1][2] <= 2016.0);
+    }
+
+    #[test]
+    fn a_start_near_the_sea_keeps_the_whole_earth_mapping() {
+        let plain = ElevationAffine::whole_earth(1.0, -2014, 2031);
+        assert_eq!(
+            ElevationAffine::whole_earth_around(1.0, -2014, 2031, None),
+            plain
+        );
+        assert_eq!(
+            ElevationAffine::whole_earth_around(1.0, -2014, 2031, Some(76.0)),
+            plain
+        );
+        assert_eq!(
+            ElevationAffine::whole_earth_around(1.0, -2014, 2031, Some(800.0)),
+            plain
+        );
+    }
+
+    #[test]
+    fn a_summit_start_spends_the_whole_height_on_real_size() {
+        let e = ElevationAffine::whole_earth_around(1.0, -2014, 2031, Some(7864.0));
+        assert_eq!(e.soft_top, None);
+        // Real size all the way from the glacier to the summit, which ends at the ceiling.
+        assert!((e.y_for_metres(8849.0) - e.y_for_metres(5600.0) - 3249.0).abs() < 1e-6);
+        assert!((e.y_for_metres(8849.0) - 2016.0).abs() < 1e-6);
+        assert!((e.y_for_metres(-430.0) - -2014.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_mountain_start_is_one_to_one_around_it_and_nothing_is_flat() {
+        let e = ElevationAffine::whole_earth_around(1.0, -2014, 2031, Some(5000.0));
+        assert!(e.soft_bottom.is_some() && e.soft_top.is_some());
+        // Real size from a kilometre below the start to well above it.
+        assert!((e.y_for_metres(5000.0) - e.y_for_metres(4000.0) - 1000.0).abs() < 1e-6);
+        assert!((e.y_for_metres(6500.0) - e.y_for_metres(5000.0) - 1500.0).abs() < 1e-6);
+        // All of Earth still fits between the floor and the ceiling.
+        assert!((e.y_for_metres(-430.0) - -2014.0).abs() < 1e-6);
+        assert!(e.y_for_metres(8849.0) <= 2016.0 + 1e-6);
+        // Squeezed, never flattened: every 7 m step still rises.
+        let mut last = f64::MIN;
+        for h in (-430..=8849).step_by(7) {
+            let y = e.y_for_metres(h as f64);
+            assert!(y > last, "flat at {h} m");
+            last = y;
+        }
+        // A Nepal valley far below the start is lower than a ridge above it.
+        assert!(e.y_for_metres(1500.0) + 50.0 < e.y_for_metres(2500.0));
     }
 }
 

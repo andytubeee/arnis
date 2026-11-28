@@ -26,7 +26,9 @@ pub const DEFAULT_WORLD_NAME: &str = "Arnis One World";
 /// mapping, which older builds would not apply.
 /// 4: the world keeps a seed, cave settings, a world border or jobs built in pieces,
 /// which version 3 builds drop when they save. Worlds without them are still written as 3.
-pub const MANIFEST_VERSION: u32 = 4;
+/// 5: the elevation mapping squeezes land far below a high start (`soft_bottom`), which
+/// older builds would map straight and flatten.
+pub const MANIFEST_VERSION: u32 = 5;
 
 /// Geometry kept past the area edge, so an element straddling a seam is
 /// built whole on both sides.
@@ -225,7 +227,9 @@ fn is_real_height(multiplier: &f64) -> bool {
 }
 
 impl Manifest {
-    fn new(args: &Args, origin_lat: f64, origin_lon: f64) -> Self {
+    /// `start_m` is the ground at the origin, in metres, if known: a high start keeps
+    /// real size around it and squeezes the land far below.
+    fn new(args: &Args, origin_lat: f64, origin_lon: f64, start_m: Option<f64>) -> Self {
         let scale = stable(args.scale, 9);
         let height_multiplier = stable(args.height_multiplier, 6);
         Self {
@@ -244,15 +248,21 @@ impl Manifest {
             cave_datum_y: args.cave_datum_y,
             // One section up, so water carved at the lowest level stays above the floor.
             elevation: args.terrain().then(|| {
-                let mut e = ElevationAffine::whole_earth(
+                let mut e = ElevationAffine::whole_earth_around(
                     scale * height_multiplier,
                     crate::ground::min_ground_level_for(args) + 16,
                     crate::ground::extended_max_y_for(args),
+                    // Whole metres, so the stored mapping reads back exactly.
+                    start_m.map(f64::round),
                 );
                 if let Some(top) = e.soft_top.as_mut() {
                     top.knee_m = stable(top.knee_m, 6);
                     // Down, so Everest stays under the ceiling.
                     top.width_blocks = stable(top.width_blocks - 5e-7, 6);
+                }
+                if let Some(bottom) = e.soft_bottom.as_mut() {
+                    // Down, so the Dead Sea stays over the floor.
+                    bottom.width_blocks = stable(bottom.width_blocks - 5e-7, 6);
                 }
                 e
             }),
@@ -306,9 +316,12 @@ impl Manifest {
         crate::args::validate_scale(self.scale)?;
         crate::args::validate_height_multiplier(self.height_multiplier)?;
         if let Some(e) = &self.elevation {
-            let soft_top_ok = e.soft_top.is_none_or(|t| {
-                t.knee_m.is_finite() && t.width_blocks.is_finite() && t.width_blocks > 0.0
-            });
+            let bend_ok = |b: Option<crate::elevation::SoftTop>| {
+                b.is_none_or(|t| {
+                    t.knee_m.is_finite() && t.width_blocks.is_finite() && t.width_blocks > 0.0
+                })
+            };
+            let soft_top_ok = bend_ok(e.soft_top) && bend_ok(e.soft_bottom);
             if !(e.min_height_m.is_finite()
                 && e.blocks_per_meter.is_finite()
                 && e.blocks_per_meter >= 0.0
@@ -327,8 +340,12 @@ impl Manifest {
         Ok(())
     }
 
-    /// Version 4 only for a world holding what a version 3 build would drop when it saves.
+    /// Version 4 only for a world holding what a version 3 build would drop when it saves,
+    /// 5 only for one an older build would map wrong.
     fn written_version(&self) -> u32 {
+        if self.elevation.is_some_and(|e| e.soft_bottom.is_some()) {
+            return self.version.max(5);
+        }
         let needs_4 = self.seed.is_some()
             || self.cave_seed.is_some()
             || self.cave_datum_y.is_some()
@@ -451,7 +468,7 @@ pub fn frame_for(
         Some(manifest) => manifest.projection(),
         None => {
             let (lat, lon) = new_origin(requested, args);
-            Manifest::new(args, lat, lon).projection()
+            Manifest::new(args, lat, lon, None).projection()
         }
     })
 }
@@ -765,7 +782,15 @@ fn resolve(
                 args.disable_height_limit = true;
             }
             let (origin_lat, origin_lon) = new_origin(requested, args);
-            (Manifest::new(args, origin_lat, origin_lon), true)
+            (
+                Manifest::new(
+                    args,
+                    origin_lat,
+                    origin_lon,
+                    start_metres(args, origin_lat, origin_lon),
+                ),
+                true,
+            )
         }
     };
 
@@ -1007,6 +1032,13 @@ pub fn apply_world_border(world_dir: &Path, rect: &XZBBox) {
     }
 }
 
+/// The ground at a new world's origin, for an Earth world with terrain.
+fn start_metres(args: &Args, lat: f64, lon: f64) -> Option<f64> {
+    (args.terrain() && args.body.is_earth())
+        .then(|| crate::elevation::start_metres(lat, lon, args.aws_only_elevation))
+        .flatten()
+}
+
 /// A new One World centred on `(origin_lat, origin_lon)` with no areas yet, for live mode,
 /// whose tiles then line up with the world's region grid from the first one on.
 pub fn create_empty(
@@ -1044,7 +1076,13 @@ pub fn create_empty(
         .to_string();
     let made = (|| {
         crate::world_utils::write_world_skeleton(world_dir, &name, false)?;
-        Manifest::new(args, origin_lat, origin_lon).save(world_dir)?;
+        Manifest::new(
+            args,
+            origin_lat,
+            origin_lon,
+            start_metres(args, origin_lat, origin_lon),
+        )
+        .save(world_dir)?;
         let (min_y, max_y) = crate::world_utils::TALL_DATAPACK_FULL_RANGE;
         crate::world_utils::install_tall_datapack(world_dir, min_y, max_y)?;
         crate::world_utils::apply_java_world_settings(
@@ -1531,6 +1569,17 @@ mod tests {
 
     const MUNICH: &str = "48.130,11.560,48.145,11.590";
 
+    #[test]
+    fn a_world_squeezed_below_its_start_is_kept_from_older_builds() {
+        let args = args_for(MUNICH, &[]);
+        let low = Manifest::new(&args, 48.13, 11.56, Some(520.0));
+        assert!(low.elevation.unwrap().soft_bottom.is_none());
+        assert_eq!(low.written_version(), 3);
+        let high = Manifest::new(&args, 27.99, 86.92, Some(5000.0));
+        assert!(high.elevation.unwrap().soft_bottom.is_some());
+        assert_eq!(high.written_version(), 5);
+    }
+
     /// A 3 x 3 grid of cells of 2 x 2 regions, the corner cell clipped mid-region, and one
     /// plain area inside the middle cell: removing the middle and a corner deletes the region
     /// files they hold whole, and only their own chunks from the others.
@@ -1538,7 +1587,7 @@ mod tests {
     fn removing_cells_deletes_only_their_chunks() {
         let tmp = tempfile::tempdir().unwrap();
         let world = tmp.path();
-        let mut m = Manifest::new(&args_for(MUNICH, &[]), 48.13, 11.56);
+        let mut m = Manifest::new(&args_for(MUNICH, &[]), 48.13, 11.56, None);
         let area = |id: u32, r: [i32; 4], piece: Option<u32>| GeneratedArea {
             id,
             generated_at: 0,
